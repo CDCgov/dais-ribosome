@@ -98,8 +98,8 @@ mkdir -p $bpath/workdir/$TOKEN && workdir=$bpath/workdir/$TOKEN || die "Could no
 binp=$bpath/bin
 refp=$bpath/refs
 specp=$bpath/spec
-alnp=$workdir/2-alignment
-nullp=$workdir/3-unused
+nullp=$workdir/2-unused
+alnp=$workdir/3-alignment
 protp=$workdir/4-translation
 module=INFLUENZA
 
@@ -295,13 +295,14 @@ if test -n "$(shopt -s nullglob;echo $alnp/*.products.c)";then
 				$alnp/*.ins.txt $alnp/*.fasta > $coordresult || die "annotation failed"
 fi
 
-#paste <(cat $protp/*.aa|tr '|' "\t") <(cat $protp/*.cds|cut -f2-) <(cut -f2- $coordresult) > $seqresult
 $binp/leftjoin.pl <(cat $protp/*.aa) <(cat $protp/*.cds) $coordresult| tr '|' "\t" > ${seqresult}
 
 if test -n "$(shopt -s nullglob;echo $nullp/*.fa)";then
 	$binp/unused2delim.pl -F 13 <(cat $nullp/*.fa) >> $seqresult
 fi
+
+# Produce output and clean up
 [ -r "$seqresult" ] && mv $seqresult $OUT_SEQ
 [ -r "$insertresult" ] && mv $insertresult $OUT_INS
-#rm -rf $workdir &
+rm -rf $workdir &
 finish "finished"

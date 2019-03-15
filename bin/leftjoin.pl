@@ -68,21 +68,15 @@ for($i = 1; $i < $numberFiles; $i++) {
 		}
 
 		if ( $id ne '' ) {
-			@remainingColumns = complementArray(\@values,\@fields);
-			$lengthRemaining[$i-1] = scalar(@remainingColumns);
-			$data[$i-1]{$id} = join("\t",@remainingColumns);
+			@remainingColumns = map { $_ eq '' ? '\N' : $_ } complementArray(\@values,\@fields);
+			$N = scalar(@remainingColumns);
+			if ( !defined($lengthRemaining[$i-1]) || $N > $lengthRemaining[$i-1] ) {
+				$lengthRemaining[$i-1] = $N;
+			}
+			$data[$i-1]{$id} = [@remainingColumns];
 		}
-
 	}
 	close(IN);
-}
-
-$tmp = '';
-for($i=1;$i < $numberFiles;$i++) {
-	foreach my $j ( 1..$lengthRemaining[$i-1] ) {
-		$tmp .= "\t\\N";
-	}
-	$lengthRemaining = $tmp;
 }
 
 open(IN,'<',$ARGV[0]) or die("Cannot open main table: $ARGV[0].\n");
@@ -102,9 +96,19 @@ while($line = <IN>) {
 	if ( $id ne '' ) {
 		for($i = 1; $i < $numberFiles; $i++) {
 			if ( defined($data[$i-1]{$id}) ) {
-				$line .= "\t".$data[$i-1]{$id};
+				$N = scalar(@{$data[$i-1]{$id}});
+				if ( $N < $lengthRemaining[$i-1] ) {
+					if ( $N > 0 ) {
+						$line .= "\t".join("\t",@{$data[$i-1]{$id}});
+					}
+					foreach( 1 .. ($lengthRemaining[$i-1] - $N) ) {
+						$line .= "\t\\N";
+					}
+				} else {
+					$line .= "\t".join("\t",@{$data[$i-1]{$id}});
+				}
 			} else {
-				$line .= $lengthRemaining;
+				$line .= "\t\\N" for 1 .. $lengthRemaining[$i-1];
 			}
 		}
 	}	
