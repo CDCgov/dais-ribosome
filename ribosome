@@ -1,0 +1,307 @@
+#!/bin/bash
+# Sam Shepard - 2019-03-01
+# Self-contained translation engine for influenza
+
+# UTILITY FUNCTIONS #
+function help() {
+cat <<EOL
+
+Usage:
+
+	ribosome	install
+			rebuild
+			<†fasta|*tab> [<output_file1.seq> <output_file2.ins>]
+
+	†if classified, fasta: 	>ID|type_segment[_subtype]
+	*if classified, tab:	ID<TAB>type_segment_[subtype]<TAB>sequence
+
+EOL
+	exit 0
+}
+
+owd=$(pwd)
+prog=RIBOSOME
+function die() {
+	local t=$(date +"%Y-%m-%d %k:%M:%S")
+	echo -e "[$t] $prog ERROR :: $1" 1>&2
+	exit 1
+}
+
+function warn() {
+	local t=$(date +"%Y-%m-%d %k:%M:%S")
+	echo -e "[$t] $prog WARNING :: $1" 1>&2
+	return 1
+}
+
+function finish() {
+	local t=$(date +"%Y-%m-%d %k:%M:%S")
+	echo -e "[$t] $prog :: $1"
+	exit 0
+}
+
+function time_stamp() {
+	local t=$(date +"%Y-%m-%d %k:%M:%S")
+	echo -e "[$t] $prog :: $1"
+}
+
+function rmglob () {
+	local glob=""
+	for glob in "$@";do
+		if test -n "$(shopt -s nullglob;echo $glob)";then
+			rm $glob
+		fi
+	done
+}
+
+function catglob () {
+	local glob=""
+	for glob in "$@";do
+		if test -n "$(shopt -s nullglob;echo $glob)";then
+			cat $glob
+		fi
+	done
+}
+#######################
+
+tab=$'\t'
+bpath=
+if [ "$bpath" == "" ]; then
+	bpath=$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+fi
+
+function install() {
+	local libp=$1
+	libp=$(dirname "$libp")
+	[ ! -d "$libp" ] && mkdir $libp
+
+	cd $libp
+	for repo in editMSA convert sampling sswsort;do
+		[ ! -d "$repo" ] &&  git clone git@git.biotech.cdc.gov:vfn4/${repo}.git >/dev/null || die "failed to install $repo"
+	done
+	time_stamp "repos installed"
+	cd -
+}
+
+if [ -d "$bpath/lib" ];then
+	libp=$bpath/lib/*
+else
+	time_stamp "first time run, installing libraries"
+	libp=$bpath/lib/*
+	install $libp
+fi
+
+# Create working path
+TOKEN=$(perl -e '@chars = ("A".."Z","0".."9","a".."z");print $chars[int(rand(scalar(@chars)))] for 1..32;')
+mkdir -p $bpath/workdir/$TOKEN && workdir=$bpath/workdir/$TOKEN || die "Could not create working directory under $bpath"
+
+# files and vars
+binp=$bpath/bin
+refp=$bpath/refs
+specp=$bpath/spec
+alnp=$workdir/2-alignment
+nullp=$workdir/3-unused
+protp=$workdir/4-translation
+module=INFLUENZA
+
+# programs
+OS="Linux"
+command -v uname >/dev/null 2>&1 && OS=$(uname -s)
+if [ "$OS" != "Linux" -a "$OS" != "Darwin" ];then
+	time_stamp "Your $OS OS not yet supported."
+	exit 0
+fi
+SSW=$binp/ssw_$OS
+PARALLEL="$binp/parallel --will-cite"
+LIMIT_SSW=500		# threshold before grid
+SINGLE_LOCAL_PROC=8	# local processes on executing node
+GRID_PROCS=80		# grid array processes
+GRID_ON=1		# yes, we can use the cluster if needed, turn off for deployments without a cluster
+
+if [ "$1" == "help" -o "$#" -eq "0" ];then
+	help
+elif [ "$1" == "rebuild" ];then
+	time_stamp "rebuilding references"
+	module=INFLUENZA
+	[ -d "$refp/$module" ] && rm -rf $refp/$module
+	mkdir $refp/$module
+	$libp/partitionByField.pl $specp/${module}.refs -F 2 $refp/$module/
+	if test -n "$(shopt -s nullglob;echo $refp/$module/*.refs)";then
+		for ref in $refp/$module/*.refs;do
+			segment=$(basename $ref .refs)
+			mkdir $refp/$module/$segment || die "Could not make directory: $segment"
+			$libp/partitionByField.pl $ref -F 1 $refp/$module/$segment/ && rm $ref
+		done
+	fi
+	finish "rebuilt"	
+elif [ "$1" == "install" ];then
+	install $libp
+	finish "installation complete"
+elif [ "$#" -eq "3" ];then
+	INPUT_FILE=$1
+	OUT_SEQ=$2
+	OUT_INS=$3
+elif [ "$#" -eq "1" ];then
+	INPUT_FILE=$1
+	OUT_SEQ=$owd/${TOKEN}.seq
+	OUT_INS=$owd/${TOKEN}.ins
+else
+	help
+fi
+
+# if it's a pipe or not zero length, process it
+if [ -p "$INPUT_FILE" -o -s "$INPUT_FILE" ];then
+	cat "$INPUT_FILE" > $workdir/0-raw
+	INPUT_FILE=$workdir/0-raw
+else
+	rm -rf $workdir
+	die "file '$INPUT_FILE' could not be read."
+fi
+
+ext=$($binp/ext.pl $INPUT_FILE)
+fastaresult=$workdir/1-${TOKEN}.fa
+annotresult=$workdir/1-${TOKEN}.txt
+coordresult=$workdir/5-${TOKEN}.coords
+insertresult=$workdir/${TOKEN}.ins
+seqresult=$workdir/${TOKEN}.seq
+
+if [ "$ext" == "unk" ];then
+	die "unknown input format"
+elif [ "$ext" == "atxt" ];then
+	$libp/delim2fasta.pl $INPUT_FILE > $fastaresult
+elif [ "$ext" == "afa" ];then
+	mv $INPUT_FILE $fastaresult
+else
+	if [ "$ext" == "txt" ];then
+		$libp/delim2fasta.pl $INPUT_FILE > $fastaresult
+	elif [ "$ext" == "fa" ];then
+		mv $INPUT_FILE $fastaresult
+	else
+		die "unexpected format error: $ext"
+	fi
+
+	preset=flu-ABC90P
+	[ "$(grep '>' $fastaresult -c)" -eq "0" ] && die "only $N samples found in $fastaresult"
+	time_stamp "performing GENETYPE annotations on $N sequences"
+	$libp/SSWSORT $preset $fastaresult $annotresult || die "SSWSORT failure"
+	time_stamp "performed SSWSORT annotations with ${preset}."
+
+	$libp/reviseTaxa.pl -I -p -A <(cut -f3-4 $annotresult) $fastaresult || die "failed to revise annotations"
+fi
+
+# could de-duplicate
+#if [ ! -s "$fastaresult" ];then
+#	trimfile=$bpath/corrections/${prefix}.fa	
+#fi
+
+function alignSpliceTranslate() {
+	local alignp=$1
+	local proteinp=$2
+	local unusedp=$3
+	local refPath=$4
+	local queryDB=$5
+	local module=$6
+	local name=$module
+	local script=$alignp/${name}
+	local doGrid=0
+	local n=$(grep '>' $queryDB -c)
+
+	# Do we have sequences?
+	[ "${n:-0}" -eq "0" ] && die "No sequences found ($n), exiting" 
+	[ ! -d "$alignp" ] && mkdir $alignp
+	[ ! -d "$proteinp" ] && mkdir $proteinp
+	[ ! -d "$unusedp" ] && mkdir $unusedp
+
+	# perform initial estimate
+	if [ "$n" -gt "$LIMIT_SSW" -a "${GRID_ON:-0}" -eq "1" ];then
+		doGrid=1
+		procs=$GRID_PROCS
+	elif [ "$n" -ge "$SINGLE_LOCAL_PROC" ];then
+		procs=$SINGLE_LOCAL_PROC	
+	else
+		procs=1
+	fi
+	local samples=$( expr $n / $procs )
+	[ "${samples:-0}" -lt "1" ] && samples=1
+
+###
+cat > ${script}.sh  <<EOL
+#!/bin/bash
+LANG=$LANG
+shopt -u nocaseglob;shopt -u nocasematch
+
+function die() { local t=\$(date +"%Y-%m-%d %k:%M:%S");echo -e "[\$t] $prog/SSW ERROR \$1" 1>&2 && exit 1; }
+function finish() { local t=\$(date +"%Y-%m-%d %k:%M:%S");echo -e "[\$t] $prog/SSW :: \$1" && exit 0; }
+
+if [ "\$#" -eq "1" ];then
+	ID=\$(printf %04d \$1)
+else
+	ID=\$(printf %04d \$SGE_TASK_ID)
+fi
+
+QUERY=$alignp/*.\$ID.fa
+GENE=\$(basename \$QUERY .\$ID.fa)
+REFP=$refPath/\$GENE
+SSW_OPTS=\$($binp/getSSWconfig.pl $specp/${module}.ssw \$GENE)
+[ ! -d "\$REFP" ] && mv \$QUERY $unusedp/ && finish "no specification yet for \$GENE" 
+
+if test -n "\$(shopt -s nullglob;echo \$REFP/*.refs)";then
+	for REF in \$REFP/*.refs;do
+		SPEC=\$(basename \$REF .refs)
+		PREFIX=$alignp/\$SPEC.\$GENE.\$ID
+		SAM=\$PREFIX.sam
+		$binp/winnowSAM.pl <($SSW \$SSW_OPTS -r -s -h -c \$REF <( $binp/chewToStart.pl -R \$REF \$QUERY ) 2> /dev/null ) > \$SAM
+		$libp/sam2fasta.pl -P \$REF \$SAM \$PREFIX -E -M \$QUERY
+		$binp/makeProducts.pl \$PREFIX.fasta $specp/${module}.spec \$PREFIX -G \$GENE -R \$SPEC
+		$binp/makeInsProducts.pl \$PREFIX.ins.txt $specp/${module}.spec \$PREFIX -G \$GENE -R \$SPEC
+		$libp/codonCorrectStats.pl -S $specp/${module}.sto -F 3,4 -I \$PREFIX.ins -O \$PREFIX.ins.c \$PREFIX.products > \$PREFIX.products.c
+		PREFIX2=$proteinp/\$SPEC.\$GENE.\$ID
+		$binp/amendInsertionTable.pl -U \$PREFIX.ins.c > \$PREFIX2.ins
+		$libp/nt2aa.pl -E -M -P \$PREFIX.products.c \
+			| $libp/fa2delim.pl --show-if-insertion -A -B -I <(cut -f1,2,4 \$PREFIX2.ins|grep -v '?') > \$PREFIX2.aa
+		$libp/fa2delim.pl \$PREFIX.products.c -A --nt-id -B -I <(cat \$PREFIX.ins.c|grep -v '?') > \$PREFIX2.cds
+ 
+	done
+else
+	die "skipping \$GENE, missing refs"
+fi
+EOL
+###
+
+	# ASSEMBLE on grid vs local
+	chmod 755 ${script}.sh
+	local workdir=$alignp
+	$libp/partitionByField.pl -L ${samples:-1} -G -F 2 $queryDB $workdir/
+	procs=$(find $workdir/ -maxdepth 1 -name "*.????.fa"  | wc -l)
+	[ "${procs:-0}" -gt "$GRID_PROCS" ] && procs=$GRID_PROCS
+	if [ "$doGrid" -eq "1" ];then
+		qsub -t 1-$procs:1 -N N$name -sync y -wd $workdir -j y -o ${script}.o ${script}.sh > /dev/null 2>&1
+		if [ "$?" -ne "0" ];then
+			time_stamp "qsub of 'N$name' failed. Switching to master node."
+			$PARALLEL --workdir $workdir -j $SINGLE_LOCAL_PROC $BASH ${script}.sh {} ::: $(seq $procs) > /dev/null 2>&1
+		fi
+	else
+		$PARALLEL --workdir $workdir -j $procs $BASH ${script}.sh {} ::: $(seq $procs) > ${script}.o 2>&1
+	fi
+	cat ${script}.o
+}
+
+time_stamp "performing pairwise alignments"
+alignSpliceTranslate $alnp $protp $nullp $refp/$module $fastaresult $module || die "SSW failed"
+
+catglob $protp/*.ins|tr '|' "\t"|grep -v '?' > $insertresult
+if test -n "$(shopt -s nullglob;echo $alnp/*.products.c)";then
+	$binp/annotateCDS.pl	$specp/${module}.spec $fastaresult  \
+				<(cat $alnp/*.ins.c) <(cat $alnp/*.products.c) \
+				$alnp/*.ins.txt $alnp/*.fasta > $coordresult || die "annotation failed"
+fi
+
+#paste <(cat $protp/*.aa|tr '|' "\t") <(cat $protp/*.cds|cut -f2-) <(cut -f2- $coordresult) > $seqresult
+$binp/leftjoin.pl <(cat $protp/*.aa) <(cat $protp/*.cds) $coordresult| tr '|' "\t" > ${seqresult}
+
+if test -n "$(shopt -s nullglob;echo $nullp/*.fa)";then
+	$binp/unused2delim.pl -F 13 <(cat $nullp/*.fa) >> $seqresult
+fi
+[ -r "$seqresult" ] && mv $seqresult $OUT_SEQ
+[ -r "$insertresult" ] && mv $insertresult $OUT_INS
+#rm -rf $workdir &
+finish "finished"

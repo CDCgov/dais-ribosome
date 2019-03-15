@@ -1,0 +1,6 @@
+lib/
+debug/
+lib
+workdir/
+*.fa
+*.fasta
