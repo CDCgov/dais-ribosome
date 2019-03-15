@@ -180,7 +180,8 @@ else
 	fi
 
 	preset=flu-ABC90P
-	[ "$(grep '>' $fastaresult -c)" -eq "0" ] && die "only $N samples found in $fastaresult"
+	N=$(grep '>' $fastaresult -c)
+	[ "${N:-0}" -eq "0" ] && die "only $N samples found in $fastaresult"
 	time_stamp "performing GENETYPE annotations on $N sequences"
 	$libp/SSWSORT $preset $fastaresult $annotresult || die "SSWSORT failure"
 	time_stamp "performed SSWSORT annotations with ${preset}."
@@ -189,9 +190,7 @@ else
 fi
 
 # could de-duplicate
-#if [ ! -s "$fastaresult" ];then
-#	trimfile=$bpath/corrections/${prefix}.fa	
-#fi
+# need to check corrections: trimfile=$bpath/corrections/${prefix}.fa	
 
 function alignSpliceTranslate() {
 	local alignp=$1
@@ -285,7 +284,7 @@ EOL
 	cat ${script}.o
 }
 
-time_stamp "performing pairwise alignments"
+time_stamp "aligning, splicing products, and translating sequences"
 alignSpliceTranslate $alnp $protp $nullp $refp/$module $fastaresult $module || die "SSW failed"
 
 catglob $protp/*.ins|tr '|' "\t"|grep -v '?' > $insertresult
