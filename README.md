@@ -1,6 +1,31 @@
-The output for the `dais-ribosome` consists of two tab-delimited files. One with `.ins` for insertions and `.seq` for sequence related data.
+The DAIS **ribosome** compartmentalizes the original translation engine developed for our protein analytics database. Currently there is only support for INFLUENZA, but some seeds for extensibility have been planted throughout the code. I provide a brief outline of the algorithm:
+1.  If necessary, classify the nucleotide gene segment into its influenza type, segment, and subtype. I call this the compound type or `C_type`.
+2.  Align said segments (via [SSW](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0082138)) to the corresponding reference sequence(s) and pick the best alignment.
+3.  There can be more than one reference reading frame per C_type, so complete step 2 for each `reference_id`. Data with no reference is held-aside and added in later.
+4.  Fix alignment ends that have been chopped (due to local alignment disagreement).
+5.  Create protein product CDS using an internal specification.
+5.  Correct product alignment so that indels occur within frame only, then tabularize and create `cds_id`.
+6.  Amend insertion tables to use protein coordinates and translate.
+7.  Translate CDS to amino acids, calculating the `variant_hash` as well.
+8.  Create coordinate mapping between CDS and AA
+9.  Combine AA, CDS, and coordinate tabular data; output with insertion data from step 6.
 
-The insertion file example:<br />
+***
+
+**Input** can be one of the four formats.
+
+1.  Unannotated Fasta (ID only)
+>\>223550<br />ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
+2.  Annotated Fasta (ID and compound type)
+>\>223550|B_HA<br />ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
+3.  Unannotated tab-delimited (ID only)
+>223550 *\<tab\>* ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
+4.  Annotated tab-delimited (ID and compound type)
+>223550 *\<tab\>* B_HA *\<tab\>* ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
+
+***
+
+**Output** for the `dais-ribosome` consists of two tab-delimited files. One with `.ins` for insertions and `.seq` for sequence related data. An insertion file output example:<br />
 
 | ID | C_type | Ref_ID | Protein | Site | Codon | Residue |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
@@ -8,7 +33,7 @@ The insertion file example:<br />
 | 154957 | B_HA | PHUKET3073 | HA | 163 | krc | X | 
 | 223550 | B_HA | PHUKET3073 | HA | 161 | caa | Q | 
 
-The sequence file header:
+A sequence file output example:
 
 | ID | C_type | Ref_ID | Protein | VH | Insertion | AA_seq | AA_aln | cds_id | NT_seq | NT_aln | Query_nt_coordinates | CDS_nt_coordinates |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
