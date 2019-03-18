@@ -185,7 +185,7 @@ else
 	time_stamp "performing GENETYPE annotations on $N sequences"
 	$libp/SSWSORT $preset $fastaresult $annotresult || die "SSWSORT failure"
 	time_stamp "performed SSWSORT annotations with ${preset}."
-	[ ! -s "$annotresult" ] && $binp/revcompIDs.pl $fastaresult <(cut -f3- $annotresult) --in-place --by-strand
+	[ -s "$annotresult" ] && $binp/revcompIDs.pl $fastaresult <(cut -f3- $annotresult) --in-place --strand-field
 
 	$libp/reviseTaxa.pl -I -p -A <(cut -f3-4 $annotresult) $fastaresult || die "failed to revise annotations"
 fi

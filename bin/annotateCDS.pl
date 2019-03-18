@@ -266,7 +266,7 @@ while( $record = <PRODUCTS> ) {
 	$compound_id = shift(@lines);
 	$seq_prod = lc(join('',@lines)); $seq_len = length($seq_prod);
 	($flu_seq_id,$segment,$ref_id,$peptide) = split('\|',$compound_id);
-	#$segment = $segmentByRefPep{$ref_id}{$peptide};
+	$leftPad = ($seq_prod =~ /^(\.+)/) ? length($1) : 0;
 
 	$length = length($seq_prod);
 	if ( $length == 0 ) { 
@@ -278,7 +278,6 @@ while( $record = <PRODUCTS> ) {
 		# Aligned segment to original sequence offset. (1-based).
 		$oriOffset = $segmentOffset{$segment}{$ref_id}{$flu_seq_id};
 		($oriCoords, $pepCoords) = ('','');
-
 		$pepOffset = 0; $first = 1;
 		for($i = 0;$i < scalar(@exons);$i++ ) {
 			($idx,$L) = @{$exons[$i]};
@@ -291,7 +290,7 @@ while( $record = <PRODUCTS> ) {
 
 			# Let $idx + 1 = offset for the peptide within the segment alignment
 			# Thus the starting original coordinate adds the peptide to ref and ref to original offsets. 
-			$oriCursor = $idx + 1 + $oriOffset;
+			$oriCursor = $idx + 1 + $oriOffset + $leftPad;
 
 			# Peptide cursor is after previous exon lengths (offsets). Start at 1.
 			$pepCursor = $pepOffset+1;		
