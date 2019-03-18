@@ -227,7 +227,6 @@ foreach $file ( @ARGV ) {
 		$header = shift(@lines);
 		$seq = lc(join('',@lines));
 		($flu_seq_id,$segment) = split('\|',$header);
-
 		$length = length($seq);
 		if ( $length == 0 ) { 
 			next;
@@ -276,7 +275,11 @@ while( $record = <PRODUCTS> ) {
 		$original = $originals{$flu_seq_id};
 
 		# Aligned segment to original sequence offset. (1-based).
-		$oriOffset = $segmentOffset{$segment}{$ref_id}{$flu_seq_id};
+		if ( defined($segmentOffset{$segment}{$ref_id}{$flu_seq_id}) ) {
+			$oriOffset = $segmentOffset{$segment}{$ref_id}{$flu_seq_id};
+		} else {
+			die("Missing segment offset data for $segment / $ref_id / $flu_seq_id \n");
+		}
 		($oriCoords, $pepCoords) = ('','');
 		$pepOffset = 0; $first = 1;
 		for($i = 0;$i < scalar(@exons);$i++ ) {
