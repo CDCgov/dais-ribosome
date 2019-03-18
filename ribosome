@@ -198,6 +198,7 @@ else
 	$libp/SSWSORT $preset $fastaresult $annotresult || die "SSWSORT failure"
 	time_stamp "performed SSWSORT annotations with ${preset}."
 	[ -s "$annotresult" ] && $binp/revcompIDs.pl $fastaresult <(cut -f3- $annotresult) --in-place --strand-field
+print STDERR "here"
 
 	$libp/reviseTaxa.pl -I -p -A <(cut -f3-4 $annotresult) $fastaresult || die "failed to revise annotations"
 fi
@@ -261,7 +262,7 @@ if test -n "\$(shopt -s nullglob;echo \$REFP/*.refs)";then
 		SPEC=\$(basename \$REF .refs)
 		PREFIX=$alignp/\$SPEC.\$GENE.\$ID
 		SAM=\$PREFIX.sam
-		$binp/winnowSAM.pl <($SSW \$SSW_OPTS -r -s -h -c \$REF <( $binp/chewToStart.pl -R \$REF \$QUERY ) 2> /dev/null ) > \$SAM
+		$binp/winnowSAM.pl <($SSW \$SSW_OPTS -s -h -c \$REF <( $binp/chewToStart.pl -R \$REF \$QUERY ) 2> /dev/null ) > \$SAM
 		$libp/sam2fasta.pl -P \$REF \$SAM \$PREFIX -E -M \$QUERY
 		$binp/makeProducts.pl \$PREFIX.fasta $specp/${module}.spec \$PREFIX -G \$GENE -R \$SPEC
 		$binp/makeInsProducts.pl \$PREFIX.ins.txt $specp/${module}.spec \$PREFIX -G \$GENE -R \$SPEC
