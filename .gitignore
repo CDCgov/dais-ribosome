@@ -7,3 +7,4 @@ workdir/
 *.fasta
 *.seq
 *.ins
+.DS*
