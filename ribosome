@@ -21,6 +21,10 @@ EOL
 
 owd=$(pwd)
 prog=RIBOSOME
+function cleanup() {
+	rm -rf $workdir &
+}
+
 function die() {
 	local t=$(date +"%Y-%m-%d %k:%M:%S")
 	echo -e "[$t] $prog ERROR :: $1" 1>&2
@@ -36,6 +40,7 @@ function warn() {
 function finish() {
 	local t=$(date +"%Y-%m-%d %k:%M:%S")
 	echo -e "[$t] $prog :: $1"
+	cleanup
 	exit 0
 }
 
@@ -61,6 +66,7 @@ function catglob () {
 		fi
 	done
 }
+
 #######################
 
 tab=$'\t'
@@ -76,18 +82,21 @@ function install() {
 
 	cd $libp
 	for repo in editMSA convert sampling sswsort;do
-		[ ! -d "$repo" ] &&  git clone git@git.biotech.cdc.gov:vfn4/${repo}.git >/dev/null || die "failed to install $repo"
+		if [ ! -d "$repo" ];then 
+			git clone git@git.biotech.cdc.gov:vfn4/${repo}.git >/dev/null || die "failed to install $repo"
+		else
+			cd $libp/$repo
+			git pull || die "failed to pull data for $repo"
+			cd $libp
+		fi
 	done
-	time_stamp "repos installed"
-	cd -
 }
 
-if [ -d "$bpath/lib" ];then
-	libp=$bpath/lib/*
-else
+libp=$bpath/lib/*
+if [ ! -d "$bpath/lib" -a "$1" != "install" ];then
 	time_stamp "first time run, installing libraries"
-	libp=$bpath/lib/*
 	install $libp
+	time_stamp "finished installing repos"
 fi
 
 # Create working path
@@ -119,6 +128,7 @@ GRID_ON=1		# yes, we can use the cluster if needed, turn off for deployments wit
 
 if [ "$1" == "help" -o "$#" -eq "0" ];then
 	help
+	cleanup
 elif [ "$1" == "rebuild" ];then
 	time_stamp "rebuilding references"
 	module=INFLUENZA
@@ -134,6 +144,7 @@ elif [ "$1" == "rebuild" ];then
 	fi
 	finish "rebuilt"	
 elif [ "$1" == "install" ];then
+	time_stamp "installing/updating dependencies"
 	install $libp
 	finish "installation complete"
 elif [ "$#" -eq "3" ];then
@@ -146,6 +157,7 @@ elif [ "$#" -eq "1" ];then
 	OUT_INS=$owd/${TOKEN}.ins
 else
 	help
+	cleanup
 fi
 
 # if it's a pipe or not zero length, process it
@@ -308,5 +320,4 @@ fi
 # Produce output and clean up
 [ -r "$seqresult" ] && mv $seqresult $OUT_SEQ
 [ -r "$insertresult" ] && mv $insertresult $OUT_INS
-rm -rf $workdir &
 finish "finished"
