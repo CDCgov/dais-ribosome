@@ -35,7 +35,7 @@ The DAIS **ribosome** compartmentalizes the original translation engine develope
 
 A sequence file output example:
 
-| ID | C_type | Ref_ID | Protein | VH | Insertion | AA_seq | AA_aln | cds_id | NT_seq | NT_aln | Query_nt_coordinates | CDS_nt_coordinates |
+| ID | C_type | Ref_ID | Protein | VH | Insertion | AA_seq | AA_aln | CDS_id | CDS_seq | CDS_aln | Query_nt_coordinates | CDS_nt_coordinates |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
 | 223550 | B_HA | BRISBANE60 | HA-signal | e81d2e81d2d895c70e91bb3ef917fe49fdab7d89549fdab7 | false | MKAIIVLLMVVTSNA | MKAIIVLLMVVTSNA | 2aa6443b92ca45b301faa4d46e5fbd3b010e3ab7 | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | 20..64 | 1..45 |
 | 223550 | B_HA | PHUKET3073 | HA-signal | e81d2d895c70e91bb3ef917fe49fdab7 | false | MKAIIVLLMVVTSNA | MKAIIVLLMVVTSNA | 2aa6443b92ca45b301faa4d46e5fbd3b010e3ab7 | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | 20..64 | 1..45 |
@@ -56,6 +56,6 @@ The field explanations:
 | Codon | The codon(s) inserted. |
 | Residue | the residue(s) inserted. Partial codons are denoted as `?`. |
 | AA_seq / AA_aln | The amino acid sequence (less deletions + insertions) and the amino acid alignment (residues relative to reference only). |
-| NT_seq / NT_aln | The nucleotide cds sequence (less deletions + insertions) and the cds alignment (bases relative to reference only). |
+| CDS_seq / CDS_aln | The nucleotide cds sequence (less deletions + insertions) and the cds alignment (bases relative to reference only). |
 | Query_nt_coordinates | Set of aligned position ranges representing the aligned coordinates relative to the original submitted query sequence. Insertions appear as singletons. |
 | CDS_nt_coordinates | Set of aligned position ranges relative to the spliced CDS. Insertions appear as singletons. |
