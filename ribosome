@@ -185,6 +185,7 @@ else
 	time_stamp "performing GENETYPE annotations on $N sequences"
 	$libp/SSWSORT $preset $fastaresult $annotresult || die "SSWSORT failure"
 	time_stamp "performed SSWSORT annotations with ${preset}."
+	[ ! -s "$annotresult" ] && $binp/revcompIDs.pl $fastaresult <(cut -f3- $annotresult) --in-place --by-strand
 
 	$libp/reviseTaxa.pl -I -p -A <(cut -f3-4 $annotresult) $fastaresult || die "failed to revise annotations"
 fi
@@ -241,7 +242,7 @@ QUERY=$alignp/*.\$ID.fa
 GENE=\$(basename \$QUERY .\$ID.fa)
 REFP=$refPath/\$GENE
 SSW_OPTS=\$($binp/getSSWconfig.pl $specp/${module}.ssw \$GENE)
-[ ! -d "\$REFP" ] && mv \$QUERY $unusedp/ && finish "no specification yet for \$GENE" 
+[ ! -d "\$REFP" ] && mv \$QUERY $unusedp/ && exit 0
 
 if test -n "\$(shopt -s nullglob;echo \$REFP/*.refs)";then
 	for REF in \$REFP/*.refs;do
@@ -286,6 +287,10 @@ EOL
 
 time_stamp "aligning, splicing products, and translating sequences"
 alignSpliceTranslate $alnp $protp $nullp $refp/$module $fastaresult $module || die "SSW failed"
+
+if test -n "$(shopt -s nullglob;echo $nullp/*.fa)";then
+	time_stamp "no specification yet for: $(for i in $nullp/*.fa;do basename $i .fa;done|cut -f1 -d'.'|tr '\n' ' ')"
+fi
 
 catglob $protp/*.ins|tr '|' "\t"|grep -v '?' > $insertresult
 if test -n "$(shopt -s nullglob;echo $alnp/*.products.c)";then
