@@ -1,5 +1,5 @@
 The DAIS **ribosome** compartmentalizes the original translation engine developed for our protein analytics database. Currently there is only support for INFLUENZA, but some seeds for extensibility have been planted throughout the code. I provide a brief outline of the algorithm:
-1.  If necessary, classify the nucleotide gene segment into its influenza type, segment, and subtype. I call this the compound type or `C_type`.
+1.  If necessary, classify the nucleotide gene segment into its influenza type, segment, and subtype. I call this the compound type or `C_type`. If necessary, reverse complement the query.
 2.  Align said segments (via [SSW](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0082138)) to the corresponding reference sequence(s) and pick the best alignment.
 3.  There can be more than one reference reading frame per C_type, so complete step 2 for each `reference_id`. Data with no reference is held-aside and added in later.
 4.  Fix alignment ends that have been chopped (due to local alignment disagreement).
