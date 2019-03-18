@@ -5,3 +5,5 @@ lib
 workdir/
 *.fa
 *.fasta
+*.seq
+*.ins
