@@ -198,7 +198,6 @@ else
 	$libp/SSWSORT $preset $fastaresult $annotresult || die "SSWSORT failure"
 	time_stamp "performed SSWSORT annotations with ${preset}."
 	[ -s "$annotresult" ] && $binp/revcompIDs.pl $fastaresult <(cut -f3- $annotresult) --in-place --strand-field
-print STDERR "here"
 
 	$libp/reviseTaxa.pl -I -p -A <(cut -f3-4 $annotresult) $fastaresult || die "failed to revise annotations"
 fi
