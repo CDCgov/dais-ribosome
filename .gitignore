@@ -1,4 +1,5 @@
 lib/
+out.log
 debug/
 lib
 workdir/

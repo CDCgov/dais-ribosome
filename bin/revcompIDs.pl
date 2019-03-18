@@ -53,7 +53,7 @@ if ( defined($inPlace) ) {
 			$sequence =~ tr/gcatrykmbvdhuGCATRYKMBVDHU/cgtayrmkvbhdaCGTAYRMKVBHDA/;
 		}
 
-		print FASTA $seqID,"\n",$sequence,"\n";
+		print FASTA '>',$seqID,"\n",$sequence,"\n";
 	}
 } else {
 	open(FASTA,'<',$ARGV[0]) or die("Cannot open $ARGV[0] for reading.\n");
@@ -73,7 +73,7 @@ if ( defined($inPlace) ) {
 			$sequence =~ tr/gcatrykmbvdhuGCATRYKMBVDHU/cgtayrmkvbhdaCGTAYRMKVBHDA/;
 		}
 
-		print STDOUT $seqID,"\n",$sequence,"\n";
+		print STDOUT '>',$seqID,"\n",$sequence,"\n";
 	}
 	close(FASTA);
 }
