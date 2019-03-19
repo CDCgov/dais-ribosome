@@ -1,18 +1,15 @@
 #!/usr/bin/perl
-# Samuel Shepard - 6.2018
+# Samuel Shepard - 2019.03
 # Annotate the CDS of sequences in DAIS
 
 use File::Basename;
-
-if (  scalar(@ARGV) < 5 ) {
-	$message = "\nUsage:\n\t$0 <0-spec> <2-original-fasta> <5-product-ins-c> <5-aligned-fas-c> <4-aligned-fas/ins ...> \n";
+my $message;
+if (  scalar(@ARGV) != 6 ) {
+	$message = "\nUsage:\n\t$0 <spec> <original-fasta> <product-fasta-c> <product-ins-c> <seg-alignment-fasta> <seg-insertion-ins-txt>\n";
 	die($message."\n");
 }
 
-$specfile=shift(@ARGV);
-$origfile=shift(@ARGV);
-$insprodfile=shift(@ARGV);
-$fasprodfile=shift(@ARGV);
+my ($specfile,$origfile,$fasprodfile,$insprodfile,$fassegfile,$inssegfile) = (@ARGV);
 
 # FUNCTIONS #
 sub removeElongation($) {
@@ -34,13 +31,6 @@ sub sequenceByCigar($$$) {
 	}
 	return $result;
 }
-
-sub getRef($) {
-	my $file = basename($_[0]);
-	my @pieces = split('\.',$file);
-	return $pieces[0];
-}
-
 
 sub getSubstringOffset($$) {
 	my ($original, $alignable) = (lc($_[0]),lc($_[1]));
@@ -137,17 +127,19 @@ sub addInsertionsBounded($$$) {
 }
 
 # process parameters
-$PROG = basename($0,'.pl');
+my $PROG = basename($0,'.pl');
 
 # process specifications
-$/ = "\n"; %specs = (); %segmentByRefPep = ();
-$max = 0; $productsFound = 0;
+$/ = "\n"; 
+my %specs = ();
+my %segmentByRefPep = ();
+my ($max, $productsFound) = (0,0);
 open( SPEC, '<', $specfile ) or die("$PROG ERROR: Could not open $specfile for reading.\n");
-while($line=<SPEC>) {
+while(my $line=<SPEC>) {
 	chomp($line);
-	($segment,$peptide,$headerInfo,$coords,$prefix,$suffix) = split("\t",$line);
-	($ref_id,$peptide2) = split('\|',$headerInfo);
-	@coordList = split(';',$coords);
+	my ($segment,$peptide,$headerInfo,$coords,$prefix,$suffix) = split("\t",$line);
+	my ($ref_id,$peptide2) = split('\|',$headerInfo);
+	my @coordList = split(';',$coords);
 
 	$segmentByRefPep{$ref_id}{$peptide} = $segment;
 	for( $i=0;$i<scalar(@coordList);$i++ ) {
@@ -159,8 +151,9 @@ while($line=<SPEC>) {
 close(SPEC);
 
 # process original fasta
+$/ = ">"; 
+my %originals = ();
 open( ORIG, '<', $origfile ) or die("$PROG ERROR: Could not open $origfile for reading.\n");
-$/ = ">"; %originals = ();
 while( $record = <ORIG> ) {
 	chomp($record);
 	@lines = split(/\r\n|\n|\r/, $record);
@@ -178,28 +171,22 @@ while( $record = <ORIG> ) {
 close(ORIG);
 
 # process alignment (gene segment level) insertions
-$/ = "\n"; %segmentInsertions = ();
-foreach $file (@ARGV) {
-	if ( $file =~ /\.ins\.txt$/ ) {
-		$ref_id = getRef($file);
-	} else {
-		next;
-	}
-
-	open(INS, '<', $file) or die("$PROG ERROR: could not open $file for reading.\n");
-	while($line = <INS> ) {
-		chomp($line);
-		($compound_id,$upstream_position,$insert) = split("\t",$line);
-		($flu_seq_id,$segment) = split('\|',$compound_id);
-		$segmentInsertions{$ref_id}{$segment}{$flu_seq_id}{$upstream_position} = $insert;
-	}
-	close(INS);
+$/ = "\n";
+my %segmentInsertions = ();
+open(INS, '<', $inssegfile) or die("$PROG ERROR: could not open $inssegfile for reading.\n");
+while($line = <INS> ) {
+	chomp($line);
+	($compound_id,$upstream_position,$insert) = split("\t",$line);
+	($flu_seq_id,$segment,$ref_id) = split('\|',$compound_id);
+	$segmentInsertions{$ref_id}{$segment}{$flu_seq_id}{$upstream_position} = $insert;
 }
+close(INS);
 
 
 # [INPUT]: "240934|A_HA_H3|HK4801|PB1	2274	TGA"
 # process product (nucleotide gene transcript) insertions
-$/ = "\n"; %productInsertions = ();
+$/ = "\n";
+my %productInsertions = ();
 open(INS, '<', $insprodfile) or die("$PROG ERROR: could not open $insprodfile for reading.\n");
 while($line = <INS> ) {
 	chomp($line);
@@ -211,49 +198,42 @@ close(INS);
 
 
 # process the segment coordinates to create a bounding box for segment alignments via reference
-$/ = ">"; %segmentOffset = ();
-foreach $file ( @ARGV ) {
-	if ( $file =~ /fasta$/ ) {
-		$ref_id = getRef($file);
-	} else {
+$/ = ">"; 
+my %segmentOffset = ();
+my ($total,$found) = (0,0);
+open( ALIGNED, '<', $fassegfile) or die("$PROG ERROR: Could not open $fassegfile for reading.\n");
+while( $record = <ALIGNED> ) {
+	chomp($record);
+	@lines = split(/\r\n|\n|\r/, $record);
+	$header = shift(@lines);
+	$seq = lc(join('',@lines));
+	($flu_seq_id,$segment,$ref_id) = split('\|',$header);
+	$length = length($seq);
+	if ( $length == 0 ) { 
 		next;
-	}
+	} elsif ( defined($originals{$flu_seq_id}) ) {
+		$found++;
 
-	$total = $found = 0;
-	open( ALIGNED, '<', $file ) or die("$PROG ERROR: Could not open $file for reading.\n");
-	while( $record = <ALIGNED> ) {
-		chomp($record);
-		@lines = split(/\r\n|\n|\r/, $record);
-		$header = shift(@lines);
-		$seq = lc(join('',@lines));
-		($flu_seq_id,$segment) = split('\|',$header);
-		$length = length($seq);
-		if ( $length == 0 ) { 
-			next;
-		} elsif ( defined($originals{$flu_seq_id}) ) {
-			$found++;
+		# Add back in insertions so the reference-aligned sequence will map to the original.
+		# Remove the trailing insertions (3' elongation) if applicable.
+		# Goal is to get the Reference boundary coords, which excludes elongation.
+		if ( defined($segmentInsertions{$ref_id}{$segment}{$flu_seq_id}) ) {
+			$seq = removeElongation(addInsertions($seq, \%{$segmentInsertions{$ref_id}{$segment}{$flu_seq_id}}))
+		}	
 
-			# Add back in insertions so the reference-aligned sequence will map to the original.
-			# Remove the trailing insertions (3' elongation) if applicable.
-			# Goal is to get the Reference boundary coords, which excludes elongation.
-			if ( defined($segmentInsertions{$ref_id}{$segment}{$flu_seq_id}) ) {
-				$seq = removeElongation(addInsertions($seq, \%{$segmentInsertions{$ref_id}{$segment}{$flu_seq_id}}))
-			}	
-
-			# Reference-Aligned Query to Original	
-			$offset = getSubstringOffset($originals{$flu_seq_id},$seq);
-			if ( $offset == 0.5 ) { 
-				die("Issue with $segment / $ref_id / #$flu_seq_id!\n");
-			}
-			$segmentOffset{$segment}{$ref_id}{$flu_seq_id} = $offset;
-		} else {
-			print STDERR "Original pair not found: $flu_seq_id ( $segment / $ref_id )\n";
+		# Reference-Aligned Query to Original	
+		$offset = getSubstringOffset($originals{$flu_seq_id},$seq);
+		if ( $offset == 0.5 ) { 
+			die("Issue with $segment / $ref_id / #$flu_seq_id!\n");
 		}
-
-		$total++;
+		$segmentOffset{$segment}{$ref_id}{$flu_seq_id} = $offset;
+	} else {
+		print STDERR "Original pair not found: $flu_seq_id ( $segment / $ref_id )\n";
 	}
-	close( ALIGNED );
+
+	$total++;
 }
+close( ALIGNED );
 
 # Sample header: >251324|A_NA_N2|HK4801|NA
 # process final products and create a map between reference coordinates (codon number) and original nucleotide coordinates
@@ -304,10 +284,7 @@ while( $record = <PRODUCTS> ) {
 				($inc,$op) = ($1,$2);
 				if ( $op eq 'N' ) {
 					if  ( $first ) {
-					#	$pepCoords .= $pepCursor.'..';
 						$pepCursor += $inc;
-					#	$pepCoords .= ($pepCursor-1).';';
-					#	$oriCoords .= ($oriCursor-1).';';
 						$first = 0;
 					}
 				} elsif ( $op eq 'M' ) {
@@ -328,13 +305,8 @@ while( $record = <PRODUCTS> ) {
 
 					$oriCoords .= ($oriCursor-1).';';
 				} elsif ( $op eq 'D' ) {
-#					$oriCoords .= ($oriCursor-1).';';
-#					$pepCoords .= $pepCursor.'..';
-
 					$pepCursor += $inc;
 					$oriOffset -= $inc;	# Likewise deletions are removed from the offset.
-
-#					$pepCoords .= ($pepCursor-1).';';
 				} else {
 					die("$op : Unknown\n");
 				}

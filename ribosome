@@ -176,6 +176,7 @@ coordresult=$workdir/5-${TOKEN}.coords
 insertresult=$workdir/${TOKEN}.ins
 seqresult=$workdir/${TOKEN}.seq
 
+time_stamp "started, processing data"
 if [ "$ext" == "unk" ];then
 	die "unknown input format"
 elif [ "$ext" == "atxt" ];then
@@ -262,13 +263,13 @@ if test -n "\$(shopt -s nullglob;echo \$REFP/*.refs)";then
 		PREFIX=$alignp/\$SPEC.\$GENE.\$ID
 		SAM=\$PREFIX.sam
 		$binp/winnowSAM.pl <($SSW \$SSW_OPTS -s -h -c \$REF <( $binp/chewToStart.pl -R \$REF \$QUERY ) 2> /dev/null ) > \$SAM
-		$libp/sam2fasta.pl -P \$REF \$SAM \$PREFIX -E -M \$QUERY
+		$libp/sam2fasta.pl -H \$SPEC -P \$REF \$SAM \$PREFIX -E -M \$QUERY
 		$binp/makeProducts.pl \$PREFIX.fasta $specp/${module}.spec \$PREFIX -G \$GENE -R \$SPEC
 		$binp/makeInsProducts.pl \$PREFIX.ins.txt $specp/${module}.spec \$PREFIX -G \$GENE -R \$SPEC
 		$libp/codonCorrectStats.pl -S $specp/${module}.sto -F 3,4 -I \$PREFIX.ins -O \$PREFIX.ins.c \$PREFIX.products > \$PREFIX.products.c
 		PREFIX2=$proteinp/\$SPEC.\$GENE.\$ID
 		$binp/amendInsertionTable.pl -U \$PREFIX.ins.c > \$PREFIX2.ins
-		$libp/nt2aa.pl -E -M -P \$PREFIX.products.c \
+		$libp/nt2aa.pl -T -E -M -P \$PREFIX.products.c \
 			| $libp/fa2delim.pl --show-if-insertion -A -B -I <(cut -f1,2,4 \$PREFIX2.ins|grep -v '?') > \$PREFIX2.aa
 		$libp/fa2delim.pl \$PREFIX.products.c -A --nt-id -B -I <(cat \$PREFIX.ins.c|grep -v '?') > \$PREFIX2.cds
  
@@ -284,7 +285,6 @@ EOL
 	local workdir=$alignp
 	$libp/partitionByField.pl -L ${samples:-1} -G -F 2 $queryDB $workdir/
 	procs=$(find $workdir/ -maxdepth 1 -name "*.????.fa"  | wc -l)
-	[ "${procs:-0}" -gt "$GRID_PROCS" ] && procs=$GRID_PROCS
 	if [ "$doGrid" -eq "1" ];then
 		qsub -t 1-$procs:1 -N N$name -sync y -wd $workdir -j y -o ${script}.o ${script}.sh > /dev/null 2>&1
 		if [ "$?" -ne "0" ];then
@@ -292,7 +292,7 @@ EOL
 			$PARALLEL --workdir $workdir -j $SINGLE_LOCAL_PROC $BASH ${script}.sh {} ::: $(seq $procs) > /dev/null 2>&1
 		fi
 	else
-		$PARALLEL --workdir $workdir -j $procs $BASH ${script}.sh {} ::: $(seq $procs) > ${script}.o 2>&1
+		$PARALLEL --workdir $workdir -j $SINGLE_LOCAL_PROC $BASH ${script}.sh {} ::: $(seq $procs) > ${script}.o 2>&1
 	fi
 	cat ${script}.o
 }
@@ -306,13 +306,14 @@ fi
 
 catglob $protp/*.ins|tr '|' "\t"|grep -v '?' > $insertresult
 if test -n "$(shopt -s nullglob;echo $alnp/*.products.c)";then
+	time_stamp "mapping CDS and query coordinates"
 	$binp/annotateCDS.pl	$specp/${module}.spec $fastaresult  \
-				<(cat $alnp/*.ins.c) <(cat $alnp/*.products.c) \
-				$alnp/*.ins.txt $alnp/*.fasta > $coordresult || die "annotation failed"
+				<(catglob $alnp/*.products.c) <(catglob $alnp/*.ins.c) \
+				<(catglob $alnp/*.fasta) <(catglob $alnp/*.ins.txt) > $coordresult || die "annotation failed"
 fi
 
+time_stamp "collating data"
 $binp/leftjoin.pl <(cat $protp/*.aa) <(cat $protp/*.cds) $coordresult| tr '|' "\t" > ${seqresult}
-
 if test -n "$(shopt -s nullglob;echo $nullp/*.fa)";then
 	$binp/unused2delim.pl -F 13 <(cat $nullp/*.fa) >> $seqresult
 fi

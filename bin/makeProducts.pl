@@ -12,7 +12,7 @@ if ( scalar(@ARGV) != 3 ) {
 
 $PROG = basename($0,'.pl');
 
-$/ = "\n"; $max = 0; $productsFound = 0;
+$/ = "\n"; $max = 0; $productsFound = 0; %fields = ();
 open(PROD,'<',$ARGV[1]) or die("Cannot open $ARGV[1] for reading.\n");
 while($line=<PROD>) {
 	chomp($line);
@@ -53,11 +53,6 @@ if ( defined($geneSegment) && $productsFound == 0 ) {
 
 %handles = ();
 @peptides = sort { $a cmp $b } keys(%fields);
-#foreach $peptide ( @peptides ) {
-#	$filename = $ARGV[2] . '-' . $peptide . '.fasta';
-#	open($peptide,'>', $filename) or die("Cannot open $filename for writing.\n");
-#}
-
 $filename = $ARGV[2] .'.products';
 open(OUT,'>', $filename) or die("Cannot open $filename for writing.\n");
 $/ = '>';
@@ -89,12 +84,9 @@ while ( $record = <FASTA> ) {
 
 			$length = length($cds);
 			if ( $length % 3 != 0 ) { die("$PROG:\tNot in triplets ($length) for peptide '$p'.\n"); }
-			print OUT '>',$id,'|',$fields{$p},"\n",$cds,"\n";
+			print OUT '>',$id,'|',$p,"\n",$cds,"\n";
 		}
 	}
 }
 close(FASTA);
 close(OUT);
-#foreach $peptide ( @peptides ) {
-#	close($handles{$peptide});
-#}

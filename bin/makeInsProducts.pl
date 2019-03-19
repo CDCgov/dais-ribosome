@@ -54,10 +54,6 @@ if ( defined($geneSegment) && $productsFound == 0 ) {
 }
 
 @peptides = sort { $a cmp $b } keys(%fields);
-#foreach $peptide ( @peptides ) {
-#	$filename = $prefix . '-' . $peptide . '.ins';
-#	open($peptide,'>', $filename) or die("Cannot open $filename for writing.\n");
-#}
 
 $filename = $prefix.'.ins';
 open(OUT,'>', $filename) or die("Cannot open $filename for writing.\n");
@@ -81,7 +77,7 @@ foreach $line ( @lines ) {
 				($start,$stop) = @{$exons{$p}[$i]};
 				if ( $start <= $pos && $pos < $stop ) {
 					$newPos = $pos - $start + 1 + $offset;
-					print OUT ($id.'|'.$fields{$p}),"\t",$newPos,"\t",$insert,"\n";
+					print OUT $id,'|',$p,"\t",$newPos,"\t",$insert,"\n";
 					$offset += ($stop-$start+1);
 					last;
 				}
@@ -89,13 +85,10 @@ foreach $line ( @lines ) {
 			}
 			if ( $pos == $max && $pos == $pMax{$p} ) {
 				$newPos = $offset;
-				print OUT ($id.'|'.$fields{$p}),"\t",$newPos,"\t",$insert,"\n";
+				print OUT $id,'|',$p,"\t",$newPos,"\t",$insert,"\n";
 			}
 		}
 	}
 }
 close(INS);
 close(OUT);
-#foreach $peptide ( @peptides ) {
-#	close($handles{$peptide});
-#}
