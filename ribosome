@@ -146,7 +146,7 @@ elif [ "$1" == "rebuild" ];then
 elif [ "$1" == "install" ];then
 	time_stamp "installing/updating dependencies"
 	install $libp
-	finish "installation complete"
+	finish "installation/update complete"
 elif [ "$#" -eq "3" ];then
 	INPUT_FILE=$1
 	OUT_SEQ=$2
