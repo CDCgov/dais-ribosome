@@ -312,7 +312,10 @@ if test -n "$(shopt -s nullglob;echo $alnp/*.products.c)";then
 				<(catglob $alnp/*.fasta) <(catglob $alnp/*.ins.txt) > $coordresult || die "annotation failed"
 fi
 
-$binp/leftjoin.pl <(cat $protp/*.aa) <(cat $protp/*.cds) $coordresult| tr '|' "\t" > ${seqresult}
+if test -n "$(shopt -s nullglob;echo $protp/*.aa)";then
+	$binp/leftjoin.pl <(cat $protp/*.aa) <(cat $protp/*.cds) $coordresult| tr '|' "\t" > ${seqresult}
+fi
+
 if test -n "$(shopt -s nullglob;echo $nullp/*.fa)";then
 	$binp/unused2delim.pl -F 13 <(cat $nullp/*.fa) >> $seqresult
 fi
