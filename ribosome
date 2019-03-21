@@ -271,8 +271,7 @@ if test -n "\$(shopt -s nullglob;echo \$REFP/*.refs)";then
 		$binp/amendInsertionTable.pl -U \$PREFIX.ins.c > \$PREFIX2.ins
 		$libp/nt2aa.pl -T -E -M -P \$PREFIX.products.c \
 			| $libp/fa2delim.pl --show-if-insertion -A -B -I <(cut -f1,2,4 \$PREFIX2.ins|grep -v '?') > \$PREFIX2.aa
-		$libp/fa2delim.pl \$PREFIX.products.c -A --nt-id -B -I <(cat \$PREFIX.ins.c|grep -v '?') > \$PREFIX2.cds
- 
+		$libp/fa2delim.pl \$PREFIX.products.c -A --nt-id -B -I <(cat \$PREFIX.ins.c) > \$PREFIX2.cds
 	done
 else
 	die "skipping \$GENE, missing refs"
