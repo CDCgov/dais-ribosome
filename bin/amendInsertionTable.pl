@@ -54,14 +54,20 @@ foreach $id ( sort { $a cmp $b } keys(%inserts) ) {
 	foreach $pos ( sort { $a <=> $b } keys(%{$inserts{$id}}) ) {
 		$insert = $inserts{$id}{$pos};
 		$L = length($insert);
-		if ( $L % 3 == 0 ) {
+		if ( $L >= 3 ) {
 			$aa = '';
 			for($i=0;$i<$L;$i+=3) {
 				$codon = uc(substr($insert,$i,3));
-				$aa .= defined($gc{$codon}) ? $gc{$codon} : 'X';
+				if ( defined($gc{$codon}) ) {
+					$aa .= $gc{$codon};
+				} elsif ( length($codon) < 3 ) {
+					$aa .= '~';
+				} else {
+					$aa .= 'X';
+				}
 			}
 		} else {	
-			$aa = "?" x ($L%3);
+			$aa = '?';
 		}
 
 		if ( $pos % 3 != 0 ) {

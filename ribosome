@@ -270,8 +270,8 @@ if test -n "\$(shopt -s nullglob;echo \$REFP/*.refs)";then
 		PREFIX2=$proteinp/\$SPEC.\$GENE.\$ID
 		$binp/amendInsertionTable.pl -U \$PREFIX.ins.c > \$PREFIX2.ins
 		$libp/nt2aa.pl -T -E -M -P \$PREFIX.products.c \
-			| $libp/fa2delim.pl --show-if-insertion -A -B -I <(cut -f1,2,4 \$PREFIX2.ins|grep -v '?') > \$PREFIX2.aa
-		$libp/fa2delim.pl \$PREFIX.products.c -A --nt-id -B -I <(cat \$PREFIX.ins.c) > \$PREFIX2.cds
+			| $libp/fa2delim.pl -A -B -I <(cut -f1,2,4 \$PREFIX2.ins|grep -v '?') > \$PREFIX2.aa
+		$libp/fa2delim.pl \$PREFIX.products.c --show-if-insertion --show-shift-indel -A --nt-id -B -I <(cat \$PREFIX.ins.c) > \$PREFIX2.cds
 	done
 else
 	die "skipping \$GENE, missing refs"
@@ -316,7 +316,7 @@ if test -n "$(shopt -s nullglob;echo $protp/*.aa)";then
 fi
 
 if test -n "$(shopt -s nullglob;echo $nullp/*.fa)";then
-	$binp/unused2delim.pl -F 13 <(cat $nullp/*.fa) >> $seqresult
+	$binp/unused2delim.pl -F 14 <(cat $nullp/*.fa) >> $seqresult
 fi
 
 # Produce output and clean up
