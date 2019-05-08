@@ -192,7 +192,7 @@ else
 		die "unexpected format error: $ext"
 	fi
 
-	preset=flu-ABC90P
+	preset=flu-ABCD90P
 	N=$(grep '>' $fastaresult -c)
 	[ "${N:-0}" -eq "0" ] && die "only $N samples found in $fastaresult"
 	time_stamp "performing GENETYPE annotations on $N sequences"
