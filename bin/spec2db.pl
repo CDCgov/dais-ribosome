@@ -30,11 +30,12 @@ while($record = <FASTA>) {
 	$sequence = uc(join('',@lines));
 
 	($refID,$seg,$id) = (split('\|',$header))[0..2];
-	if ( $id =~ /[A-Za-z]/ || length($sequence) == 0 ) {
+	# exclude specially modified sequences
+	if ( $id =~ /^\d+[A-Za-z]/ || length($sequence) == 0 ) {
 		next;
 	}
 
-	if ( $refID ne '' ) {
+	if ( $refID ne '' && $seg ne '' && ! defined($seqByRefSeg{$refID}{$seg}) ) {
 		$seqByRefSeg{$refID}{$seg} = $sequence;
 	}
 }
