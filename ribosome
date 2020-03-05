@@ -8,9 +8,9 @@ cat <<EOL
 
 Usage:
 
-	ribosome	install
-			rebuild
-			<†fasta|*tab> [<output_file1.seq> <output_file2.ins>]
+	ribosome			 	install
+			[--module <MODULE>]	rebuild
+			[--module <MODULE>]	<†fasta|*tab> [<output_file1.seq> <output_file2.ins>]
 
 	†if classified, fasta: 	>ID|type_segment[_subtype]
 	*if classified, tab:	ID<TAB>type_segment_[subtype]<TAB>sequence
@@ -112,6 +112,16 @@ alnp=$workdir/3-alignment
 protp=$workdir/4-translation
 module=INFLUENZA
 
+case $1 in
+	-m|--module)
+		if [ "$2" ];then
+			module="$2"
+			shift
+		fi
+	shift
+esac
+	
+
 # programs
 OS="Linux"
 command -v uname >/dev/null 2>&1 && OS=$(uname -s)
@@ -131,7 +141,6 @@ if [ "$1" == "help" -o "$#" -eq "0" ];then
 	cleanup
 elif [ "$1" == "rebuild" ];then
 	time_stamp "rebuilding references"
-	module=INFLUENZA
 	[ -d "$refp/$module" ] && rm -rf $refp/$module
 	mkdir $refp/$module
 	$libp/partitionByField.pl $specp/${module}.refs -F 2 $refp/$module/
@@ -192,7 +201,12 @@ else
 		die "unexpected format error: $ext"
 	fi
 
-	preset=flu-ABCD90P
+	if [ "${module:-INFLUENZA}" == "BETACORONAVIRUS" ];then
+		preset=cov-beta
+	else 
+		preset=flu-ABCD90P
+	fi
+
 	N=$(grep '>' $fastaresult -c)
 	[ "${N:-0}" -eq "0" ] && die "only $N samples found in $fastaresult"
 	time_stamp "performing GENETYPE annotations on $N sequences"
@@ -322,4 +336,4 @@ fi
 # Produce output and clean up
 [ -r "$seqresult" ] && mv $seqresult $OUT_SEQ
 [ -r "$insertresult" ] && mv $insertresult $OUT_INS
-finish "finished"
+#finish "finished"
