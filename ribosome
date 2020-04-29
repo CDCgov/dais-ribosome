@@ -178,7 +178,7 @@ else
 	die "file '$INPUT_FILE' could not be read."
 fi
 
-ext=$($binp/ext.pl $INPUT_FILE)
+ext=$($binp/ext.pl $INPUT_FILE ${module:-INFLUENZA})
 fastaresult=$workdir/1-${TOKEN}.fa
 annotresult=$workdir/1-${TOKEN}.txt
 coordresult=$workdir/5-${TOKEN}.coords
