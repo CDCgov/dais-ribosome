@@ -19,6 +19,7 @@ my $seq = '[a-zA-Z.~-]+';
 
 if ( $module =~ /CORONAVIRUS/i ) {
 	$annot = '[A-Z]+-CoV(-\w+)*';
+	$ID = '[A-Za-z0-9_-]+';
 }
 
 if ( $L =~ /^$ID\t$annot\t$seq$/ ) {
