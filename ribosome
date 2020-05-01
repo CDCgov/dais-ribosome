@@ -310,6 +310,9 @@ EOL
 	cat ${script}.o
 }
 
+time_stamp "removing extraneous FASTA characters"
+$libp/stripSequences.pl $fastaresult '*: .~-' > ${fastaresult}.tmp && mv ${fastaresult}.tmp $fastaresult
+
 time_stamp "aligning, splicing products, and translating sequences"
 alignSpliceTranslate $alnp $protp $nullp $refp/$module $fastaresult $module || die "SSW failed"
 
@@ -336,4 +339,4 @@ fi
 # Produce output and clean up
 [ -r "$seqresult" ] && mv $seqresult $OUT_SEQ
 [ -r "$insertresult" ] && mv $insertresult $OUT_INS
-#finish "finished"
+finish "finished"

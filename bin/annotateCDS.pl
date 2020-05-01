@@ -43,7 +43,7 @@ sub getSubstringOffset($$) {
 	if ( $original =~ m/\Q$alignable\E/ ) {
 		return ($-[0] - $leftpad);
 	} else {
-		print STDERR "ERROR, alignable not found.\n>Original\n$original\n>Alignable\n$alignable\n\n";
+		print STDERR "ERROR, alignable not found.\n>Original(gSO)\n$original\n\n>Alignable\n$alignable\n\n";
 		return 0.5;
 	}
 }
@@ -55,7 +55,7 @@ sub getSubstringCoords($$) {
 	if ( $original =~ m/\Q$alignable\E/ ) {
 		return ($-[0],$+[0]);
 	} else {
-		print STDERR "ERROR, alignable not found.\n>Original\n$original\n>Alignable\n$alignable\n\n";
+		print STDERR "ERROR, alignable not found.\n>Original(gSC)\n$original\n\n>Alignable\n$alignable\n\n";
 		return (-1,-1);
 	}
 }
