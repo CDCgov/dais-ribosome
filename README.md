@@ -28,7 +28,7 @@ The DAIS **ribosome** compartmentalizes the original translation engine develope
 
 **Output** for the `dais-ribosome` consists of two tab-delimited files. One with `.ins` for insertions and `.seq` for sequence related data. An insertion file output example:<br />
 
-| ID | C_type | Ref_ID | Protein | Site | Codon | Residue |
+| ID | C_type | Ref_ID | Protein | Site | Codon | Inserted_Residues |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
 | 11209 | B_HA | PHUKET3073 | HA | 161 | aaa | K | 
 | 154957 | B_HA | PHUKET3073 | HA | 163 | krc | X | 
@@ -36,27 +36,84 @@ The DAIS **ribosome** compartmentalizes the original translation engine develope
 
 A sequence file output example:
 
-| ID | C_type | Ref_ID | Protein | VH | Insertion | AA_seq | AA_aln | CDS_id | CDS_seq | CDS_aln | Query_nt_coordinates | CDS_nt_coordinates |
-| ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
-| 223550 | B_HA | BRISBANE60 | HA-signal | e81d2e81d2d895c70e91bb3ef917fe49fdab7d89549fdab7 | false | MKAIIVLLMVVTSNA | MKAIIVLLMVVTSNA | 2aa6443b92ca45b301faa4d46e5fbd3b010e3ab7 | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | 20..64 | 1..45 |
-| 223550 | B_HA | PHUKET3073 | HA-signal | e81d2d895c70e91bb3ef917fe49fdab7 | false | MKAIIVLLMVVTSNA | MKAIIVLLMVVTSNA | 2aa6443b92ca45b301faa4d46e5fbd3b010e3ab7 | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | 20..64 | 1..45 |
-| 11209 | B_HA | BRISBANE60 | HA-signal | c7ee7ff234abf5c0591e0fe1af26ca87 | false | MKAIIILLMVVTSNA | MKAIIILLMVVTSNA | c49a73ab7280362c8c710abbf648708c41f97712 | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | 1..45 | 1..45 |
-| 11209 | B_HA | PHUKET3073 | HA-signal | c7ee7ff234abf5c0591e0fe1af26ca87 | false | MKAIIILLMVVTSNA | MKAIIILLMVVTSNA | c49a73ab7280362c8c710abbf648708c41f97712 | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | 1..45 | 1..45 |
+| ID | C_type | Ref_ID | Protein | VH | Insertion | Shift_Insert | AA_seq | AA_aln | CDS_id | CDS_seq | CDS_aln | Query_nt_coordinates | CDS_nt_coordinates |
+| ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| 223550 | B_HA | BRISBANE60 | HA-signal | e81d2e81d2d895c70e91bb3ef917fe49fdab7d89549fdab7 | false | false | MKAIIVLLMVVTSNA | MKAIIVLLMVVTSNA | 2aa6443b92ca45b301faa4d46e5fbd3b010e3ab7 | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | 20..64 | 1..45 |
+| 223550 | B_HA | PHUKET3073 | HA-signal | e81d2d895c70e91bb3ef917fe49fdab7 | false | false | MKAIIVLLMVVTSNA | MKAIIVLLMVVTSNA | 2aa6443b92ca45b301faa4d46e5fbd3b010e3ab7 | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | 20..64 | 1..45 |
+| 11209 | B_HA | BRISBANE60 | HA-signal | c7ee7ff234abf5c0591e0fe1af26ca87 | false | false | MKAIIILLMVVTSNA | MKAIIILLMVVTSNA | c49a73ab7280362c8c710abbf648708c41f97712 | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | 1..45 | 1..45 |
+| 11209 | B_HA | PHUKET3073 | HA-signal | c7ee7ff234abf5c0591e0fe1af26ca87 | false | false | MKAIIILLMVVTSNA | MKAIIILLMVVTSNA | c49a73ab7280362c8c710abbf648708c41f97712 | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | 1..45 | 1..45 |
+
+
+<i>Optional</i> genome output file example:
+
+| ID | C_type | Ref_ID | Genome_ID | Genome_ength | Insertion | Genome_seq | Genome_aln |
+| ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 | 8e193a72b22a666947b21cb785af6780c2c6996b | 108 | true | TTTAAGGTTTATACCTTCCCAGGTAACAAACCAACC<b>TGGGTTTGG</b>AACTTTCGATCTCTTGTAGATCTGTTCTCTAAACGAACTTTAAAATCTGTGTGGCTGTCACTC | .TTTAAGGTTTATACCTTCCCAGGTAACAAACCAACCAACTTTCGATCTCTTGTAGATCTGTTCTCTAAACGAACTTTAAAATCTGTGTGGCTGTCACTC |
+
+<i>Optional</i> genome insertion output file example:
+
+| ID | C_type | Ref_ID | Site | Inserted_nucleotides |
+| ------ | ------ | ------ | ------ | ------ |
+| EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 | 37 | TGGGTTTGG |
+
 
 The field explanations:
 
 | field | description |
 | ------ | ------ |
 | ID | Any unique identifier, but likely the `flu_sequence_id`, `epi_segment_id`, raw `nt_id`, or NCBI accession. |
-| C_type | The compound type conisting of the influenza type, segment, and subtype if applicable. This is the same as IRMA. Chimeric types start with an asterisk. | 
+| C_type | The compound type conisting of the influenza type, segment, and subtype if applicable. This is the same as IRMA. Chimeric types start with an asterisk. Other modules, this field is used for the taxon, eg, SARS-CoV-2 and MERS-CoV. | 
 | Ref_ID | As with DAIS, the reference reading frame used for alignment. |
 | Protein | The protein product or peptide derived from the gene segment. |
 | VH | The `variant_hash` as used in DAIS (md5 hex of `AA_seq`). |
 | Insertion | Boolean indicating whether or not there is an insertion relative to reference. |
-| Site | The upstream amino acid position relative the insertion. |
+| Shift_Insert | Boolean indicating whether insertions would induce a frameshift. |
+| Site | The upstream amino acid / nucleotide position for the insertion relative to the reference coordinates. |
 | Codon | The codon(s) inserted. |
-| Residue | the residue(s) inserted. Partial codons are denoted as `?`. |
+| Inserted_residues / Inserted_nucleotides | The residues / nucleotides inserted. For AA, partial codons are denoted as `?`. |
+| CDS_ID / Genome_ID | The nucleotide sequence ID using the sha1 hex of the CDS_seq and Genome_seq (as in PubSeq). |
 | AA_seq / AA_aln | The amino acid sequence (less deletions + insertions) and the amino acid alignment (residues relative to reference only). |
 | CDS_seq / CDS_aln | The nucleotide cds sequence (less deletions + insertions) and the cds alignment (bases relative to reference only). |
+| Genome_seq / Genome_aln | The nucleotide genome sequence (less deletions + insertions) and the genome alignment (bases relative to reference only). |
 | Query_nt_coordinates | Set of aligned position ranges representing the aligned coordinates relative to the original submitted query sequence. Insertions appear as singletons. |
 | CDS_nt_coordinates | Set of aligned position ranges relative to the spliced CDS. Insertions appear as singletons. |
+| Genome_length | Length of the ungapped genome sequence (including insertions) aligned via relaxed Smith-Waterman to reference. May be smaller than the original sequence file if divergent ends were hard-clipped. |
+
+***
+
+**Command-line** usage
+<pre>
+        ribosome                        install         
+                        [--module <MODULE>]     rebuild
+                        [--module <MODULE>]     &lt;†fasta|*tab> [&lt;output_file1.seq> &lt;output_file2.ins> [&lt;output_file3.gen**] ]
+
+        †if classified, fasta:  >ID|type_segment[_subtype]
+        *if classified, tab:    ID<TAB>type_segment_[subtype]<TAB>sequence
+
+        ** Also procduces output_file4.gen.ins if specified
+
+        Valid modules: INFLUENA, BETACORONAVIRUS
+</pre>
+
+For first time use, use the <tt>install</tt> command. Make sure you have at least <i>reporter</i> access to @vfn4's git repos:
+*  [convert](https://git.biotech.cdc.gov/vfn4/convert)
+*  [editMSA](https://git.biotech.cdc.gov/vfn4/editMSA)
+*  [sampling](https://git.biotech.cdc.gov/vfn4/sampling)
+*  [sswsort](https://git.biotech.cdc.gov/vfn4/sswsort)
+
+Multiple references of the same type (and <b>same length</b>) can be included in the <tt>spec/</tt> subfolder.
+References with new types may also be added, and must match reference types in <tt>sswsort</tt> for automatic classification purposes.
+Automated classification is not needed if the reference type is included in the input (see below). 
+Once references are updated, issue the <tt>rebuild</tt> command to deposit them for use in the <tt>refs/</tt> folder structure.
+
+Influenza is the default module. Example usage might look like:
+
+<pre>
+ribosome simple.fasta
+ribosome flu.fasta out.seq out.ins
+ribosome --module BETACORONAVIRUS cov.txt out.seq out.ins out.genome
+</pre>
+
+Please note that the genome output is an additional optional argument given output files are explicitly specified (output files are normally sent to the calling working directory if not specified). 
+An insertion file is implicitly created when genome output is specified. In this example it would be: <tt>out.genome.ins</tt>
+
