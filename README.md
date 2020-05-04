@@ -46,7 +46,7 @@ A sequence file output example:
 
 <i>Optional</i> genome output file example:
 
-| ID | C_type | Ref_ID | Genome_ID | Genome_ength | Insertion | Genome_seq | Genome_aln |
+| ID | C_type | Ref_ID | Genome_ID | Genome_length | Insertion | Genome_seq | Genome_aln |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
 | EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 | 8e193a72b22a666947b21cb785af6780c2c6996b | 108 | true | TTTAAGGTTTATACCTTCCCAGGTAACAAACCAACC<b>TGGGTTTGG</b>AACTTTCGATCTCTTGTAGATCTGTTCTCTAAACGAACTTTAAAATCTGTGTGGCTGTCACTC | .TTTAAGGTTTATACCTTCCCAGGTAACAAACCAACCAACTTTCGATCTCTTGTAGATCTGTTCTCTAAACGAACTTTAAAATCTGTGTGGCTGTCACTC |
 
