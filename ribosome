@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sam Shepard - 2019-03-01
+# Sam Shepard - 2020-05
 # Self-contained translation engine for influenza
 
 # UTILITY FUNCTIONS #
@@ -10,10 +10,14 @@ Usage:
 
 	ribosome			 	install
 			[--module <MODULE>]	rebuild
-			[--module <MODULE>]	<†fasta|*tab> [<output_file1.seq> <output_file2.ins>]
+			[--module <MODULE>]	<†fasta|*tab> [<output_file1.seq> <output_file2.ins> [<output_file3.gen**] ]
 
 	†if classified, fasta: 	>ID|type_segment[_subtype]
 	*if classified, tab:	ID<TAB>type_segment_[subtype]<TAB>sequence
+
+	** Also procduces output_file4.gen.ins if specified
+
+	Valid modules: INFLUENA, BETACORONAVIRUS
 
 EOL
 	exit 0
@@ -156,14 +160,19 @@ elif [ "$1" == "install" ];then
 	time_stamp "installing/updating dependencies"
 	install $libp
 	finish "installation/update complete"
-elif [ "$#" -eq "3" ];then
+elif [ "$#" -eq "3" -o "$#" -eq "4" ];then
 	INPUT_FILE=$1
 	OUT_SEQ=$2
 	OUT_INS=$3
+	if [ "$#" -eq "4" ];then
+		OUT_GEN=$4
+	else
+		OUT_GEN=""
+	fi
 elif [ "$#" -eq "1" ];then
 	INPUT_FILE=$1
-	OUT_SEQ=$owd/${TOKEN}.seq
-	OUT_INS=$owd/${TOKEN}.ins
+	OUT_SEQ="$owd"/${TOKEN}.seq
+	OUT_INS="$owd"/${TOKEN}.ins
 else
 	help
 	cleanup
@@ -184,6 +193,7 @@ annotresult=$workdir/1-${TOKEN}.txt
 coordresult=$workdir/5-${TOKEN}.coords
 insertresult=$workdir/${TOKEN}.ins
 seqresult=$workdir/${TOKEN}.seq
+genresult=$workdir/${TOKEN}.genome
 
 time_stamp "started, processing data"
 if [ "$ext" == "unk" ];then
@@ -336,7 +346,17 @@ if test -n "$(shopt -s nullglob;echo $nullp/*.fa)";then
 	$binp/unused2delim.pl -F 14 <(cat $nullp/*.fa) >> $seqresult
 fi
 
+if [ "${OUT_GEN:-NONE}" != "NONE" ];then
+	if test -n "$(shopt -s nullglob;echo $alnp/*.????.fasta)";then
+		$libp/fa2delim.pl -Z -A -B --nt --show-if-insertion <(cat $alnp/*.????.fasta) -I <(cat $alnp/*.????.ins.txt) \
+			| tr '|' "\t" > $genresult
+		cat $alnp/*.????.ins.txt | tr '|' "\t" > ${genresult}.ins
+	fi
+fi
+
 # Produce output and clean up
+[ -s "$genresult" ] && mv ${genresult}.ins ${OUT_GEN}.ins
+[ -s "$genresult" ] && mv $genresult $OUT_GEN
 [ -r "$seqresult" ] && mv $seqresult $OUT_SEQ
 [ -r "$insertresult" ] && mv $insertresult $OUT_INS
 finish "finished"
