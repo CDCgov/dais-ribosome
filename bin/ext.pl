@@ -26,9 +26,9 @@ if ( $L =~ /^$ID\t$annot\t$seq$/ ) {
 	print "atxt";
 } elsif ( $L =~ /^$ID\t$seq$/ ) {
 	print 'txt';
-} elsif ( $L =~ /^>$ID\|$annot(\r?\z|\|)/ ) {
+} elsif ( $L =~ /^>$ID\|$annot(\r?\Z|\|)/ ) {
 	print 'afa';
-} elsif ( $L =~ /^>$ID\r?$/ ) {
+} elsif ( $L =~ /^>$ID\r?\Z/ ) {
 	print 'fa';
 } else {
 	print 'unk';
