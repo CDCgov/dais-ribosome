@@ -1,4 +1,4 @@
-The DAIS **ribosome** compartmentalizes the original translation engine developed for our protein analytics database. Currently there is only support for INFLUENZA, but some seeds for extensibility have been planted throughout the code. I provide a brief outline of the algorithm:
+The DAIS **ribosome** compartmentalizes the original translation engine developed for our protein analytics database. The tool was designed for use with INFLUENZA, but has been extended for use with BETACORONAVIRUS (codon weight matrix not yet stored for this module). I provide a brief outline of the algorithm:
 1.  If necessary, classify the nucleotide gene segment into its influenza type, segment, and subtype (compound or `C_type`) as well as make sure CDS is on the *forward strand*†.
 2.  Align said segments (via [SSW](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0082138)) to the corresponding reference sequence(s) and pick the best alignment.
 3.  There can be more than one reference reading frame per C_type, so complete step 2 for each `reference_id`. Data with no reference is held-aside and added in later.
@@ -78,6 +78,18 @@ The field explanations:
 | Query_nt_coordinates | Set of aligned position ranges representing the aligned coordinates relative to the original submitted query sequence. Insertions appear as singletons. |
 | CDS_nt_coordinates | Set of aligned position ranges relative to the spliced CDS. Insertions appear as singletons. |
 | Genome_length | Length of the ungapped genome sequence (including insertions) aligned via relaxed Smith-Waterman to reference. May be smaller than the original sequence file if divergent ends were hard-clipped. |
+***
+
+**Special use of translated characters**
+
+Translation produces standard amino acid codes with the two non-standard exceptions listed below.  The translation engine also stops when it encounters a stop codon.
+
+| Character | Interpretation |
+| ------ | ------ |
+| **.** | Missing alignment data (non-standard) |
+| **-** | Gap in alignment (standard) |
+| **~** | Partial codon (non-standard) |
+| **X** | Ambiguous codon translation (standard) |
 
 ***
 
