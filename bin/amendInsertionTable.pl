@@ -2,10 +2,17 @@
 # Sam Shepard
 
 use Getopt::Long;
-GetOptions(	'use-std-out|U' => \$useSTDOUT, 'split-id-field|T' => \$splitID 
+GetOptions(	'use-std-out|U' => \$useSTDOUT, 'split-id-field|T' => \$splitID,
+		'apply-all-filters|F=s' => \$prefix
 	);
+
+my $filtering = 0;
+if ( defined($prefix) ) {
+	$filtering = 1;
+}
+
 if ( scalar(@ARGV) != 1 ) {
-	$message = "Usage:\n\tperl $0 <insertion_table.txt> [-U|--use-std-out] [-T|--split-id-field]\n";
+	$message = "Usage:\n\tperl $0 <insertion_table.txt> [-A|--apply-all-filters <prefix>] [-U|--use-std-out] [-T|--split-id-field]\n";
 	die($message."\n");
 }
 
@@ -19,7 +26,7 @@ foreach $line ( @lines ) {
 	} elsif ( scalar(@fields) == 4 ) {
 		die("Likely already translated.\n");
 	} else {
-		($id,$pos,$insert) = @fields;
+		my ($id,$pos,$insert) = @fields;
 		$inserts{$id}{$pos} = lc($insert);
 	}
 }
@@ -45,14 +52,19 @@ close(INS);
 	'GTN'=>'V','GTR'=>'V','GTS'=>'V','GTT'=>'V','GTV'=>'V','GTW'=>'V','GTY'=>'V','TGG'=>'W','TAC'=>'Y','TAT'=>'Y','TAY'=>'Y'
 );
 
-if ( $useSTDOUT ) {
+if ( $filtering ) {
+	open(REJ,'>',$prefix . ".ins.filtered") or die("Cannot open ${prefix}.ins.filtered for writing.\n");
+	open(INS,'>',$prefix . ".ins") or die("Cannot open ${prefix}.ins for writing.\n");
+} elsif ( $useSTDOUT ) {
 	*INS = *STDOUT;
 } else {
 	open(INS,'>',$insertionTable) or die("Cannot open $insertionTable for writing.\n");
 }
-foreach $id ( sort { $a cmp $b } keys(%inserts) ) {
-	foreach $pos ( sort { $a <=> $b } keys(%{$inserts{$id}}) ) {
-		$insert = $inserts{$id}{$pos};
+
+
+foreach my $id ( sort { $a cmp $b } keys(%inserts) ) {
+	foreach my $nt_pos ( sort { $a <=> $b } keys(%{$inserts{$id}}) ) {
+		$insert = $inserts{$id}{$nt_pos};
 		$L = length($insert);
 		if ( $L >= 3 ) {
 			$aa = '';
@@ -70,14 +82,23 @@ foreach $id ( sort { $a cmp $b } keys(%inserts) ) {
 			$aa = '?';
 		}
 
-		if ( $pos % 3 != 0 ) {
-			$pos = int($pos/3) + ($pos%3) * 0.3;
-		} else {
-			$pos = int($pos/3);
-		}
+
+		my $aa_pos = int($nt_pos/3);
+		my $nt_shift = ($nt_pos%3);
 
 		if ( defined($splitID) ) { $id = join("\t",split('\|',$id)); }
-		print INS $id,"\t",$pos,"\t",$insert,"\t$aa\n";
+
+		if ( $filtering ) {
+			if ( $aa eq '?' || $insert =~ /^[nN]+$/ ) {
+				print REJ $id,"\t",$aa_pos,"\t",$insert,"\t",$aa,"\t",$nt_pos,"\t",$nt_shift,"\n";
+			} else {
+				print INS $id,"\t",$aa_pos,"\t",$insert,"\t",$aa,"\t",$nt_pos,"\t",$nt_shift,"\n";
+			}
+		} else {
+			print INS $id,"\t",$aa_pos,"\t",$insert,"\t",$aa,"\t",$nt_pos,"\t",$nt_shift,"\n";
+		}
 	}
 }
+
+if ( $filtering ) { close(REJ); }
 close(INS);

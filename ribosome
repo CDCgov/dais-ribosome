@@ -292,9 +292,9 @@ if test -n "\$(shopt -s nullglob;echo \$REFP/*.refs)";then
 		$binp/makeInsProducts.pl \$PREFIX.ins.txt $specp/${module}.spec \$PREFIX -G \$GENE -R \$SPEC
 		$libp/codonCorrectStats.pl -S $specp/${module}.sto -F 3,4 -I \$PREFIX.ins -O \$PREFIX.ins.c \$PREFIX.products > \$PREFIX.products.c
 		PREFIX2=$proteinp/\$SPEC.\$GENE.\$ID
-		$binp/amendInsertionTable.pl -U \$PREFIX.ins.c > \$PREFIX2.ins
+		$binp/amendInsertionTable.pl -U \$PREFIX.ins.c -A \$PREFIX2
 		$libp/nt2aa.pl -T -E -M -P \$PREFIX.products.c \
-			| $libp/fa2delim.pl -A -B -I <(cut -f1,2,4 \$PREFIX2.ins|grep -v '?') > \$PREFIX2.aa
+			| $libp/fa2delim.pl -A -B -I <(cut -f1,2,4 \$PREFIX2.ins) > \$PREFIX2.aa
 		$libp/fa2delim.pl \$PREFIX.products.c --show-if-insertion --show-shift-indel -A --nt-id -B -I <(cat \$PREFIX.ins.c) > \$PREFIX2.cds
 	done
 else
@@ -330,7 +330,7 @@ if test -n "$(shopt -s nullglob;echo $nullp/*.fa)";then
 	time_stamp "no specification yet for: $(for i in $nullp/*.fa;do basename $i .fa;done|cut -f1 -d'.'|tr '\n' ' ')"
 fi
 
-catglob $protp/*.ins|tr '|' "\t"|grep -v '?' > $insertresult
+catglob $protp/*.ins|tr '|' "\t" > $insertresult
 if test -n "$(shopt -s nullglob;echo $alnp/*.products.c)";then
 	time_stamp "mapping CDS and query coordinates"
 	$binp/annotateCDS.pl	$specp/${module}.spec $fastaresult  \

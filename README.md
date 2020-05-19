@@ -5,7 +5,7 @@ The DAIS **ribosome** compartmentalizes the original translation engine develope
 4.  Fix alignment ends that have been chopped (due to local alignment disagreement).
 5.  Create protein product CDS using an internal specification.
 5.  Correct product alignment so that indels occur within frame only, then tabularize and create `cds_id`.
-6.  Amend insertion tables to use protein coordinates and translate.
+6.  Amend insertion tables to use protein coordinates and translate. Filter singleton, doubleton, and entirely ambiugous inserts used for AA (retain in CDS output).
 7.  Translate CDS to amino acids, calculating the `variant_hash` as well.
 8.  Create coordinate mapping between CDS and AA
 9.  Combine AA, CDS, and coordinate tabular data; output with insertion data from step 6.
@@ -66,11 +66,11 @@ The field explanations:
 | Ref_ID | As with DAIS, the reference reading frame used for alignment. |
 | Protein | The protein product or peptide derived from the gene segment. |
 | VH | The `variant_hash` as used in DAIS (md5 hex of `AA_seq`). |
-| Insertion | Boolean indicating whether or not there is an insertion relative to reference. |
-| Shift_Insert | Boolean indicating whether insertions would induce a frameshift. |
+| Insertion | Boolean indicating whether or not there is an insertion relative to reference in the original CDS. |
+| Shift_Insert | Boolean indicating whether any of the above insertions would induce a frameshift. |
 | Site | The upstream amino acid / nucleotide position for the insertion relative to the reference coordinates. |
 | Codon | The codon(s) inserted. |
-| Inserted_residues / Inserted_nucleotides | The residues / nucleotides inserted. For AA, partial codons are denoted as `?`. |
+| Inserted_residues / Inserted_nucleotides | The residues / nucleotides inserted. |
 | CDS_ID / Genome_ID | The nucleotide sequence ID using the sha1 hex of the CDS_seq and Genome_seq (as in PubSeq). |
 | AA_seq / AA_aln | The amino acid sequence (less deletions + insertions) and the amino acid alignment (residues relative to reference only). |
 | CDS_seq / CDS_aln | The nucleotide cds sequence (less deletions + insertions) and the cds alignment (bases relative to reference only). |
