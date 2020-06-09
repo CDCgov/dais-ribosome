@@ -22,7 +22,7 @@ my $aln = CDS_ALN;
 my $pre_end = 4;
 if ( $genomeDeletions ) {
 	$aln = GEN_ALN;
-	$pre_end = 3;
+	$pre_end = 2;
 }
 
 if ( scalar(@ARGV) != 1 ) {
