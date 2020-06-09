@@ -9,6 +9,7 @@ The DAIS **ribosome** compartmentalizes the original translation engine develope
 7.  Translate CDS to amino acids, calculating the `variant_hash` as well.
 8.  Create coordinate mapping between CDS and AA
 9.  Combine AA, CDS, and coordinate tabular data; output with insertion data from step 6.
+10. Produce deletion table(s) from aligned sequences.
 
 ***
 
@@ -26,13 +27,25 @@ The DAIS **ribosome** compartmentalizes the original translation engine develope
 †Annotated fasta / tab-delimited data **must** be on the forward or plus strand. Unannotated data will be classified and reverse complemented to the forward strand in the CDS as needed.
 ***
 
-**Output** for the `dais-ribosome` consists of two tab-delimited files. One with `.ins` for insertions and `.seq` for sequence related data. An insertion file output example:<br />
+**Output** for the `dais-ribosome` consists of two tab-delimited files. One with `.ins` for insertions, one with `.del` for deletions, and `.seq` for sequence related data. An insertion file output example:<br />
 
-| ID | C_type | Ref_ID | Protein | Site | Codon | Inserted_Residues |
-| ------ | ------ | ------ | ------ | ------ | ------ | ------ |
-| 11209 | B_HA | PHUKET3073 | HA | 161 | aaa | K | 
-| 154957 | B_HA | PHUKET3073 | HA | 163 | krc | X | 
-| 223550 | B_HA | PHUKET3073 | HA | 161 | caa | Q | 
+| ID | C_type | Ref_ID | Protein | Upstream_aa | Inserted_nuceotides | Inserted_residues | Upstream_nt | Codon_shift |
+| ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| 11209 | B_HA | PHUKET3073 | HA | 161 | aaa | K | 483 | 0 |
+| 154957 | B_HA | PHUKET3073 | HA | 163 | krc | X | 489 | 0 |
+| 223550 | B_HA | PHUKET3073 | HA | 161 | caa | Q | 483 | 0 |
+
+A deletion file example:
+
+| ID | C_type | Ref_ID | Protein | VH | Del_AA_start | Del_AA_end | Del_AA_len | In_frame | CDS_ID | Del_CDS_start | Del_CDS_end | Del_CDS_len |
+| ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+|EPI_ISL_410721|SARS-CoV-2|WUHAN19|orf1ab|5ba70e95c9a3251bc6155f62295dd3e8|994|1002|9|true|29cd767e2d144c31179395fd606d1489ce731746|2980|3006|27|
+|EPI_ISL_410721|SARS-CoV-2|WUHAN19|orf1ab|5ba70e95c9a3251bc6155f62295dd3e8|1012|1012|1|true|29cd767e2d144c31179395fd606d1489ce731746|3034|3036|3|
+|EPI_ISL_410721|SARS-CoV-2|WUHAN19|S|450c068c437e7536d27fdb883d95d4f4|72|72|1|true|36a75a0d34960c048abaf82ee46a1b713eee534e|214|216|3|
+|EPI_ISL_410721|SARS-CoV-2|WUHAN19|S|450c068c437e7536d27fdb883d95d4f4|146|146|1|true|36a75a0d34960c048abaf82ee46a1b713eee534e|436|438|3|
+|EPI_ISL_410721|SARS-CoV-2|WUHAN19|S|450c068c437e7536d27fdb883d95d4f4|254|256|3|true|36a75a0d34960c048abaf82ee46a1b713eee534e|760|768|9|
+|EPI_ISL_410721|SARS-CoV-2|WUHAN19|S|450c068c437e7536d27fdb883d95d4f4|680|683|4|true|36a75a0d34960c048abaf82ee46a1b713eee534e|2038|2049|12|
+
 
 A sequence file output example:
 
@@ -52,9 +65,15 @@ A sequence file output example:
 
 <i>Optional</i> genome insertion output file example:
 
-| ID | C_type | Ref_ID | Site | Inserted_nucleotides |
+| ID | C_type | Ref_ID | Upstream_nt | Inserted_nucleotides |
 | ------ | ------ | ------ | ------ | ------ |
 | EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 | 37 | TGGGTTTGG |
+
+<i>Optional</i> genome deletion output file example:
+
+| ID | C_type | Ref_ID | Del_NT_start | Del_NT_end | Del_NT_len |
+| ------ | ------ | ------ | ------ | ------ |  ------ |
+| EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 |3246|3272|27|
 
 
 The field explanations:
@@ -65,10 +84,10 @@ The field explanations:
 | C_type | The compound type conisting of the influenza type, segment, and subtype if applicable. This is the same as IRMA. Chimeric types start with an asterisk. Other modules, this field is used for the taxon, eg, SARS-CoV-2 and MERS-CoV. | 
 | Ref_ID | As with DAIS, the reference reading frame used for alignment. |
 | Protein | The protein product or peptide derived from the gene segment. |
-| VH | The `variant_hash` as used in DAIS (md5 hex of `AA_seq`). |
+| VH (AA_ID) | The `variant_hash` as used in DAIS (md5 hex of `AA_seq`). |
 | Insertion | Boolean indicating whether or not there is an insertion relative to reference in the original CDS. |
 | Shift_Insert | Boolean indicating whether any of the above insertions would induce a frameshift. |
-| Site | The upstream amino acid / nucleotide position for the insertion relative to the reference coordinates. |
+| Upstream_aa / Upstream_nt | The upstream amino acid / nucleotide position for the insertion relative to the reference coordinates. |
 | Codon | The codon(s) inserted. |
 | Inserted_residues / Inserted_nucleotides | The residues / nucleotides inserted. |
 | CDS_ID / Genome_ID | The nucleotide sequence ID using the sha1 hex of the CDS_seq and Genome_seq (as in PubSeq). |
@@ -78,6 +97,9 @@ The field explanations:
 | Query_nt_coordinates | Set of aligned position ranges representing the aligned coordinates relative to the original submitted query sequence. Insertions appear as singletons. |
 | CDS_nt_coordinates | Set of aligned position ranges relative to the spliced CDS. Insertions appear as singletons. |
 | Genome_length | Length of the ungapped genome sequence (including insertions) aligned via relaxed Smith-Waterman to reference. May be smaller than the original sequence file if divergent ends were hard-clipped. |
+| Del_<AA/CDS/NT>_<start/end/len> | The start, end positions for amino acid, CDS, or genomic nucleotide deletions. Len is for total length. |
+| Codon_shift | The number of extra nucleotide between the complete upstream codon and the insertion (0, 1 or 2). |
+| In_frame | Specifies that the deletion contains no codon with partial deletions relative to `Ref ID`. |
 ***
 
 **Special use of translated characters**
@@ -97,12 +119,12 @@ Translation produces standard amino acid codes with the two non-standard excepti
 <pre>
         ribosome                        install         
                         [--module <MODULE>]     rebuild
-                        [--module <MODULE>]     &lt;†fasta|*tab> [&lt;output_file1.seq> &lt;output_file2.ins> [&lt;output_file3.gen**] ]
+                        [--module <MODULE>]     &lt;†fasta|*tab> [&lt;file1.seq> &lt;file2.ins> &lt;file3.del> [&lt;file4.gen**] ]
 
         †if classified, fasta:  >ID|type_segment[_subtype]
         *if classified, tab:    ID<TAB>type_segment_[subtype]<TAB>sequence
 
-        ** Also procduces output_file4.gen.ins if specified
+        ** Also procduces file5.gen.ins and file6.gen.del if specified
 
         Valid modules: INFLUENA, BETACORONAVIRUS
 </pre>
