@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sam Shepard - 2020-05
+# Sam Shepard - 2020-06
 # Self-contained translation engine for influenza
 
 # UTILITY FUNCTIONS #
@@ -10,12 +10,12 @@ Usage:
 
 	ribosome			 	install
 			[--module <MODULE>]	rebuild
-			[--module <MODULE>]	<†fasta|*tab> [<output_file1.seq> <output_file2.ins> [<output_file3.gen**] ]
+			[--module <MODULE>]	<†fasta|*tab> [<output1.seq> <output2.ins> <output3.del> [<output_file3.gen**] ]
 
 	†if classified, fasta: 	>ID|type_segment[_subtype]
 	*if classified, tab:	ID<TAB>type_segment_[subtype]<TAB>sequence
 
-	** Also procduces output_file4.gen.ins if specified
+	** Also procduces output4.gen.ins and output5.gen.del if specified
 
 	Valid modules: INFLUENA, BETACORONAVIRUS
 
@@ -160,12 +160,13 @@ elif [ "$1" == "install" ];then
 	time_stamp "installing/updating dependencies"
 	install $libp
 	finish "installation/update complete"
-elif [ "$#" -eq "3" -o "$#" -eq "4" ];then
+elif [ "$#" -eq "4" -o "$#" -eq "5" ];then
 	INPUT_FILE=$1
 	OUT_SEQ=$2
 	OUT_INS=$3
-	if [ "$#" -eq "4" ];then
-		OUT_GEN=$4
+	OUT_DEL=$4
+	if [ "$#" -eq "5" ];then
+		OUT_GEN=$5
 	else
 		OUT_GEN=""
 	fi
@@ -355,8 +356,12 @@ if [ "${OUT_GEN:-NONE}" != "NONE" ];then
 fi
 
 # Produce output and clean up
-[ -s "$genresult" ] && mv ${genresult}.ins ${OUT_GEN}.ins
-[ -s "$genresult" ] && mv $genresult $OUT_GEN
-[ -r "$seqresult" ] && mv $seqresult $OUT_SEQ
+[ -s "$genresult" ] && mv ${genresult}.ins ${OUT_GEN}.ins \
+	&& $binp/seq2del.pl $genresult -G > ${OUT_GEN}.del \
+	&& mv $genresult $OUT_GEN
+if [ -r "$seqresult" ];then
+	 $binp/seq2del.pl $seqresult > $OUT_DEL
+	 mv $seqresult $OUT_SEQ
+fi
 [ -r "$insertresult" ] && mv $insertresult $OUT_INS
 finish "finished"
