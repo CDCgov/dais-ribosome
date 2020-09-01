@@ -297,7 +297,7 @@ if test -n "\$(shopt -s nullglob;echo \$REFP/*.refs)";then
 		$binp/amendInsertionTable.pl -U \$PREFIX.ins.c -A \$PREFIX2
 		$libp/nt2aa.pl -T -E -M -P \$PREFIX.products.c \
 			| $libp/fa2delim.pl -A -B -I <(cut -f1,2,4 \$PREFIX2.ins) > \$PREFIX2.aa
-		$libp/fa2delim.pl \$PREFIX.products.c --show-if-insertion --show-shift-indel -A --nt-id -B -I <(cat \$PREFIX.ins.c) > \$PREFIX2.cds
+		$libp/fa2delim.pl \$PREFIX.products.c --show-if-insertion --show-shift-indel -A --nt-id -B -I <(cat \$PREFIX.ins.c) > \$PREFIX2.cds || { echo -e "\$(hostname)\n\$(which perl)\n\$(env|grep PERL)"; exit 2; }
 	done
 else
 	die "skipping \$GENE, missing refs"
@@ -313,8 +313,9 @@ EOL
 	if [ "$doGrid" -eq "1" ];then
 		qsub -t 1-$procs:1 -N N$name -sync y -wd $workdir -j y -o ${script}.o ${script}.sh > /dev/null 2>&1
 		if [ "$?" -ne "0" ];then
+			cat ${script}.o
 			time_stamp "qsub of 'N$name' failed. Switching to master node."
-			$PARALLEL --workdir $workdir -j $SINGLE_LOCAL_PROC $BASH ${script}.sh {} ::: $(seq $procs) > /dev/null 2>&1
+			$PARALLEL --workdir $workdir -j $SINGLE_LOCAL_PROC $BASH ${script}.sh {} ::: $(seq $procs) > ${script}.o 2>&1
 		fi
 	else
 		$PARALLEL --workdir $workdir -j $SINGLE_LOCAL_PROC $BASH ${script}.sh {} ::: $(seq $procs) > ${script}.o 2>&1
