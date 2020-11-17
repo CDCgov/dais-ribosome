@@ -250,6 +250,14 @@ function alignSpliceTranslate() {
 	[ ! -d "$proteinp" ] && mkdir $proteinp
 	[ ! -d "$unusedp" ] && mkdir $unusedp
 
+	# Check for qsub
+	if [ "$GRID_ON" -eq "1" ];then
+		if ! command -v qsub >/dev/null 2>&1;then
+			time_stamp "No 'qsub' command found, switching to local computation."
+			GRID_ON=0
+		fi
+	fi
+
 	# perform initial estimate
 	if [ "$n" -gt "$LIMIT_SSW" -a "${GRID_ON:-0}" -eq "1" ];then
 		doGrid=1
@@ -270,6 +278,9 @@ shopt -u nocaseglob;shopt -u nocasematch
 
 function die() { local t=\$(date +"%Y-%m-%d %k:%M:%S");echo -e "[\$t] $prog/SSW ERROR \$1" 1>&2 && exit 1; }
 function finish() { local t=\$(date +"%Y-%m-%d %k:%M:%S");echo -e "[\$t] $prog/SSW :: \$1" && exit 0; }
+
+perl -e 'use Digest::MD5;' >/dev/null 2>&1 || die "Missing Perl modules Digest::MD5 on \$(hostname), use yum to install."
+perl -e 'use Digest::SHA;' >/dev/null 2>&1 || die "Missing Perl modules Digest::SHA on \$(hostname), use yum to install."
 
 if [ "\$#" -eq "1" ];then
 	ID=\$(printf %04d \$1)
