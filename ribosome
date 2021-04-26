@@ -377,4 +377,4 @@ if [ -r "$seqresult" ];then
 	 mv $seqresult $OUT_SEQ
 fi
 [ -r "$insertresult" ] && mv $insertresult $OUT_INS
-#finish "finished"
+finish "finished"
