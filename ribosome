@@ -135,10 +135,10 @@ if [ "$OS" != "Linux" -a "$OS" != "Darwin" ];then
 fi
 SSW=$binp/ssw_$OS
 PARALLEL="$binp/parallel --will-cite"
-LIMIT_SSW=500			# threshold before grid
-SINGLE_LOCAL_PROC=8		# local processes on executing node
-GRID_PROCS=80			# grid array processes
-GRID_ON=${IFX_GRID_DEF:-1}	# yes, we can use the cluster if needed, turn off for deployments without a cluster
+LIMIT_SSW=500			                        # threshold before grid
+SINGLE_LOCAL_PROC=${IFX_LOCAL_PROCS:-16}		# local processes on executing node
+GRID_PROCS=${IFX_GRID_PROCS:-80}			    # grid array processes
+GRID_ON=${IFX_GRID_DEF:-1}	                    # yes, we can use the cluster if needed, turn off for deployments without a cluster
 
 if [ "$1" == "help" -o "$#" -eq "0" ];then
 	help
@@ -377,4 +377,4 @@ if [ -r "$seqresult" ];then
 	 mv $seqresult $OUT_SEQ
 fi
 [ -r "$insertresult" ] && mv $insertresult $OUT_INS
-finish "finished"
+#finish "finished"
