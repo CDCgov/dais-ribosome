@@ -136,7 +136,7 @@ fi
 SSW=$binp/ssw_$OS
 PARALLEL="$binp/parallel --will-cite"
 LIMIT_SSW=500			                        # threshold before grid
-SINGLE_LOCAL_PROC=${IFX_LOCAL_PROCS:-16}		# local processes on executing node
+SINGLE_LOCAL_PROCS=${IFX_LOCAL_PROCS:-16}		# local processes on executing node
 GRID_PROCS=${IFX_GRID_PROCS:-80}			    # grid array processes
 GRID_ON=${IFX_GRID_DEF:-1}	                    # yes, we can use the cluster if needed, turn off for deployments without a cluster
 
@@ -262,8 +262,8 @@ function alignSpliceTranslate() {
 	if [ "$n" -gt "$LIMIT_SSW" -a "${GRID_ON:-0}" -eq "1" ];then
 		doGrid=1
 		procs=$GRID_PROCS
-	elif [ "$n" -ge "$SINGLE_LOCAL_PROC" ];then
-		procs=$SINGLE_LOCAL_PROC	
+	elif [ "$n" -ge "$SINGLE_LOCAL_PROCS" ];then
+		procs=$SINGLE_LOCAL_PROCS
 	else
 		procs=1
 	fi
@@ -326,10 +326,10 @@ EOL
 		if [ "$?" -ne "0" ];then
 			cat ${script}.o
 			time_stamp "qsub of 'N$name' failed. Switching to master node."
-			$PARALLEL --workdir $workdir -j $SINGLE_LOCAL_PROC $BASH ${script}.sh {} ::: $(seq $procs) > ${script}.o 2>&1
+			$PARALLEL --workdir $workdir -j $SINGLE_LOCAL_PROCS $BASH ${script}.sh {} ::: $(seq $procs) > ${script}.o #2>&1
 		fi
 	else
-		$PARALLEL --workdir $workdir -j $SINGLE_LOCAL_PROC $BASH ${script}.sh {} ::: $(seq $procs) > ${script}.o 2>&1
+		$PARALLEL --workdir $workdir -j $SINGLE_LOCAL_PROCS $BASH ${script}.sh {} ::: $(seq $procs) > ${script}.o 2>&1
 	fi
 	cat ${script}.o
 }
