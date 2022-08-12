@@ -136,17 +136,6 @@ function script_path() {
     fi
 }
 
-# Select dependencies
-SSWSORT=$(script_path sswsort SSWSORT)
-partitionByField=$(script_path  sampling    partitionByField.pl)
-reviseTaxa=$(script_path        editMSA     reviseTaxa.pl)
-codonCorrectStats=$(script_path editMSA     codonCorrectStats.pl)
-stripSequences=$(script_path    editMSA     stripSequences.pl)
-sam2fasta=$(script_path         convert     sam2fasta.pl)
-delim2fasta=$(script_path       convert     delim2fasta.pl)
-fa2delim=$(script_path          convert     fa2delim.pl)
-nt2aa=$(script_path             convert     nt2aa.pl)
-
 # Create working path
 workdir=$(mktemp -d "$bpath"/workdir/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX)
 [ -d "$workdir" ] \
@@ -194,6 +183,8 @@ elif [ "$1" == "rebuild" ]; then
     time_stamp "rebuilding references"
     [ -d "$refp/$module" ] && rm -rf "$refp/${module:?}"
     mkdir "$refp/$module"
+
+    partitionByField=$(script_path  sampling    partitionByField.pl)
     "$partitionByField" "$specp/${module}.refs" -F 2 "$refp/$module/"
     if test -n "$(echo "$refp/$module"/*.refs)"; then
         for ref in "$refp/$module"/*.refs; do
@@ -234,6 +225,17 @@ else
     rm -rf "$workdir"
     die "file '$INPUT_FILE' could not be read."
 fi
+
+# Select dependencies
+SSWSORT=$(script_path sswsort SSWSORT)
+partitionByField=$(script_path  sampling    partitionByField.pl)
+reviseTaxa=$(script_path        editMSA     reviseTaxa.pl)
+codonCorrectStats=$(script_path editMSA     codonCorrectStats.pl)
+stripSequences=$(script_path    editMSA     stripSequences.pl)
+sam2fasta=$(script_path         convert     sam2fasta.pl)
+delim2fasta=$(script_path       convert     delim2fasta.pl)
+fa2delim=$(script_path          convert     fa2delim.pl)
+nt2aa=$(script_path             convert     nt2aa.pl)
 
 ext=$("$binp"/ext.pl "$INPUT_FILE" "${module:-INFLUENZA}")
 fastaresult="$workdir"/1-${TOKEN}.fa
