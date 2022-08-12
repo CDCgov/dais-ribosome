@@ -17,7 +17,7 @@ else
     cov_data="fix_headers spec/BETACORONAVIRUS.refs"
 fi
 
-previous=$(git rev-parse HEAD)
+previous=$(git branch|grep '*'|cut -f2 -d' ')
 for tag in "$NEW" "$OLD"; do
     git checkout $tag > /dev/null \
         || {
