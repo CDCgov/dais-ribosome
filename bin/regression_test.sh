@@ -17,6 +17,7 @@ else
     cov_data="fix_headers spec/BETACORONAVIRUS.refs"
 fi
 
+previous=$(git rev-parse HEAD)
 for tag in "$NEW" "$OLD"; do
     git checkout $tag > /dev/null \
         || {
@@ -39,3 +40,5 @@ for mod in flu cov; do
             || echo "  Failed"
     done
 done
+
+git checkout "$previous"
