@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # Samuel Shepard - 2019.03
 # Annotate the CDS of sequences in DAIS
 
