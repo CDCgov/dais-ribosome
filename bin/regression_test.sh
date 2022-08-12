@@ -1,7 +1,7 @@
 #!/bin/bash
 
 VERSION="v1.0"
-COMP="clean-up"
+COMP="b7904b738ae8d3bcf78c36733b02aab1d80c93ff"
 
 export IFX_LOCAL_PROCS=48
 
