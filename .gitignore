@@ -8,3 +8,6 @@ workdir/
 *.seq
 *.ins
 .DS*
+test*
+log*.txt
+junk*
