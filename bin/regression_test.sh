@@ -17,13 +17,14 @@ else
     cov_data="fix_headers spec/BETACORONAVIRUS.refs"
 fi
 
-previous=$(git branch|grep '*'|cut -f2 -d' ')
+previous=$(git branch | grep '*' | cut -f2 -d' ')
 for tag in "$NEW" "$OLD"; do
     git checkout $tag > /dev/null \
         || {
             echo "Git failure could be do to unstashed or uncommited work. Stash/commit and then try again."
             exit 1
-        }
+        } && ./ribosome install
+
     echo "Running '$tag'" \
         && time ./ribosome --module INFLUENZA <($flu_data) \
             test-flu-$tag.seq test-flu-$tag.ins test-flu-$tag.del test-flu-$tag.gen \

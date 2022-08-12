@@ -43,6 +43,7 @@ function help() {
 Usage:
 
         ribosome                            help
+                                            install (explicit)
                     [--module <MODULE>]	    rebuild
                     [--module <MODULE>]	    <†fasta|*tab> [<output1.seq> <output2.ins> <output3.del> [<output_file3.gen**] ]
 
@@ -136,6 +137,19 @@ function script_path() {
     fi
 }
 
+# Select dependencies
+function set_scripts() {
+    SSWSORT=$(script_path sswsort SSWSORT)
+    partitionByField=$(script_path sampling partitionByField.pl)
+    reviseTaxa=$(script_path    editMSA     reviseTaxa.pl)
+    codonCorrectStats=$(script_path editMSA codonCorrectStats.pl)
+    stripSequences=$(script_path editMSA    stripSequences.pl)
+    sam2fasta=$(script_path     convert     sam2fasta.pl)
+    delim2fasta=$(script_path   convert     delim2fasta.pl)
+    fa2delim=$(script_path      convert     fa2delim.pl)
+    nt2aa=$(script_path         convert     nt2aa.pl)
+}
+
 # Create working path
 workdir=$(mktemp -d "$bpath"/workdir/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX)
 [ -d "$workdir" ] \
@@ -179,6 +193,20 @@ GRID_ON=${IFX_GRID_DEF:-0}                  # yes, we can use the cluster if nee
 if [ "$1" == "help" ] || [ "$#" -eq "0" ]; then
     help
     cleanup
+elif [ "$1" == "install" ]; then
+    time_stamp "Installing and checking paths as needed"
+    set_scripts && cat << EOL
+    SSWSORT             $SSWSORT
+    partitionByField    $partitionByField
+    reviseTaxa          $reviseTaxa
+    codonCorrectStats   $codonCorrectStats
+    stripSequences      $stripSequences
+    sam2fasta           $sam2fasta
+    delim2fasta         $delim2fasta
+    fa2delim            $fa2delim
+    nt2aa               $nt2aa
+EOL
+    finish "Done"
 elif [ "$1" == "rebuild" ]; then
     time_stamp "rebuilding references"
     [ -d "$refp/$module" ] && rm -rf "$refp/${module:?}"
@@ -217,6 +245,9 @@ else
     cleanup
 fi
 
+# installl or set scripts
+set_scripts
+
 # if it's a pipe or not zero length, process it
 if [ -p "$INPUT_FILE" ] || [ -s "$INPUT_FILE" ]; then
     cat "$INPUT_FILE" > "$workdir"/0-raw
@@ -225,17 +256,6 @@ else
     rm -rf "$workdir"
     die "file '$INPUT_FILE' could not be read."
 fi
-
-# Select dependencies
-SSWSORT=$(script_path sswsort SSWSORT)
-partitionByField=$(script_path  sampling    partitionByField.pl)
-reviseTaxa=$(script_path        editMSA     reviseTaxa.pl)
-codonCorrectStats=$(script_path editMSA     codonCorrectStats.pl)
-stripSequences=$(script_path    editMSA     stripSequences.pl)
-sam2fasta=$(script_path         convert     sam2fasta.pl)
-delim2fasta=$(script_path       convert     delim2fasta.pl)
-fa2delim=$(script_path          convert     fa2delim.pl)
-nt2aa=$(script_path             convert     nt2aa.pl)
 
 ext=$("$binp"/ext.pl "$INPUT_FILE" "${module:-INFLUENZA}")
 fastaresult="$workdir"/1-${TOKEN}.fa
