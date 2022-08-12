@@ -1,7 +1,7 @@
 #!/bin/bash
 
-VERSION="v1.0"
-COMP="b7904b738ae8d3bcf78c36733b02aab1d80c93ff"
+NEW="v1.1"
+OLD="v1.0"
 
 export IFX_LOCAL_PROCS=48
 
@@ -17,7 +17,7 @@ else
     cov_data="fix_headers spec/BETACORONAVIRUS.refs"
 fi
 
-for tag in "$VERSION" "$COMP"; do
+for tag in "$NEW" "$OLD"; do
     git checkout $tag > /dev/null \
         || {
             echo "Git failure could be do to unstashed or uncommited work. Stash/commit and then try again."
@@ -34,7 +34,7 @@ done
 for mod in flu cov; do
     for ext in seq ins del gen gen.ins gen.del; do
         echo -n "Checking $mod / $ext" \
-            && cmp <(cat test-${mod}-${COMP}.$ext | sort) <(cat test-${mod}-${VERSION}.$ext | sort) > /dev/null 2>&1 \
+            && cmp <(cat test-${mod}-${OLD}.$ext | sort) <(cat test-${mod}-${NEW}.$ext | sort) > /dev/null 2>&1 \
             && echo "  Passed" \
             || echo "  Failed"
     done
