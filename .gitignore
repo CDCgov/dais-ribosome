@@ -11,3 +11,4 @@ workdir/
 test*
 log*.txt
 junk*
+.nfs*

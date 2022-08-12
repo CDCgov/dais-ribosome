@@ -5,12 +5,16 @@ COMP="b7904b738ae8d3bcf78c36733b02aab1d80c93ff"
 
 export IFX_LOCAL_PROCS=48
 
+function fix_headers() {
+    perl -p -e 's/>.+?\|.+?\|(.+?)$/>$1/' "$1"
+}
+
 if [ "$#" == "2" ]; then
     flu_data="cat $1"
     cov_data="cat $2"
 else
-    flu_data="lib/editMSA/ordinalHeaders.pl spec/INFLUENZA.refs"
-    cov_data="lib/editMSA/ordinalHeaders.pl spec/BETACORONAVIRUS.refs"
+    flu_data="fix_headers spec/INFLUENZA.refs"
+    cov_data="fix_headers spec/BETACORONAVIRUS.refs"
 fi
 
 for tag in "$VERSION" "$COMP"; do

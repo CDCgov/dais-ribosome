@@ -49,6 +49,11 @@ open( $IN, '<', $ARGV[0] ) or die("Cannot open $ARGV[0].\n");
 local $RS = "\n";
 my $module = $ARGV[1];
 my $L      = <$IN>;
+
+if ( !defined $L ) {
+    die("First line of input was blank: $ARGV[0]\n");
+}
+
 chomp($L);
 close $IN or croak("Cannot close file: $OS_ERROR\n");
 
