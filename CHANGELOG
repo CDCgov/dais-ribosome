@@ -1,2 +1,3 @@
+v1.2 (2022.08) - Adds ORF7b and ORF9b to the BETACORONAVIRUS.spec (Thanks to C. Paden)
 v1.1 (2022.07) - Cleaned up scripts and added individual licensing.
 v1.0 (2021.04) - Initial tagged release supporting SARS-CoV-2 and Influenza.
