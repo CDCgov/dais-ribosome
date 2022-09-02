@@ -58,6 +58,7 @@ EOL
     exit 0
 }
 
+IFX_PROG=RIBOSOME
 owd=$(pwd)
 function cleanup() {
     rm -rf "$workdir" &
