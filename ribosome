@@ -59,33 +59,8 @@ EOL
 }
 
 owd=$(pwd)
-prog=RIBOSOME
 function cleanup() {
     rm -rf "$workdir" &
-}
-
-function die() {
-    local t=$(date +"%Y-%m-%d %k:%M:%S")
-    echo -e "[$t] $prog ERROR :: $1" 1>&2
-    exit 1
-}
-
-function warn() {
-    local t=$(date +"%Y-%m-%d %k:%M:%S")
-    echo -e "[$t] $prog WARNING :: $1" 1>&2
-    return 1
-}
-
-function finish() {
-    local t=$(date +"%Y-%m-%d %k:%M:%S")
-    echo -e "[$t] $prog :: $1"
-    cleanup
-    exit 0
-}
-
-function time_stamp() {
-    local t=$(date +"%Y-%m-%d %k:%M:%S")
-    echo -e "[$t] $prog :: $1"
 }
 
 function catglob()  {
@@ -107,6 +82,7 @@ if [ "$bpath" == "" ]; then
     bpath=$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 fi
 libp=$bpath/lib
+source "$bpath/bin/utils.sh"
 
 function install() {
     local repo=$1
@@ -349,8 +325,8 @@ function alignSpliceTranslate() {
 LANG=$LANG
 shopt -u nocaseglob;shopt -u nocasematch
 
-function die() { local t=\$(date +"%Y-%m-%d %k:%M:%S");echo -e "[\$t] $prog/SSW ERROR \$1" 1>&2 && exit 1; }
-function finish() { local t=\$(date +"%Y-%m-%d %k:%M:%S");echo -e "[\$t] $prog/SSW :: \$1" && exit 0; }
+function die() { local t=\$(date +"%Y-%m-%d %k:%M:%S");echo -e "[\$t] $PROG/SSW ERROR \$1" 1>&2 && exit 1; }
+function finish() { local t=\$(date +"%Y-%m-%d %k:%M:%S");echo -e "[\$t] $PROG/SSW :: \$1" && exit 0; }
 
 perl -e 'use Digest::MD5;' >/dev/null 2>&1 || die "Missing Perl modules Digest::MD5 on \$(hostname), use yum to install."
 perl -e 'use Digest::SHA;' >/dev/null 2>&1 || die "Missing Perl modules Digest::SHA on \$(hostname), use yum to install."
