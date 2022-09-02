@@ -69,12 +69,12 @@ while ( my $fasta_record = <$FASTA> ) {
     my $header   = shift(@lines);
     my $sequence = uc( join( q{}, @lines ) );
 
+    if ( length $sequence == 0 ) { next; }
+
     my ( $refID, $seg, $id ) = ( split( '\|', $header ) )[0 .. 2];
 
     # exclude specially modified sequences
-    if ( $id =~ /^\d+[A-Za-z]/smx || length($sequence) == 0 ) {
-        next;
-    }
+    if ( $id =~ /^\d+[A-Za-z]/smx ) { next; }
 
     if ( $refID ne q{} && $seg ne q{} && !defined $seqByRefSeg{$refID}{$seg} ) {
         $seqByRefSeg{$refID}{$seg} = $sequence;
