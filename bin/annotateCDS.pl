@@ -104,8 +104,8 @@ sub sequenceToStates($) {
 sub addInsertions($$) {    ## no critic (Subroutines::RequireArgUnpacking)
     my $seq     = lc( $_[0] );
     my $inserts = $_[1];
-    my ( $offset, $pos ) = 0;
-    my $insert = q{};
+    my $offset  = 0;
+    my $insert  = q{};
     foreach my $pos ( sort { $a <=> $b } keys( %{$inserts} ) ) {
         $insert = $inserts->{$pos};
         substr( $seq, int($pos) + $offset, 0, uc($insert) );
