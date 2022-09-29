@@ -143,7 +143,7 @@ Translation produces standard amino acid codes with the two non-standard excepti
 
         ** Also procduces file5.gen.ins and file6.gen.del if specified
 
-        Valid modules: INFLUENA, BETACORONAVIRUS
+        Valid modules: INFLUENZA, BETACORONAVIRUS
 ```
 
 ## Installation
