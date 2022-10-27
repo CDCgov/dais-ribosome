@@ -15,6 +15,7 @@ The DAIS **ribosome** compartmentalizes the original translation engine develope
 11. Produce deletion table(s) from aligned sequences.
 
 **Table of contents:**
+
 - [DAIS-ribosome - annotation and coordinate mapping of CDS and protein sequences for virus genomes](#dais-ribosome---annotation-and-coordinate-mapping-of-cds-and-protein-sequences-for-virus-genomes)
   - [Input data](#input-data)
   - [Output data](#output-data)
@@ -23,6 +24,7 @@ The DAIS **ribosome** compartmentalizes the original translation engine develope
   - [CLI Usage](#cli-usage)
   - [Installation](#installation)
   - [Updating the codon weight matrix](#updating-the-codon-weight-matrix)
+  - [License](#license)
   - [Component Citations](#component-citations)
 
 ## Input data
@@ -30,22 +32,28 @@ The DAIS **ribosome** compartmentalizes the original translation engine develope
 **Input** can be one of the four formats.
 
 1. Unannotated Fasta (ID only)
->\>223550<br />ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
+
+    >\>223550  
+    >ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
 
 2. Annotated Fasta (ID and compound type)
->\>223550|B_HA<br />ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
+
+    >\>223550|B_HA  
+    >ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
 
 3. Unannotated tab-delimited (ID only)
->223550 *\<tab\>* ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
+
+    >223550 *\<tab\>* ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
 
 4. Annotated tab-delimited (ID and compound type)
->223550 *\<tab\>* B_HA *\<tab\>* ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
+
+    >223550 *\<tab\>* B_HA *\<tab\>* ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
 
 †Annotated fasta / tab-delimited data **must** be on the forward or plus strand. Unannotated data will be classified and reverse complemented to the forward strand in the CDS as needed.
 
 ## Output data
 
-**Output** for the `dais-ribosome` consists of two tab-delimited files. One with `.ins` for insertions, one with `.del` for deletions, and `.seq` for sequence related data. An insertion file output example:<br />
+**Output** for the `dais-ribosome` consists of two tab-delimited files. One with `.ins` for insertions, one with `.del` for deletions, and `.seq` for sequence related data. An insertion file output example:
 
 | ID | C_type | Ref_ID | Protein | Upstream_aa | Inserted_nuceotides | Inserted_residues | Upstream_nt | Codon_shift |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
@@ -77,7 +85,7 @@ A sequence file output example:
 
 | ID | C_type | Ref_ID | Genome_ID | Genome_length | Insertion | Genome_seq | Genome_aln |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
-| EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 | 8e193a72b22a666947b21cb785af6780c2c6996b | 108 | true | TTTAAGGTTTATACCTTCCCAGGTAACAAACCAACC<b>TGGGTTTGG</b>AACTTTCGATCTCTTGTAGATCTGTTCTCTAAACGAACTTTAAAATCTGTGTGGCTGTCACTC | .TTTAAGGTTTATACCTTCCCAGGTAACAAACCAACCAACTTTCGATCTCTTGTAGATCTGTTCTCTAAACGAACTTTAAAATCTGTGTGGCTGTCACTC |
+| EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 | 8e193a72b22a666947b21cb785af6780c2c6996b | 108 | true | TTTAAGGTTTATACCTTCCCAGGTAACAAACCAACC**TGGGTTTGG**AACTTTCGATCTCTTGTAGATCTGTTCTCTAAACGAACTTTAAAATCTGTGTGGCTGTCACTC | .TTTAAGGTTTATACCTTCCCAGGTAACAAACCAACCAACTTTCGATCTCTTGTAGATCTGTTCTCTAAACGAACTTTAAAATCTGTGTGGCTGTCACTC |
 
 *Optional* genome insertion output file example:
 
@@ -196,6 +204,10 @@ One can also display the codon weight matrix produced:
 ```{bash}
 lib/editMSA/displayStats.pl  BETACORONAVIRUS.sto
 ```
+
+## License
+
+Generally this package is under GPLv3 but select files may be public domain. Datasets packaged with `dais-ribosome` are not for external re-distribution separate from this program. See the [LICENSE](LICENSE) file for more information.
 
 ## Component Citations
 
