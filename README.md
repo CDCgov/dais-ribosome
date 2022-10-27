@@ -134,16 +134,20 @@ Translation produces standard amino acid codes with the two non-standard excepti
 **Command-line** usage
 
 ```{bash}
-        ribosome                                install         
-                        [--module <MODULE>]     rebuild
-                        [--module <MODULE>]     &lt;†fasta|*tab> [&lt;file1.seq> &lt;file2.ins> &lt;file3.del> [&lt;file4.gen**] ]
+Usage:
+
+        ribosome                            help
+                                            install (explicit)
+                    [--module <MODULE>]     rebuild
+                    [--module <MODULE>]     <†fasta|*tab> [<output1.seq> <output2.ins> <output3.del> [<output_file3.gen**] ]
 
         †if classified, fasta:  >ID|type_segment[_subtype]
         *if classified, tab:    ID<TAB>type_segment_[subtype]<TAB>sequence
 
-        ** Also procduces file5.gen.ins and file6.gen.del if specified
+        ** Also procduces output4.gen.ins and output5.gen.del if specified
 
         Valid modules: INFLUENZA, BETACORONAVIRUS
+
 ```
 
 ## Installation
