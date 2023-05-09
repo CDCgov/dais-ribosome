@@ -116,6 +116,10 @@ sub addInsertions($$) {    ## no critic (Subroutines::RequireArgUnpacking)
 }
 
 sub addInsertionsBounded($$$) {    ## no critic (Subroutines::RequireArgUnpacking)
+    if ( !defined $_[0] ) {
+        return q{};
+    }
+
     my $seq     = lc( $_[0] );
     my $inserts = $_[1];
     my $offset  = $_[2];
@@ -276,6 +280,12 @@ while ( my $fasta_record = <$PRODUCTS> ) {
             # Get the cigar for the current exon, do not add insertions outside the valid bounds.
             # We process the exons from the peptide / product sequence.
             # I use the peptide term interchangably with product, although the product files are untranslated in DAIS terms.
+            if ( $seq_len < $pepOffset + $L ) {
+                $L = $seq_len - $pepOffset;
+                if ( $L < 1 ) {
+                    last;
+                }
+            }
             my $exon = substr( $seq_prod, $pepOffset, $L );
             my $exonCigar = sequenceToCigar(
                       addInsertionsBounded( $exon, \%{ $productInsertions{$ref_id}{$peptide}{$flu_seq_id} }, -$pepOffset ) );
