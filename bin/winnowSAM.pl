@@ -39,7 +39,7 @@ use strict;
 use warnings;
 use English qw( -no_match_vars );
 use Getopt::Long;
-use Carp qw(croak);
+use Carp qw(croak carp);
 
 my ( $useMatches, $inPlace, $interleavedPairs );
 GetOptions(
@@ -97,7 +97,7 @@ while ( my $line = <$SAM> ) {
     my $score;
     if ($useMatches) {
         $score = countMatch($cigar);
-    } elsif ( $AS =~ /AS:\w:(\d+)/smx ) {
+    } elsif ( defined $AS && $AS =~ /AS:\w:(\d+)/smx ) {
         $score = $1;
     } else {
         print STDERR "Warning, using simple matches as back-up: $qname\n";
