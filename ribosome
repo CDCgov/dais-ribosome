@@ -358,7 +358,7 @@ if test -n "\$(shopt -s nullglob;echo \$REFP/*.refs)";then
 		    && "$codonCorrectStats" -S $specp/${module}.sto -F 3,4 -I \$PREFIX.ins -O \$PREFIX.ins.c \$PREFIX.products > \$PREFIX.products.c \\
 		    && PREFIX2=$proteinp/\$SPEC.\$GENE.\$ID \\
 		    && "$binp"/amendInsertionTable.pl -U \$PREFIX.ins.c -A \$PREFIX2 \\
-		    && "$nt2aa" -U \$PREFIX2.products.c.tmp -T -E -M -P \$PREFIX.products.c | "$fa2delim" -A -B -I <(cut -f1,2,4 \$PREFIX2.ins) > \$PREFIX2.aa \\
+		    && "$nt2aa" -U \$PREFIX2.products.c.tmp --no-updated-nt-chop -T -E -M -P \$PREFIX.products.c | "$fa2delim" -A -B -I <(cut -f1,2,4 \$PREFIX2.ins) > \$PREFIX2.aa \\
             && mv \$PREFIX2.products.c.tmp \$PREFIX.products.c \\
 		    && "$fa2delim" \$PREFIX.products.c --show-if-insertion --show-shift-indel -A --nt-id -B -I <(cat \$PREFIX.ins.c) > \$PREFIX2.cds \\
             || { echo -e "Environment:\n\t\$(hostname)\n\t\$(which perl)"; env|grep PERL|perl -pe 's/^/\t/'; exit 2; }

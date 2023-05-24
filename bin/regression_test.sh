@@ -1,7 +1,7 @@
 #!/bin/bash
 
 NEW="HEAD"
-OLD="v1.3"
+OLD="v1.3.1"
 
 export IFX_LOCAL_PROCS=48
 
