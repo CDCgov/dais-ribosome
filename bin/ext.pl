@@ -57,13 +57,12 @@ if ( !defined $L ) {
 chomp($L);
 close $IN or croak("Cannot close file: $OS_ERROR\n");
 
-my $ID    = '\w+';
+my $ID    = '[A-Za-z0-9_.-]+';
 my $annot = '[ABC](_[A-Z0-9]+){1,2}';
 my $seq   = '[a-zA-Z.~-]+';
 
 if ( $module =~ /CORONAVIRUS/ismx ) {
     $annot = '[A-Z]+-CoV(-\w+)*';
-    $ID    = '[A-Za-z0-9_-]+';
 }
 
 my $type = 'unk';
