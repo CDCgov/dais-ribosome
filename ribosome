@@ -55,6 +55,7 @@ Usage:
         Valid modules: INFLUENZA, BETACORONAVIRUS
 
 EOL
+    cleanup
     exit 0
 }
 
@@ -358,7 +359,7 @@ if test -n "\$(shopt -s nullglob;echo \$REFP/*.refs)";then
 		    && "$codonCorrectStats" -S $specp/${module}.sto -F 3,4 -I \$PREFIX.ins -O \$PREFIX.ins.c \$PREFIX.products > \$PREFIX.products.c \\
 		    && PREFIX2=$proteinp/\$SPEC.\$GENE.\$ID \\
 		    && "$binp"/amendInsertionTable.pl -U \$PREFIX.ins.c -A \$PREFIX2 \\
-		    && "$nt2aa" -U \$PREFIX2.products.c.tmp --no-updated-nt-chop -T -E -M -P \$PREFIX.products.c | "$fa2delim" -A -B -I <(cut -f1,2,4 \$PREFIX2.ins) > \$PREFIX2.aa \\
+		    && "$nt2aa" -U \$PREFIX2.products.c.tmp --right-pad-cds -T -E -M -P \$PREFIX.products.c | "$fa2delim" -A -B -I <(cut -f1,2,4 \$PREFIX2.ins) > \$PREFIX2.aa \\
             && mv \$PREFIX2.products.c.tmp \$PREFIX.products.c \\
 		    && "$fa2delim" \$PREFIX.products.c --show-if-insertion --show-shift-indel -A --nt-id -B -I <(cat \$PREFIX.ins.c) > \$PREFIX2.cds \\
             || { echo -e "Environment:\n\t\$(hostname)\n\t\$(which perl)"; env|grep PERL|perl -pe 's/^/\t/'; exit 2; }
@@ -376,6 +377,9 @@ EOL
     #
     # - amendInsertiontable produces `.ins` (used by translated
     #   products, filters small frameshifts and NNN)
+    #
+    # - filterUntranslatedInserts filters out inserts that are outside of the
+    #   translated CDS region.
     ###
 
     # ASSEMBLE on grid vs local
@@ -417,7 +421,6 @@ if test -n "$(echo "$nullp"/*.fa)"; then
     time_stamp "no specification yet for: $(for i in "$nullp"/*.fa; do basename "$i" .fa; done | cut -f1 -d'.' | tr '\n' ' ')"
 fi
 
-catglob "$protp"/*.ins | tr '|' "\t" > "$insertresult"
 if test -n "$(echo "$alnp"/*.products.c)"; then
     time_stamp "mapping CDS and query coordinates"
     "$binp"/annotateCDS.pl "$specp/${module}.spec" "$fastaresult" \
@@ -425,6 +428,7 @@ if test -n "$(echo "$alnp"/*.products.c)"; then
         <(catglob "$alnp"/*.fasta) <(catglob "$alnp"/*.ins.txt) > "$coordresult" \
          || die "annotation failed"
 fi
+catglob "$protp"/*.ins | "$binp"/filterUntranslatedInserts.pl "$coordresult" /dev/stdin | tr '|' "\t" > "$insertresult"
 
 if test -n "$(echo "$protp"/*.aa)"; then
     "$binp"/leftjoin.pl <(cat "$protp"/*.aa) <(cat "$protp"/*.cds) "$coordresult" | tr '|' "\t" > "${seqresult}"
