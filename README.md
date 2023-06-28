@@ -111,7 +111,7 @@ The field explanations:
 | Protein | The protein product or peptide derived from the gene segment. |
 | VH (AA_ID) | The `variant_hash` as used in DAIS (md5 hex of `AA_seq`). |
 | Insertion | Boolean indicating whether or not there is an insertion relative to reference in the original CDS. |
-| Shift_Insert | Boolean indicating whether any of the above insertions would induce a frameshift. |
+| Shift_Indel | Boolean indicating whether an insertion or deletion in the CDS is a non-triplet and could have induced a frameshift. |
 | Upstream_aa / Upstream_nt | The upstream amino acid / nucleotide position for the insertion relative to the reference coordinates. |
 | Codon | The codon(s) inserted. |
 | Inserted_residues / Inserted_nucleotides | The residues / nucleotides inserted. |

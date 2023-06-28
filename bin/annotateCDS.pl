@@ -18,13 +18,13 @@ if ( scalar @ARGV != 6 ) {
 my ( $specfile, $origfile, $fasprodfile, $insprodfile, $fassegfile, $inssegfile ) = (@ARGV);
 
 # FUNCTIONS #
-sub removeElongation($) {
+sub removeElongation {
     my ($seq) = @_;
     $seq =~ s/[A-Z]+$//smx;
     return $seq;
 }
 
-sub sequenceByCigar($$$) {
+sub sequenceByCigar {
     my ( $sequence, $cigar, $offset ) = @_;
     my ( $result, $state ) = ( q{}, q{} );
     my $length = 0;
@@ -38,7 +38,7 @@ sub sequenceByCigar($$$) {
     return $result;
 }
 
-sub getSubstringOffset($$) {    ## no critic (Subroutines::RequireArgUnpacking)
+sub getSubstringOffset {    ## no critic (Subroutines::RequireArgUnpacking)
     my ( $original, $alignable ) = ( lc( $_[0] ), lc( $_[1] ) );
     my $leftpad = 0;
     if ( $alignable =~ /^(\.+)/smx ) {
@@ -54,7 +54,7 @@ sub getSubstringOffset($$) {    ## no critic (Subroutines::RequireArgUnpacking)
     }
 }
 
-sub getSubstringCoords($$) {    ## no critic (Subroutines::RequireArgUnpacking)
+sub getSubstringCoords {    ## no critic (Subroutines::RequireArgUnpacking)
     my ( $original, $alignable ) = ( lc( $_[0] ), lc( $_[1] ) );
     $alignable =~ tr/.-//d;
 
@@ -66,7 +66,7 @@ sub getSubstringCoords($$) {    ## no critic (Subroutines::RequireArgUnpacking)
     }
 }
 
-sub sequenceToCigar($) {
+sub sequenceToCigar {
     my ($seq) = @_;
     $seq =~ tr/A-Z/I/;
     $seq =~ tr/a-z/M/;
@@ -80,7 +80,7 @@ sub sequenceToCigar($) {
     return $cigar;
 }
 
-sub condenseCigar($) {
+sub condenseCigar {
     my ($cig) = @_;
     my $cigar = q{};
     my $state = q{};
@@ -92,7 +92,7 @@ sub condenseCigar($) {
     return $cigar;
 }
 
-sub sequenceToStates($) {
+sub sequenceToStates {
     my ($seq) = @_;
     $seq =~ tr/A-Z/I/;
     $seq =~ tr/a-z/M/;
@@ -101,11 +101,15 @@ sub sequenceToStates($) {
     return $seq;
 }
 
-sub addInsertions($$) {    ## no critic (Subroutines::RequireArgUnpacking)
-    my $seq     = lc( $_[0] );
-    my $inserts = $_[1];
+sub addInsertions {
+    my $seq     = lc( shift // q{} );
+    my $inserts = shift;
     my $offset  = 0;
     my $insert  = q{};
+
+    # Hanging insertions not allowed
+    $seq =~ s/[.]+$//smx;
+
     foreach my $pos ( sort { $a <=> $b } keys( %{$inserts} ) ) {
         $insert = $inserts->{$pos};
         substr( $seq, int($pos) + $offset, 0, uc($insert) );
@@ -115,16 +119,20 @@ sub addInsertions($$) {    ## no critic (Subroutines::RequireArgUnpacking)
     return $seq;
 }
 
-sub addInsertionsBounded($$$) {    ## no critic (Subroutines::RequireArgUnpacking)
-    if ( !defined $_[0] ) {
+sub addInsertionsBounded {
+    my $seq     = lc( shift // q{} );
+    my $inserts = shift;
+    my $offset  = shift;
+    my $pos     = 0;
+
+    if ( $seq eq q{} ) {
         return q{};
     }
 
-    my $seq     = lc( $_[0] );
-    my $inserts = $_[1];
-    my $offset  = $_[2];
-    my $pos     = 0;
-    my $L       = length($seq);
+    # Hanging insertions not allowed
+    $seq =~ s/[.]+$//smx;
+
+    my $L = length($seq);
     foreach my $pos ( sort { $a <=> $b } keys( %{$inserts} ) ) {
 
         # 1 - based check
