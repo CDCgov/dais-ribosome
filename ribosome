@@ -52,7 +52,7 @@ Usage:
 
         ** Also procduces output4.gen.ins and output5.gen.del if specified
 
-        Valid modules: INFLUENZA, BETACORONAVIRUS
+        Valid modules: INFLUENZA, BETACORONAVIRUS, RSV
 
 EOL
     cleanup
@@ -259,6 +259,8 @@ else
 
     if [ "${module:-INFLUENZA}" == "BETACORONAVIRUS" ]; then
         preset=cov-beta
+    elif [ "${module:-INFLUENZA}" == "RSV" ]; then
+        preset=rsv
     else
         preset=flu-ABCD90P
     fi
