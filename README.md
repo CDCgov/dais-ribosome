@@ -1,6 +1,6 @@
 # DAIS-ribosome - annotation and coordinate mapping of CDS and protein sequences for virus genomes
 
-The DAIS **ribosome** compartmentalizes the original translation engine developed for our protein analytics database. The tool was designed for use with INFLUENZA, but has been extended for use with BETACORONAVIRUS (codon weight matrix not yet stored for this module). I provide a brief outline of the algorithm:
+The DAIS **ribosome** compartmentalizes the original translation engine developed for our protein analytics database. The tool was designed for use with INFLUENZA, but has been extended for use with BETACORONAVIRUS and RSV. I provide a brief outline of the algorithm:
 
 1. If necessary, classify the nucleotide gene segment into its influenza type, segment, and subtype (compound or `C_type`) as well as make sure CDS is on the *forward strand*†.
 2. Align said segments (via [SSW](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0082138)) to the corresponding reference sequence(s) and pick the best alignment.
