@@ -1,6 +1,10 @@
 # DAIS-RIBOSOME Change Log
 
-## v1.4 (2024.04)
+## v1.5 (2024.04.25)
+
+**Feature**: adds the A_NA_N8 reference, 'ASTRAKHAN3212' to the INFLUENZA module.
+
+## v1.4 (2024.04.03)
 
 - **Feature**: adds built-in RSV module support. Many Thanks to C. Paden and P. Mandal!
 
