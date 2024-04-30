@@ -63,6 +63,8 @@ my $seq   = '[a-zA-Z.~-]+';
 
 if ( $module =~ /CORONAVIRUS/ismx ) {
     $annot = '[A-Z]+-CoV(-\w+)*';
+} elsif ( $module =~ /RSV/ismx ) {
+    $annot = 'RSV\w+';
 }
 
 my $type = 'unk';

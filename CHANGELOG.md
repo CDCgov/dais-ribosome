@@ -1,5 +1,9 @@
 # DAIS-RIBOSOME Change Log
 
+## v1.5.1 (2024.04.30)
+
+**Fixes**: RSV annotations now correctly validated.
+
 ## v1.5 (2024.04.25)
 
 **Feature**: adds the A_NA_N8 reference, 'ASTRAKHAN3212' to the INFLUENZA module.
