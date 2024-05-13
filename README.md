@@ -141,7 +141,7 @@ Translation produces standard amino acid codes with the two non-standard excepti
 
 **Command-line** usage
 
-```{bash}
+```bash
 Usage:
 
         ribosome                            help
@@ -156,6 +156,16 @@ Usage:
 
         Valid modules: INFLUENZA, BETACORONAVIRUS
 
+```
+
+For docker you can do:
+
+```bash
+# Use /tmp in the container
+docker run --rm -v $(pwd):/data -t cdcgov/dais-ribosome:latest ribosome flu.fasta t1.seq t1.ins t1.del t1.gen 
+
+# Alter the scratch directory to use our mount
+docker run --rm -v $(pwd):/data -e IFX_WORK_DIR=/data -t cdcgov/dais-ribosome:latest ribosome flu.fasta
 ```
 
 ## Installation
