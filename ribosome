@@ -62,10 +62,10 @@ EOL
 IFX_PROG=RIBOSOME
 owd=$(pwd)
 function cleanup() {
-    rm -rf "$workdir" &
+    rm -rf "$workdir"
 }
 
-function catglob()  {
+function catglob() {
     local glob=""
     for glob in "$@"; do
         # nullglob will take of expansion
@@ -92,7 +92,7 @@ function install() {
     local server=${3:-"git.biotech.cdc.gov"}
     cd "$libp" || die "Bad directory $libp"
     if [ ! -d "$repo" ]; then
-            git clone "git@${server}:${namespace}/${repo}.git" > /dev/null \
+        git clone "https://${server}/${namespace}/${repo}.git" > /dev/null \
             || die "failed to install $repo"
     fi
 }
@@ -119,17 +119,18 @@ function script_path() {
 function set_scripts() {
     SSWSORT=$(script_path sswsort SSWSORT)
     partitionByField=$(script_path sampling partitionByField.pl)
-    reviseTaxa=$(script_path    editMSA     reviseTaxa.pl)
+    reviseTaxa=$(script_path editMSA reviseTaxa.pl)
     codonCorrectStats=$(script_path editMSA codonCorrectStats.pl)
-    stripSequences=$(script_path editMSA    stripSequences.pl)
-    sam2fasta=$(script_path     convert     sam2fasta.pl)
-    delim2fasta=$(script_path   convert     delim2fasta.pl)
-    fa2delim=$(script_path      convert     fa2delim.pl)
-    nt2aa=$(script_path         convert     nt2aa.pl)
+    stripSequences=$(script_path editMSA stripSequences.pl)
+    sam2fasta=$(script_path convert sam2fasta.pl)
+    delim2fasta=$(script_path convert delim2fasta.pl)
+    fa2delim=$(script_path convert fa2delim.pl)
+    nt2aa=$(script_path convert nt2aa.pl)
 }
 
 # Create working path
-workdir=$(mktemp -d "$bpath"/workdir/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX)
+workdir_prefix=${IFX_WORK_DIR:-"$bpath/workdir"}
+workdir=$(mktemp -d "$workdir_prefix"/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX)
 [ -d "$workdir" ] \
     && TOKEN=$(basename "$workdir") \
     || die "Could not create working directory under $bpath"
@@ -163,10 +164,10 @@ fi
 SSW="$binp"/ssw_$OS
 PARALLEL="$binp/parallel --will-cite"
 BASH=bash
-LIMIT_SSW=500                               # threshold before grid
-SINGLE_LOCAL_PROCS=${IFX_LOCAL_PROCS:-16}   # local processes on executing node
-GRID_PROCS=${IFX_GRID_PROCS:-80}            # grid array processes
-GRID_ON=${IFX_GRID_DEF:-0}                  # yes, we can use the cluster if needed, default off
+LIMIT_SSW=500                             # threshold before grid
+SINGLE_LOCAL_PROCS=${IFX_LOCAL_PROCS:-16} # local processes on executing node
+GRID_PROCS=${IFX_GRID_PROCS:-80}          # grid array processes
+GRID_ON=${IFX_GRID_DEF:-0}                # yes, we can use the cluster if needed, default off
 
 if [ "$1" == "help" ] || [ "$#" -eq "0" ]; then
     help
@@ -189,7 +190,7 @@ elif [ "$1" == "rebuild" ]; then
     [ -d "$refp/$module" ] && rm -rf "$refp/${module:?}"
     mkdir "$refp/$module"
 
-    partitionByField=$(script_path  sampling    partitionByField.pl)
+    partitionByField=$(script_path sampling partitionByField.pl)
     "$partitionByField" "$specp/${module}.refs" -F 2 "$refp/$module/"
     if test -n "$(echo "$refp/$module"/*.refs)"; then
         for ref in "$refp/$module"/*.refs; do
@@ -297,7 +298,7 @@ function alignSpliceTranslate() {
 
     # Do we have sequences?
     [ "${n:-0}" -eq "0" ] && die "No sequences found ($n), exiting"
-    [ ! -d "$alignp" ]  && mkdir "$alignp"
+    [ ! -d "$alignp" ] && mkdir "$alignp"
     [ ! -d "$proteinp" ] && mkdir "$proteinp"
     [ ! -d "$unusedp" ] && mkdir "$unusedp"
 
@@ -428,7 +429,7 @@ if test -n "$(echo "$alnp"/*.products.c)"; then
     "$binp"/annotateCDS.pl "$specp/${module}.spec" "$fastaresult" \
         <(catglob "$alnp"/*.products.c) <(catglob "$alnp"/*.ins.c) \
         <(catglob "$alnp"/*.fasta) <(catglob "$alnp"/*.ins.txt) > "$coordresult" \
-         || die "annotation failed"
+        || die "annotation failed"
 fi
 catglob "$protp"/*.ins | "$binp"/filterUntranslatedInserts.pl "$coordresult" /dev/stdin | tr '|' "\t" > "$insertresult"
 

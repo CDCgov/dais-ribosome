@@ -1,5 +1,13 @@
 # DAIS-RIBOSOME Change Log
 
+## v1.5.2 (2024.05.10)
+
+- **Feature**:
+  - adds docker support and adds usage
+  - Adds configurable work directories using `IFX_WORK_DIR`.
+
+- **Fixes**: fixes SC2 alignments for S protein insertions (MPLF) at position 16.
+
 ## v1.5.1 (2024.04.30)
 
 **Fixes**: RSV annotations now correctly validated.

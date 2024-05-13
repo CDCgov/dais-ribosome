@@ -1,0 +1,22 @@
+version: "3.9"
+
+x-dais-ribosome-git-version: 
+  &dais-ribosome-git-version 
+  git@git.biotech.cdc.gov:flu-informatics/dais-ribosome.git
+
+x-data-volume: 
+  &data-volume
+  type: bind
+  source: /home/snu3/Connect/data
+  target: /data
+
+services:
+  dais-ribosome:
+    container_name: dais-ribosome
+    image: cdcgov/dais-ribosome:latest
+    build:
+      context: *dais-ribosome-git-version
+    restart: always
+    volumes:
+      - *data-volume
+    command: tail -f /dev/null
