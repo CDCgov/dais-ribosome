@@ -1,5 +1,9 @@
 # DAIS-RIBOSOME Change Log
 
+## v1.5.3 (2024.07.25)
+
+**Fixes**: SC2 alignments were sometimes missing biologically relevant indels. Smith-Waterman weights were relaxed to accomodate.
+
 ## v1.5.2 (2024.05.10)
 
 - **Feature**:
