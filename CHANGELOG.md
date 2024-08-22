@@ -1,5 +1,10 @@
 # DAIS-RIBOSOME Change Log
 
+## v1.5.4 (2024.08.22)
+
+- **Change**: RSV ctypes are renamed, e.g., RSVA is RSV_AD; RSV reference IDs now match the NCBI accession.
+- **Fixes**: updates the SC2 codon-weight matrix to induce corrected alignments for a deletion in S circa position 24.
+
 ## v1.5.3 (2024.07.25)
 
 **Fixes**: SC2 alignments were sometimes missing biologically relevant indels. Smith-Waterman weights were relaxed to accommodate.

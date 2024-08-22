@@ -7,6 +7,8 @@ workdir/
 *.fasta
 *.seq
 *.ins
+*.gen
+*.del
 .DS*
 test*
 log*.txt
