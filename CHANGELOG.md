@@ -1,5 +1,9 @@
 # DAIS-RIBOSOME Change Log
 
+## v1.5.5 (2024.10.30)
+
+- **Changes**: Streamlines the dockerfile and changes to debian/bookworm.
+
 ## v1.5.4 (2024.08.22)
 
 - **Change**: RSV ctypes are renamed, e.g., RSVA is RSV_AD; RSV reference IDs now match the NCBI accession.
