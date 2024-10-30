@@ -1,4 +1,4 @@
-FROM ubuntu:focal AS base
+FROM debian:bookworm-slim AS base
 
 # local apt mirror support
 # start every stage with updated apt sources
@@ -6,7 +6,7 @@ ARG APT_MIRROR_NAME=
 RUN if [ -n "$APT_MIRROR_NAME" ]; then sed -i.bak -E '/security/! s^https?://.+?/(debian|ubuntu)^http://'"$APT_MIRROR_NAME"'/\1^' /etc/apt/sources.list && grep '^deb' /etc/apt/sources.list; fi
 
 RUN apt-get update --allow-releaseinfo-change --fix-missing \
-    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y git wget ca-certificates \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y perl procps \
     && apt clean autoclean \
     && apt autoremove --yes \
     && rm -rf /var/lib/{apt,dpkg,cache,log}/
@@ -15,10 +15,11 @@ RUN apt-get update --allow-releaseinfo-change --fix-missing \
 FROM base AS builder
 
 ARG gitlab_ca
-ENV gitlab_ca=${gitlab_ca:-https://docs.cdc.gov/assets/files/CDC-G2-44495b0bcb64fa25e38eea0072929d82.pem}
+ENV gitlab_ca=${gitlab_ca:-https://docs.cdc.gov/assets/files/CDC-G2-04c520f295e01d5e2dc95573c085c35b.pem}
 COPY . /dais-ribosome
 
-RUN wget ${gitlab_ca} \
+RUN DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y git wget ca-certificates \
+    && wget ${gitlab_ca} \
     && git config --global http.sslCAInfo $(pwd)/$(basename ${gitlab_ca}) \
     && /dais-ribosome/ribosome install \
     && libp=/dais-ribosome/lib \
