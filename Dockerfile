@@ -24,7 +24,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y gi
     && /dais-ribosome/ribosome install \
     && libp=/dais-ribosome/lib \
     && for i in $(ls "$libp/convert/"|grep -vP 'sam2fasta.pl|delim2fasta.pl|fa2delim.pl|nt2aa.pl');do rm "$libp/convert/$i";done \
-    && for i in $(ls "$libp/lib/editMSA/"|grep -vP 'reviseTaxa.pl|codonCorrectStats.pl|stripSequences.pl'); do rm "$libp/editMSA/$i";done \
+    && for i in $(ls "$libp/editMSA/"|grep -vP 'reviseTaxa.pl|codonCorrectStats.pl|stripSequences.pl'); do rm "$libp/editMSA/$i";done \
     && for i in $(ls "$libp/sampling/"|grep -vP 'partitionByField.pl'); do rm "$libp/sampling/$i";done \
     && rm -rf /dais-ribosome/workdir /dais-ribosome/lib/sswsort/workdir \
     && ln -s /tmp /dais-ribosome/workdir \
