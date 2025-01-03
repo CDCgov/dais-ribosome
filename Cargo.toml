@@ -1,0 +1,16 @@
+[package]
+name = "dais-ribosome"
+version = "2.0.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+rayon = "*"
+zoe = { git = "https://git.biotech.cdc.gov/vfn4/zoe.git", branch = "main", default-features = false, features = [
+    "multiversion",
+] }
+
+[[bin]]
+bench = false
+path = "src/main.rs"
+name = "ribosome"

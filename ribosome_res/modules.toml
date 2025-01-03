@@ -1,0 +1,39 @@
+[[module]]
+name = "flu"
+references = "flu-references.fasta"
+weights = "flu-codon-position-weights.tsv"
+cds_spec = "flu-cds-spec.tsv"
+
+[module.formatting]
+right_pad_aa = true
+right_pad_cds = true
+
+[module.alignment]
+default = { match = 14, mismatch = 0, gap_open = 40, gap_extend = 0 }
+B_HA = { match = 10, mismatch = 0, gap_open = 50, gap_extend = 0 }
+
+[[module]]
+name = "cov"
+references = "cov-references.fasta"
+weights = "cov-codon-position-weights.tsv"
+cds_spec = "cov-cds-spec.tsv"
+
+[module.formatting]
+right_pad_aa = false
+right_pad_cds = true
+
+[module.alignment]
+default = { match = 1, mismatch = 0, gap_open = 8, gap_extend = 1 }
+
+[[module]]
+name = "rsv"
+references = "rsv-references.fasta"
+weights = "rsv-codon-position-weights.tsv"
+cds_spec = "rsv-cds-spec.tsv"
+
+[module.formatting]
+right_pad_aa = false
+right_pad_cds = true
+
+[module.alignment]
+default = { match = 1, mismatch = 0, gap_open = 10, gap_extend = 1 }
