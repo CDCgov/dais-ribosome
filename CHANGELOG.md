@@ -1,5 +1,9 @@
 # DAIS-RIBOSOME Change Log
 
+## v1.6.1 (2025.04.18)
+
+- **Fixes**: The codon-weight matrix had the wrong number of sites for KF640637|L, this has been corrected.
+
 ## v1.6.0 (2025.04.18)
 
 - **Feature**:
