@@ -1,8 +1,8 @@
-#![feature(let_chains)]
 #![allow(unused_variables, dead_code)]
 
 use clap::Parser;
 //use rayon::{ThreadPoolBuilder, iter::ParallelBridge, prelude::ParallelIterator};
+use dais_ribosome::conf::{get_codon_weight_matrix, process_toml};
 use std::path::PathBuf;
 use zoe::{data::fasta::FastaSeq, prelude::*};
 
@@ -34,7 +34,7 @@ pub struct Args {
     genomic_output_prefix: Option<PathBuf>,
 
     /// Name of the alignment module
-    #[arg(short, long, default_value = "INFLUENZA")]
+    #[arg(short, long, default_value = "flu")]
     module: String,
 
     /// Run in simultaneous multi-threaded mode.
@@ -50,6 +50,30 @@ fn main() {
     let args = Args::parse();
 
     println!("{mod}", mod=args.module);
+
+    let suffix = "ribosome_res/modules.toml";
+    let mut exe_path: PathBuf = std::env::current_exe().unwrap();
+    exe_path.pop();
+
+    // Check same directory
+    let mut toml_path = exe_path.join(suffix);
+    if !toml_path.exists() {
+        // otherwise check grandparent
+        exe_path.pop();
+        exe_path.pop();
+        toml_path = exe_path.join(suffix);
+    }
+
+    let conf = process_toml(&toml_path);
+    let Some(module) = conf.modules.iter().find(|m| m.name == args.module) else {
+        panic!("Module {m} not found!", m = args.module);
+    };
+
+    let mut data_path = toml_path.clone();
+    data_path.pop();
+    data_path = data_path.join(&module.name);
+
+    let weights = get_codon_weight_matrix(&data_path.clone().join(&module.weights));
 }
 
 struct Record {

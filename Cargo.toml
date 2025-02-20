@@ -6,9 +6,13 @@ edition = "2024"
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 rayon = "*"
+toml = "*"
+serde = "*"
+serde_derive = "*"
 zoe = { git = "https://git.biotech.cdc.gov/vfn4/zoe.git", branch = "main", default-features = false, features = [
     "multiversion",
 ] }
+rand = { version = "0.9", default-features = false, features = ["thread_rng"] }
 
 [[bin]]
 bench = false
