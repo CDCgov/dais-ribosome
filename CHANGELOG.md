@@ -1,10 +1,10 @@
 # DAIS-RIBOSOME Change Log
 
-## v1.6.0 (2025.03.31)
+## v1.6.0 (2025.04.18)
 
 - **Feature**:
-  - adds the A_NA_N4 reference, 'ALBERTA559' to the INFLUENZA module.
-  - adds the A_NA_N5 reference, 'RU1526' to the INFLUENZA module.
+  - adds the A_NA_N4 reference, 'ONTARIO6118' to the INFLUENZA module.
+  - adds the A_NA_N5 reference, 'RU1526' and 'ALASKA4733' (different lineage coordinate spaces) to the INFLUENZA module.
   - adds the A_NA_N6 reference, 'SICHUAN26221' to the INFLUENZA module.
 
 ## v1.5.6 (2025.03.28)
