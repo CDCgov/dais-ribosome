@@ -1,5 +1,9 @@
 # DAIS-RIBOSOME Change Log
 
+## v1.5.6 (2025.03.28)
+
+- **Changes**: ASTRAKHAN3212|A_NA_N8|OM403994 references now use lineage representatives LC339685 and MF973227, which enhances alignment quality.
+
 ## v1.5.5 (2024.10.30)
 
 - **Changes**: Streamlines the dockerfile and changes to debian/bookworm.
