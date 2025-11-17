@@ -2,7 +2,7 @@
 
 use clap::Parser;
 //use rayon::{ThreadPoolBuilder, iter::ParallelBridge, prelude::ParallelIterator};
-use dais_ribosome::conf::{get_codon_weight_matrix, process_toml};
+use dais_ribosome::conf::{get_cds_spec, get_codon_weight_matrix, get_fasta_refs, process_toml};
 use std::path::PathBuf;
 use zoe::{data::fasta::FastaSeq, prelude::*};
 
@@ -74,11 +74,20 @@ fn main() {
     data_path = data_path.join(&module.name);
 
     let weights = get_codon_weight_matrix(&data_path.clone().join(&module.weights));
+    let refs = get_fasta_refs(&data_path.clone().join(&module.references)).unwrap_or_fail();
+    let specs = get_cds_spec(&data_path.clone().join(&module.cds_spec)).unwrap_or_fail();
+
+    #[cfg(debug_assertions)]
+    {
+        eprintln!("{weights:#?}");
+        eprintln!("{refs:#?}");
+        eprintln!("{specs:#?}");
+    }
 }
 
 struct Record {
-    id: String,
-    nucleotides: Nucleotides,
+    id:             String,
+    nucleotides:    Nucleotides,
     classification: Option<String>,
 }
 
