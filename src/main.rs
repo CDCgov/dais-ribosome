@@ -1,156 +1,94 @@
+#![feature(string_from_utf8_lossy_owned)]
 #![allow(unused_variables, dead_code)]
 
-use clap::Parser;
 //use rayon::{ThreadPoolBuilder, iter::ParallelBridge, prelude::ParallelIterator};
-use dais_ribosome::conf::{get_cds_spec, get_codon_weight_matrix, get_fasta_refs, process_toml};
-use std::path::PathBuf;
-use zoe::{data::fasta::FastaSeq, prelude::*};
+
+use app::{args::Args, io::Writers, log};
+
+use clap::Parser;
+use dais_ribosome::{
+    annotation::AnnotationModule,
+    config::find_modules_toml,
+    data::{ModuleData, QueryRecord, RibosomeError},
+};
+use std::{collections::HashSet, io::Write, path::Path};
+use zoe::{data::err::OrFail, prelude::*};
 
 // If we later want to match the shell script, we can use:
 // <https://docs.rs/git-version/latest/git_version/macro.git_describe.html>
 const PROGRAM_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " v", env!("CARGO_PKG_VERSION"));
 
-#[derive(Debug, Parser)]
-#[command(author, version, about, long_about = None)]
-#[command(propagate_version = true)]
-/// CDS and and amino acid annotation tool for viruses.
-pub struct Args {
-    /// Data file to annotate in TSV or FASTA format.
-    ///         †if classified, FASTA:  >ID|type_segment[_subtype]
-    ///         *if classified, TSV:    ID<TAB>type_segment_[subtype]<TAB>sequence
-    data_file: PathBuf,
-
-    /// CDS and AA output, including coordinate mapping information, as a
-    /// filename or path.
-    sequence_output: Option<PathBuf>,
-
-    /// Insertion output filename or path.
-    insertion_output: Option<PathBuf>,
-
-    /// Deletion output filename or path.
-    deletion_output: Option<PathBuf>,
-
-    /// Genomic file output prefix for sequences, insertion, and deletion.
-    genomic_output_prefix: Option<PathBuf>,
-
-    /// Name of the alignment module
-    #[arg(short, long, default_value = "flu")]
-    module: String,
-
-    /// Run in simultaneous multi-threaded mode.
-    #[arg(short = 'T', long)]
-    threads: bool,
-
-    /// Write data as parquet files.
-    #[arg(short = 'q', long)]
-    output_parquet: bool,
-}
-
 fn main() {
     let args = Args::parse();
 
-    println!("{mod}", mod=args.module);
+    let toml_path = find_modules_toml().unwrap_or_fail();
 
-    let suffix = "ribosome_res/modules.toml";
-    let mut exe_path: PathBuf = std::env::current_exe().unwrap();
-    exe_path.pop();
+    let mut module_data = ModuleData::load_from_file(&toml_path, &args.module)
+        .unwrap_or_die(&format!("Failed to prepare module '{}'", args.module));
 
-    // Check same directory
-    let mut toml_path = exe_path.join(suffix);
-    if !toml_path.exists() {
-        // otherwise check grandparent
-        exe_path.pop();
-        exe_path.pop();
-        toml_path = exe_path.join(suffix);
-    }
+    let annotation_module = module_data
+        .build_annotation_module()
+        .unwrap_or_die(&format!("Failed to build module '{}'", args.module));
 
-    let conf = process_toml(&toml_path);
-    let Some(module) = conf.modules.iter().find(|m| m.name == args.module) else {
-        panic!("Module {m} not found!", m = args.module);
-    };
+    let writers = args.get_writers().unwrap_or_fail();
+    let gen_writers = args.get_optional_writers().unwrap_or_fail();
 
-    let mut data_path = toml_path.clone();
-    data_path.pop();
-    data_path = data_path.join(&module.name);
-
-    let weights = get_codon_weight_matrix(&data_path.clone().join(&module.weights));
-    let refs = get_fasta_refs(&data_path.clone().join(&module.references)).unwrap_or_fail();
-    let specs = get_cds_spec(&data_path.clone().join(&module.cds_spec)).unwrap_or_fail();
-
-    #[cfg(debug_assertions)]
-    {
-        eprintln!("{weights:#?}");
-        eprintln!("{refs:#?}");
-        eprintln!("{specs:#?}");
-    }
+    process_queries(&args.data_file, &annotation_module, &args, writers, gen_writers)
+        .unwrap_or_die("Query processing failed");
 }
 
-struct Record {
-    id:             String,
-    nucleotides:    Nucleotides,
-    classification: Option<String>,
-}
+// TODO: move later
+fn process_queries(
+    path: &Path, annotation_module: &AnnotationModule, args: &Args, mut writers: Writers, mut gen_writers: Option<Writers>,
+) -> Result<(), RibosomeError> {
+    log::ts("started, processing data");
+    let queries = FastaReader::from_filename(path)?;
 
-impl TryFrom<FastaSeq> for Record {
-    type Error = RibosomeError;
-    fn try_from(datum: FastaSeq) -> Result<Self, Self::Error> {
-        let FastaSeq { mut name, sequence } = datum;
-        let classification = parse_id(&mut name);
+    let mut unimplemented_ctypes = HashSet::new();
 
-        Ok(Record {
-            id: name,
-            nucleotides: sequence.into(),
-            classification,
-        })
-    }
-}
+    for result in queries {
+        let record = QueryRecord::try_from(result?)?;
+        let output = match annotation_module.process(record) {
+            Ok(output) => output,
+            Err(RibosomeError::UnimplementedCtype(ctype)) => {
+                unimplemented_ctypes.insert(ctype);
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
 
-#[allow(dead_code)]
-#[derive(Debug)]
-enum RibosomeError {
-    InvalidFastaFormat,
-    InvalidTSVFormat,
-    BlankFirstLIne,
-}
+        for row in output.seq_rows() {
+            writeln!(writers.seq, "{row}")?;
+        }
 
-impl std::fmt::Display for RibosomeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RibosomeError::InvalidFastaFormat => write!(f, "Invalid FASTA format"),
-            RibosomeError::InvalidTSVFormat => write!(f, "Invalid TSV format"),
-            RibosomeError::BlankFirstLIne => write!(f, "Blank first line"),
+        for row in output.ins_rows() {
+            writeln!(writers.ins, "{row}")?;
+        }
+
+        for row in output.del_rows() {
+            writeln!(writers.del, "{row}")?;
+        }
+
+        // Genome output rows
+        if let Some(ref mut w) = gen_writers {
+            for row in output.gen_rows() {
+                writeln!(w.seq, "{row}")?;
+            }
+
+            for row in output.gen_ins_rows() {
+                writeln!(w.ins, "{row}")?;
+            }
+
+            for row in output.gen_del_rows() {
+                writeln!(w.del, "{row}")?;
+            }
         }
     }
+
+    log::print_unimplemented_ctypes(unimplemented_ctypes, annotation_module);
+    log::ts("finished");
+
+    Ok(())
 }
 
-impl std::error::Error for RibosomeError {}
-
-fn parse_id(id: &mut String) -> Option<String> {
-    if let Some(offset) = id.find('|')
-        && !id[offset + 1..].is_empty()
-        && valid_classification(&id[offset + 1..])
-    {
-        let classification = id[offset + 1..].to_string();
-        id.truncate(offset);
-        Some(classification)
-    } else {
-        None
-    }
-}
-
-// Rather than Regex, we will check for its existence in our module set
-fn valid_classification(c: &str) -> bool {
-    true
-}
-
-#[cfg(test)]
-mod test {
-    use crate::parse_id;
-
-    #[test]
-    fn parse_id_test() {
-        let mut s = "ID|ANNOT".to_string();
-        let annot = parse_id(&mut s);
-        assert_eq!(("ID", Some("ANNOT".to_string())), (s.as_str(), annot));
-    }
-}
+pub mod app;

@@ -1,0 +1,52 @@
+pub use crate::annotation::error::RibosomeError;
+
+use zoe::{
+    data::{fasta::FastaSeq, nucleotides::ToDNA},
+    prelude::*,
+};
+
+/// [`QueryRecord`] contains the id, ctype (compound type),
+/// and [`Nucleotides`] data in guaranteed unaligned, uppercase IUPAC.
+#[derive(Debug)]
+pub struct QueryRecord {
+    pub id:          String,
+    pub nucleotides: Nucleotides,
+    pub ctype:       String,
+}
+
+impl TryFrom<FastaSeq> for QueryRecord {
+    type Error = RibosomeError;
+    fn try_from(datum: FastaSeq) -> Result<Self, Self::Error> {
+        let FastaSeq { name, sequence } = datum;
+        // BREAKING: we previously only removed: '*: .~-'
+        let nucleotides = sequence.filter_to_dna_unaligned();
+
+        if nucleotides.is_empty() {
+            return Err(RibosomeError::InvalidSequence(name.to_string()));
+        }
+
+        if name.contains('|') {
+            let mut parts = name.split('|');
+            let Some((id, ctype)) = parts
+                .next()
+                .zip(parts.next())
+                .map(|(i, c)| (i.trim_ascii().to_string(), c.trim_ascii().to_string()))
+            else {
+                return Err(RibosomeError::InvalidFastaFormat);
+            };
+
+            if ctype.is_empty() {
+                return Err(RibosomeError::NoCtype(name));
+            }
+
+            Ok(QueryRecord { id, nucleotides, ctype })
+        } else {
+            // TODO : handle unclassified queries
+            Ok(QueryRecord {
+                id: name.trim_ascii().to_string(),
+                nucleotides,
+                ctype: String::new(),
+            })
+        }
+    }
+}

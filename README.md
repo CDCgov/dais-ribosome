@@ -33,12 +33,12 @@ The DAIS **ribosome** compartmentalizes the original translation engine develope
 
 1. Unannotated Fasta (ID only)
 
-    >\>223550  
+    >\>223550
     >ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
 
 2. Annotated Fasta (ID and compound type)
 
-    >\>223550|B_HA  
+    >\>223550|B_HA
     >ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA
 
 3. Unannotated tab-delimited (ID only)
@@ -55,87 +55,87 @@ The DAIS **ribosome** compartmentalizes the original translation engine develope
 
 **Output** for the `dais-ribosome` consists of two tab-delimited files. One with `.ins` for insertions, one with `.del` for deletions, and `.seq` for sequence related data. An insertion file output example:
 
-| ID | C_type | Ref_ID | Protein | Upstream_aa | Inserted_nuceotides | Inserted_residues | Upstream_nt | Codon_shift |
-| ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
-| 11209 | B_HA | PHUKET3073 | HA | 161 | aaa | K | 483 | 0 |
-| 154957 | B_HA | PHUKET3073 | HA | 163 | krc | X | 489 | 0 |
-| 223550 | B_HA | PHUKET3073 | HA | 161 | caa | Q | 483 | 0 |
+| ID     | C_type | Ref_ID     | Protein | Upstream_aa | Inserted_nuceotides | Inserted_residues | Upstream_nt | Codon_shift |
+| ------ | ------ | ---------- | ------- | ----------- | ------------------- | ----------------- | ----------- | ----------- |
+| 11209  | B_HA   | PHUKET3073 | HA      | 161         | aaa                 | K                 | 483         | 0           |
+| 154957 | B_HA   | PHUKET3073 | HA      | 163         | krc                 | X                 | 489         | 0           |
+| 223550 | B_HA   | PHUKET3073 | HA      | 161         | caa                 | Q                 | 483         | 0           |
 
 A deletion file example:
 
-| ID | C_type | Ref_ID | Protein | VH | Del_AA_start | Del_AA_end | Del_AA_len | In_frame | CDS_ID | Del_CDS_start | Del_CDS_end | Del_CDS_len |
-| ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
-|EPI_ISL_410721|SARS-CoV-2|WUHAN19|orf1ab|5ba70e95c9a3251bc6155f62295dd3e8|994|1002|9|true|29cd767e2d144c31179395fd606d1489ce731746|2980|3006|27|
-|EPI_ISL_410721|SARS-CoV-2|WUHAN19|orf1ab|5ba70e95c9a3251bc6155f62295dd3e8|1012|1012|1|true|29cd767e2d144c31179395fd606d1489ce731746|3034|3036|3|
-|EPI_ISL_410721|SARS-CoV-2|WUHAN19|S|450c068c437e7536d27fdb883d95d4f4|72|72|1|true|36a75a0d34960c048abaf82ee46a1b713eee534e|214|216|3|
-|EPI_ISL_410721|SARS-CoV-2|WUHAN19|S|450c068c437e7536d27fdb883d95d4f4|146|146|1|true|36a75a0d34960c048abaf82ee46a1b713eee534e|436|438|3|
-|EPI_ISL_410721|SARS-CoV-2|WUHAN19|S|450c068c437e7536d27fdb883d95d4f4|254|256|3|true|36a75a0d34960c048abaf82ee46a1b713eee534e|760|768|9|
-|EPI_ISL_410721|SARS-CoV-2|WUHAN19|S|450c068c437e7536d27fdb883d95d4f4|680|683|4|true|36a75a0d34960c048abaf82ee46a1b713eee534e|2038|2049|12|
+| ID             | C_type     | Ref_ID  | Protein | VH                               | Del_AA_start | Del_AA_end | Del_AA_len | In_frame | CDS_ID                                   | Del_CDS_start | Del_CDS_end | Del_CDS_len |
+| -------------- | ---------- | ------- | ------- | -------------------------------- | ------------ | ---------- | ---------- | -------- | ---------------------------------------- | ------------- | ----------- | ----------- |
+| EPI_ISL_410721 | SARS-CoV-2 | WUHAN19 | orf1ab  | 5ba70e95c9a3251bc6155f62295dd3e8 | 994          | 1002       | 9          | true     | 29cd767e2d144c31179395fd606d1489ce731746 | 2980          | 3006        | 27          |
+| EPI_ISL_410721 | SARS-CoV-2 | WUHAN19 | orf1ab  | 5ba70e95c9a3251bc6155f62295dd3e8 | 1012         | 1012       | 1          | true     | 29cd767e2d144c31179395fd606d1489ce731746 | 3034          | 3036        | 3           |
+| EPI_ISL_410721 | SARS-CoV-2 | WUHAN19 | S       | 450c068c437e7536d27fdb883d95d4f4 | 72           | 72         | 1          | true     | 36a75a0d34960c048abaf82ee46a1b713eee534e | 214           | 216         | 3           |
+| EPI_ISL_410721 | SARS-CoV-2 | WUHAN19 | S       | 450c068c437e7536d27fdb883d95d4f4 | 146          | 146        | 1          | true     | 36a75a0d34960c048abaf82ee46a1b713eee534e | 436           | 438         | 3           |
+| EPI_ISL_410721 | SARS-CoV-2 | WUHAN19 | S       | 450c068c437e7536d27fdb883d95d4f4 | 254          | 256        | 3          | true     | 36a75a0d34960c048abaf82ee46a1b713eee534e | 760           | 768         | 9           |
+| EPI_ISL_410721 | SARS-CoV-2 | WUHAN19 | S       | 450c068c437e7536d27fdb883d95d4f4 | 680          | 683        | 4          | true     | 36a75a0d34960c048abaf82ee46a1b713eee534e | 2038          | 2049        | 12          |
 
 A sequence file output example:
 
-| ID | C_type | Ref_ID | Protein | VH |  AA_seq | AA_aln | CDS_id | Insertion | Shift_Insert | CDS_seq | CDS_aln | Query_nt_coordinates | CDS_nt_coordinates |
-| ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
-| 223550 | B_HA | BRISBANE60 | HA-signal | e81d2d895c70e91bb3ef917fe49fdab7 | MKAIIVLLMVVTSNA | MKAIIVLLMVVTSNA | 2aa6443b92ca45b301faa4d46e5fbd3b010e3ab7 |  false | false |ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | 20..64 | 1..45 |
-| 223550 | B_HA | PHUKET3073 | HA-signal | e81d2d895c70e91bb3ef917fe49fdab7 | MKAIIVLLMVVTSNA | MKAIIVLLMVVTSNA | 2aa6443b92ca45b301faa4d46e5fbd3b010e3ab7 | false | false | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | 20..64 | 1..45 |
-| 11209 | B_HA | BRISBANE60 | HA-signal | c7ee7ff234abf5c0591e0fe1af26ca87 | MKAIIILLMVVTSNA | MKAIIILLMVVTSNA | c49a73ab7280362c8c710abbf648708c41f97712 | false | false | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | 1..45 | 1..45 |
-| 11209 | B_HA | PHUKET3073 | HA-signal | c7ee7ff234abf5c0591e0fe1af26ca87 | MKAIIILLMVVTSNA | MKAIIILLMVVTSNA | c49a73ab7280362c8c710abbf648708c41f97712 | false | false | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | 1..45 | 1..45 |
+| ID     | C_type | Ref_ID     | Protein   | VH                               | AA_seq          | AA_aln          | CDS_id                                   | Insertion | Shift_Insert | CDS_seq                                       | CDS_aln                                       | Query_nt_coordinates | CDS_nt_coordinates |
+| ------ | ------ | ---------- | --------- | -------------------------------- | --------------- | --------------- | ---------------------------------------- | --------- | ------------ | --------------------------------------------- | --------------------------------------------- | -------------------- | ------------------ |
+| 223550 | B_HA   | BRISBANE60 | HA-signal | e81d2d895c70e91bb3ef917fe49fdab7 | MKAIIVLLMVVTSNA | MKAIIVLLMVVTSNA | 2aa6443b92ca45b301faa4d46e5fbd3b010e3ab7 | false     | false        | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | 20..64               | 1..45              |
+| 223550 | B_HA   | PHUKET3073 | HA-signal | e81d2d895c70e91bb3ef917fe49fdab7 | MKAIIVLLMVVTSNA | MKAIIVLLMVVTSNA | 2aa6443b92ca45b301faa4d46e5fbd3b010e3ab7 | false     | false        | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTGTACTACTCATGGTAGTAACATCCAATGCA | 20..64               | 1..45              |
+| 11209  | B_HA   | BRISBANE60 | HA-signal | c7ee7ff234abf5c0591e0fe1af26ca87 | MKAIIILLMVVTSNA | MKAIIILLMVVTSNA | c49a73ab7280362c8c710abbf648708c41f97712 | false     | false        | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | 1..45                | 1..45              |
+| 11209  | B_HA   | PHUKET3073 | HA-signal | c7ee7ff234abf5c0591e0fe1af26ca87 | MKAIIILLMVVTSNA | MKAIIILLMVVTSNA | c49a73ab7280362c8c710abbf648708c41f97712 | false     | false        | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | ATGAAGGCAATAATTATACTACTCATGGTAGTAACATCCAATGCA | 1..45                | 1..45              |
 
 *Optional* genome output file example:
 
-| ID | C_type | Ref_ID | Genome_ID | Genome_length | Insertion | Genome_seq | Genome_aln |
-| ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
-| EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 | 8e193a72b22a666947b21cb785af6780c2c6996b | 108 | true | TTTAAGGTTTATACCTTCCCAGGTAACAAACCAACC**TGGGTTTGG**AACTTTCGATCTCTTGTAGATCTGTTCTCTAAACGAACTTTAAAATCTGTGTGGCTGTCACTC | .TTTAAGGTTTATACCTTCCCAGGTAACAAACCAACCAACTTTCGATCTCTTGTAGATCTGTTCTCTAAACGAACTTTAAAATCTGTGTGGCTGTCACTC |
+| ID            | C_type     | Ref_ID  | Genome_ID                                | Genome_length | Insertion | Genome_seq                                                                                                       | Genome_aln                                                                                           |
+| ------------- | ---------- | ------- | ---------------------------------------- | ------------- | --------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 | 8e193a72b22a666947b21cb785af6780c2c6996b | 108           | true      | TTTAAGGTTTATACCTTCCCAGGTAACAAACCAACC**TGGGTTTGG**AACTTTCGATCTCTTGTAGATCTGTTCTCTAAACGAACTTTAAAATCTGTGTGGCTGTCACTC | .TTTAAGGTTTATACCTTCCCAGGTAACAAACCAACCAACTTTCGATCTCTTGTAGATCTGTTCTCTAAACGAACTTTAAAATCTGTGTGGCTGTCACTC |
 
 *Optional* genome insertion output file example:
 
-| ID | C_type | Ref_ID | Upstream_nt | Inserted_nucleotides |
-| ------ | ------ | ------ | ------ | ------ |
-| EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 | 37 | TGGGTTTGG |
+| ID            | C_type     | Ref_ID  | Upstream_nt | Inserted_nucleotides |
+| ------------- | ---------- | ------- | ----------- | -------------------- |
+| EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 | 37          | TGGGTTTGG            |
 
 *Optional* genome deletion output file example:
 
-| ID | C_type | Ref_ID | Del_NT_start | Del_NT_end | Del_NT_len |
-| ------ | ------ | ------ | ------ | ------ |  ------ |
-| EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 |3246|3272|27|
+| ID            | C_type     | Ref_ID  | Del_NT_start | Del_NT_end | Del_NT_len |
+| ------------- | ---------- | ------- | ------------ | ---------- | ---------- |
+| EPI_ISL_FAKE1 | SARS-CoV-2 | WUHAN19 | 3246         | 3272       | 27         |
 
 ## Field descriptions
 
 The field explanations:
 
-| field | description |
-| ------ | ------ |
-| ID | Any unique identifier, but likely the `flu_sequence_id`, `epi_segment_id`, raw `nt_id`, or NCBI accession. |
-| C_type | The compound type conisting of the influenza type, segment, and subtype if applicable. This is the same as IRMA. Chimeric types start with an asterisk. Other modules, this field is used for the taxon, eg, SARS-CoV-2 and MERS-CoV. |
-| Ref_ID | As with DAIS, the reference reading frame used for alignment. |
-| Protein | The protein product or peptide derived from the gene segment. |
-| VH (AA_ID) | The `variant_hash` as used in DAIS (md5 hex of `AA_seq`). |
-| Insertion | Boolean indicating whether or not there is an insertion relative to reference in the original CDS. |
-| Shift_Indel | Boolean indicating whether an insertion or deletion in the CDS is a non-triplet and could have induced a frameshift. |
-| Upstream_aa / Upstream_nt | The upstream amino acid / nucleotide position for the insertion relative to the reference coordinates. |
-| Codon | The codon(s) inserted. |
-| Inserted_residues / Inserted_nucleotides | The residues / nucleotides inserted. |
-| CDS_ID / Genome_ID | The nucleotide sequence ID using the sha1 hex of the CDS_seq and Genome_seq (as in PubSeq). |
-| AA_seq / AA_aln | The amino acid sequence (less deletions + insertions) and the amino acid alignment (residues relative to reference only). |
-| CDS_seq / CDS_aln | The nucleotide cds sequence (less deletions + insertions) and the cds alignment (bases relative to reference only). |
-| Genome_seq / Genome_aln | The nucleotide genome sequence (less deletions + insertions) and the genome alignment (bases relative to reference only). |
-| Query_nt_coordinates | Set of aligned position ranges representing the aligned coordinates relative to the original submitted query sequence. Insertions appear as singletons. |
-| CDS_nt_coordinates | Set of aligned position ranges relative to the spliced CDS. Insertions appear as singletons. |
-| Genome_length | Length of the ungapped genome sequence (including insertions) aligned via relaxed Smith-Waterman to reference. May be smaller than the original sequence file if divergent ends were hard-clipped. |
-| Del_<AA/CDS/NT>_<start/end/len> | The start, end positions for amino acid, CDS, or genomic nucleotide deletions. Len is for total length. |
-| Codon_shift | The number of extra nucleotide between the complete upstream codon and the insertion (0, 1 or 2). |
-| In_frame | Specifies that the deletion contains no codon with partial deletions relative to `Ref ID`. |
+| field                                    | description                                                                                                                                                                                                                           |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ID                                       | Any unique identifier, but likely the `flu_sequence_id`, `epi_segment_id`, raw `nt_id`, or NCBI accession.                                                                                                                            |
+| C_type                                   | The compound type conisting of the influenza type, segment, and subtype if applicable. This is the same as IRMA. Chimeric types start with an asterisk. Other modules, this field is used for the taxon, eg, SARS-CoV-2 and MERS-CoV. |
+| Ref_ID                                   | As with DAIS, the reference reading frame used for alignment.                                                                                                                                                                         |
+| Protein                                  | The protein product or peptide derived from the gene segment.                                                                                                                                                                         |
+| VH (AA_ID)                               | The `variant_hash` as used in DAIS (md5 hex of `AA_seq`).                                                                                                                                                                             |
+| Insertion                                | Boolean indicating whether or not there is an insertion relative to reference in the original CDS.                                                                                                                                    |
+| Shift_Indel                              | Boolean indicating whether an insertion or deletion in the CDS is a non-triplet and could have induced a frameshift.                                                                                                                  |
+| Upstream_aa / Upstream_nt                | The upstream amino acid / nucleotide position for the insertion relative to the reference coordinates.                                                                                                                                |
+| Codon                                    | The codon(s) inserted.                                                                                                                                                                                                                |
+| Inserted_residues / Inserted_nucleotides | The residues / nucleotides inserted.                                                                                                                                                                                                  |
+| CDS_ID / Genome_ID                       | The nucleotide sequence ID using the sha1 hex of the CDS_seq and Genome_seq (as in PubSeq).                                                                                                                                           |
+| AA_seq / AA_aln                          | The amino acid sequence (less deletions + insertions) and the amino acid alignment (residues relative to reference only).                                                                                                             |
+| CDS_seq / CDS_aln                        | The nucleotide cds sequence (less deletions + insertions) and the cds alignment (bases relative to reference only).                                                                                                                   |
+| Genome_seq / Genome_aln                  | The nucleotide genome sequence (less deletions + insertions) and the genome alignment (bases relative to reference only).                                                                                                             |
+| Query_nt_coordinates                     | Set of aligned position ranges representing the aligned coordinates relative to the original submitted query sequence. Insertions appear as singletons.                                                                               |
+| CDS_nt_coordinates                       | Set of aligned position ranges relative to the spliced CDS. Insertions appear as singletons.                                                                                                                                          |
+| Genome_length                            | Length of the ungapped genome sequence (including insertions) aligned via relaxed Smith-Waterman to reference. May be smaller than the original sequence file if divergent ends were hard-clipped.                                    |
+| Del_<AA/CDS/NT>_<start/end/len>          | The start, end positions for amino acid, CDS, or genomic nucleotide deletions. Len is for total length.                                                                                                                               |
+| Codon_shift                              | The number of extra nucleotide between the complete upstream codon and the insertion (0, 1 or 2).                                                                                                                                     |
+| In_frame                                 | Specifies that the deletion contains no codon with partial deletions relative to `Ref ID`.                                                                                                                                            |
 
 ## Special use of translated characters
 
 Translation produces standard amino acid codes with the two non-standard exceptions listed below.  The translation engine also stops when it encounters a stop codon.
 
-| Character | Interpretation |
-| ------ | ------ |
-| **.** | Missing alignment data (non-standard) |
-| **-** | Gap in alignment (standard) |
-| **~** | Partial codon (non-standard) |
-| **X** | Ambiguous codon translation (standard) |
+| Character | Interpretation                         |
+| --------- | -------------------------------------- |
+| **.**     | Missing alignment data (non-standard)  |
+| **-**     | Gap in alignment (standard)            |
+| **~**     | Partial codon (non-standard)           |
+| **X**     | Ambiguous codon translation (standard) |
 
 ## CLI Usage
 
@@ -162,7 +162,7 @@ For docker you can do:
 
 ```bash
 # Use /tmp in the container
-docker run --rm -v $(pwd):/data -t cdcgov/dais-ribosome:latest ribosome flu.fasta t1.seq t1.ins t1.del t1.gen 
+docker run --rm -v $(pwd):/data -t cdcgov/dais-ribosome:latest ribosome flu.fasta t1.seq t1.ins t1.del t1.gen
 
 # Alter the scratch directory to use our mount
 docker run --rm -v $(pwd):/data -e IFX_WORK_DIR=/data -t cdcgov/dais-ribosome:latest ribosome flu.fasta

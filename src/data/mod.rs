@@ -1,0 +1,31 @@
+mod error;
+mod outputs;
+mod profiles;
+mod refs;
+mod spec;
+
+pub(crate) mod ctype;
+pub(crate) mod exons;
+pub(crate) mod keys;
+pub(crate) mod module;
+pub(crate) mod products;
+pub(crate) mod ranges;
+pub(crate) mod weights;
+
+pub mod query;
+
+pub use module::ModuleData;
+pub use outputs::*;
+pub use query::*;
+
+use std::{fs::File, io, path::Path};
+
+/// Helper for constructing IO errors with path context.
+pub(crate) struct TSVReader;
+
+impl TSVReader {
+    /// Open a file, returning an error if the file is empty.
+    pub fn open_nonempty_file(path: &Path) -> io::Result<File> {
+        zoe::data::err::open_nonempty_file(path)
+    }
+}

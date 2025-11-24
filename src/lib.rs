@@ -1,18 +1,14 @@
-#![feature(try_trait_v2)]
-#![allow(dead_code)]
+#![feature(try_trait_v2, int_format_into)]
 
-use rand::{Rng, distr::Alphanumeric};
-use zoe::prelude::*;
+// =============================================================================
+// Module hierarchy
+// =============================================================================
 
-// A well-formed DAIS-ribosome input.
-struct InputRecord {
-    id:    String,
-    taxon: String,
-    seq:   Nucleotides,
-}
+/// Configuration loading and path resolution.
+pub mod config;
 
-pub fn generate_token(length: usize) -> String {
-    rand::rng().sample_iter(&Alphanumeric).take(length).map(char::from).collect()
-}
+/// Data loading and structures for module resources.
+pub mod data;
 
-pub mod conf;
+/// Protein annotation engine.
+pub mod annotation;

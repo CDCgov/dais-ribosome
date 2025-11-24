@@ -5,15 +5,19 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-rayon = "*"
-toml = "*"
-serde = "*"
-serde_derive = "*"
+rayon = "1"
+toml = "0.9"
+serde = "1"
+serde_derive = "1"
 
-zoe = { git = "https://git.biotech.cdc.gov/vfn4/zoe.git", branch = "make-record-reader-public", default-features = false, features = [
+zoe = { version = "0.0.25", default-features = false, features = [
     "multiversion",
+    "rand",
 ] }
-rand = { version = "0.9", default-features = false, features = ["thread_rng"] }
+sha1_smol = "1"
+md5 = "0.8"
+getrandom = "0.3.4"
+jiff = "0.2.18"
 
 [[bin]]
 bench = false

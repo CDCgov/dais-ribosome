@@ -22,3 +22,5 @@ s
 g.*
 *bak
 /target
+*.pptx
+/extras
