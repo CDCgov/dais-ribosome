@@ -1,8 +1,8 @@
 //! Module data loading.
 
 use crate::annotation::AnnotationModule;
-use crate::config::{Formatting, Rules, TomlConfig, module_resource_dir};
-use std::path::PathBuf;
+use crate::config::{Formatting, Rules, TomlConfig};
+use std::path::{Path, PathBuf};
 
 use super::{
     ctype::build_ctype_map,
@@ -39,11 +39,16 @@ impl ModuleData {
     pub fn from_config(
         modules_path: &std::path::Path, config: TomlConfig, module_name: &str,
     ) -> Result<Self, ModuleLoadError> {
+        let modules_dir = modules_path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+
         let (module, other_modules) = config
-            .find_module(module_name)
+            .find_module(module_name, &modules_dir)
             .ok_or_else(|| ModuleLoadError::module_not_found(module_name))?;
 
-        let module_root = module_resource_dir(modules_path, &module.name);
+        let module_root = modules_dir.join(&module.name);
 
         let references_path = module_root.join(&module.references);
         let weights_path = module_root.join(&module.weights);

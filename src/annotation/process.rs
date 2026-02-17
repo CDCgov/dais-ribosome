@@ -29,6 +29,8 @@ impl<'a> AnnotationModule<'a> {
                 return Err(RibosomeError::Unmappable(query.id.to_string()));
             };
 
+            //eprintln!("{}\t{}", query.id, genome_aln.states);
+
             self.rule_repairable_ends(&mut genome_aln);
 
             let stop_extension = self.rule_stop_extension(&query_seq, &genome_aln);
@@ -103,7 +105,7 @@ impl<'a> AnnotationModule<'a> {
             // For half-open 0-based ranges, the exclusive end is the inclusive starting index
             let start_index = genome_aln.query_range.end;
             Some(InsertionRange {
-                upstream_ref_index: start_index - 1,
+                upstream_ref_index: genome_aln.ref_range.end - 1,
                 query_range:        start_index..start_index + stop_codon_index + 3,
             })
         } else {

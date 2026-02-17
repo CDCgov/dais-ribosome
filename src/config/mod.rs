@@ -8,5 +8,5 @@
 mod paths;
 mod toml;
 
-pub use paths::{find_modules_toml, module_resource_dir};
+pub use paths::find_modules_toml;
 pub use toml::{AlignmentParams, ConfiguredModule, Formatting, Rules, TomlConfig, suggest_module_for_compound_type};

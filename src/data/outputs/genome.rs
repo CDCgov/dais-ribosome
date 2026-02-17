@@ -1,4 +1,7 @@
-use crate::{config::Formatting, data::ranges::DeletionRange};
+use crate::{
+    config::Formatting,
+    data::{Nullable, ranges::DeletionRange},
+};
 use std::fmt::{self, Display};
 use zoe::prelude::*;
 
@@ -55,7 +58,7 @@ impl Display for GenRow<'_> {
             self.id,
             self.ctype,
             self.ref_id,
-            g.genome_id,
+            Nullable(&g.genome_id),
             g.genome_length,
             g.has_insertion,
             g.genome_seq,

@@ -27,24 +27,3 @@ pub fn find_modules_toml() -> Result<PathBuf, Error> {
 
     Err(Error::other("Could not find 'modules.toml' file"))
 }
-
-/// Returns the directory containing a module's resource files.
-pub fn module_resource_dir(modules_toml_path: &std::path::Path, module_name: &str) -> PathBuf {
-    modules_toml_path
-        .parent()
-        .map(std::path::Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(module_name)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_module_resource_dir() {
-        let toml_path = PathBuf::from("/app/ribosome_res/modules.toml");
-        let dir = module_resource_dir(&toml_path, "flu");
-        assert_eq!(dir, PathBuf::from("/app/ribosome_res/flu"));
-    }
-}

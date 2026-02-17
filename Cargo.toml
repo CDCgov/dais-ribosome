@@ -3,6 +3,10 @@ name = "dais-ribosome"
 version = "2.0.0"
 edition = "2024"
 
+[features]
+default = ["regression-testing"]
+regression-testing = []
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 rayon = "1"

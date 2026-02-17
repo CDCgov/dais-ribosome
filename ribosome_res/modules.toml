@@ -6,10 +6,11 @@ weights = "flu-codon-position-weights.tsv"
 cds_spec = "flu-cds-spec.tsv"
 
 [module.formatting]
-right_pad_aa = true
+right_pad_aa = false
 right_pad_cds = true
 
 [module.rules]
+list_contig_stop_extension = true
 chew_to_start = true
 
 [module.alignment]

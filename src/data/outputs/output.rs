@@ -168,8 +168,7 @@ impl<'a> GenomeAndProductStates<'a> {
             }
 
             let genome_seq = Nucleotides::from_vec_unchecked(genome_seq_bytes);
-            // TODO: change to a hash type that implements the proper dispaly instead
-            let genome_id = nt_id(&genome_seq).unwrap_or_else(|| "\\N".to_string());
+            let genome_id = nt_id(&genome_seq).unwrap_or_default();
             let genome_length = genome_seq.len();
             let genome_aln = Nucleotides::from_vec_unchecked(genome_aln_bytes);
 

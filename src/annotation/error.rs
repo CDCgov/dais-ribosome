@@ -5,8 +5,8 @@ use zoe::data::err::{ErrorWithContext, GetCode};
 #[derive(Debug)]
 pub enum RibosomeError {
     InvalidFastaFormat,
-    //InvalidTSVFormat,
-    //BlankFirstLine,
+    InvalidTsvFormat,
+    BlankFirstLine(std::path::PathBuf),
     InvalidSequence(String),
     NoCtype(String),
     UnimplementedCtype(String),
@@ -27,6 +27,7 @@ impl GetCode for RibosomeError {
     fn get_code(&self) -> i32 {
         match self {
             RibosomeError::IO(e) => e.get_code(),
+            RibosomeError::BlankFirstLine(_) => 66, // EX_NOINPUT
             _ => 1,
         }
     }
@@ -38,8 +39,8 @@ impl std::fmt::Display for RibosomeError {
             RibosomeError::InvalidFastaFormat => {
                 write!(f, "Invalid FASTA format. Header needs to be either ID or ID|ctype.")
             }
-            //RibosomeError::InvalidTSVFormat => write!(f, "Invalid TSV format"),
-            //RibosomeError::BlankFirstLIne => write!(f, "Blank first line"),
+            RibosomeError::InvalidTsvFormat => write!(f, "Invalid TSV format: expected 2 or 3 tab-separated columns"),
+            RibosomeError::BlankFirstLine(p) => write!(f, "Blank or empty first line: {}", p.display()),
             RibosomeError::NoCtype(s) => write!(f, "No ctype found in header: {s}"),
             RibosomeError::UnimplementedCtype(c) => write!(f, "Unimpelmented ctype '{c}'"),
             RibosomeError::InvalidSequence(s) => write!(f, "Invalid sequence, see header: {s}"),

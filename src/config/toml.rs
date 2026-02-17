@@ -21,7 +21,7 @@ impl TomlConfig {
     }
 
     /// Find a module by name, returning it along with the other modules' metadata.
-    pub fn find_module(self, name: &str) -> Option<(ConfiguredModule, Vec<(String, PathBuf)>)> {
+    pub fn find_module(self, name: &str, module_path: &Path) -> Option<(ConfiguredModule, Vec<(String, PathBuf)>)> {
         let mut selected = None;
         let mut others = Vec::new();
 
@@ -29,7 +29,8 @@ impl TomlConfig {
             if m.name == name {
                 selected = Some(m);
             } else {
-                others.push((m.name, m.references));
+                let ref_path = module_path.join(&m.name).join(&m.references);
+                others.push((m.name, ref_path));
             }
         }
 

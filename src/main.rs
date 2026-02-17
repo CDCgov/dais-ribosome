@@ -1,22 +1,20 @@
-#![feature(string_from_utf8_lossy_owned)]
-#![allow(unused_variables, dead_code)]
-
+#![feature(string_from_utf8_lossy_owned, bufreader_peek, try_trait_v2)]
 //use rayon::{ThreadPoolBuilder, iter::ParallelBridge, prelude::ParallelIterator};
 
-use app::{args::Args, io::Writers, log};
+use app::{args::Args, input::QueryInput, io::Writers, log};
 
 use clap::Parser;
 use dais_ribosome::{
     annotation::AnnotationModule,
     config::find_modules_toml,
-    data::{ModuleData, QueryRecord, RibosomeError},
+    data::{ModuleData, RibosomeError},
 };
 use std::{collections::HashSet, io::Write, path::Path};
-use zoe::{data::err::OrFail, prelude::*};
+use zoe::data::err::OrFail;
 
 // If we later want to match the shell script, we can use:
 // <https://docs.rs/git-version/latest/git_version/macro.git_describe.html>
-const PROGRAM_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " v", env!("CARGO_PKG_VERSION"));
+// const PROGRAM_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " v", env!("CARGO_PKG_VERSION"));
 
 fn main() {
     let args = Args::parse();
@@ -33,21 +31,20 @@ fn main() {
     let writers = args.get_writers().unwrap_or_fail();
     let gen_writers = args.get_optional_writers().unwrap_or_fail();
 
-    process_queries(&args.data_file, &annotation_module, &args, writers, gen_writers)
-        .unwrap_or_die("Query processing failed");
+    process_queries(&args.data_file, &annotation_module, writers, gen_writers).unwrap_or_die("Query processing failed");
 }
 
 // TODO: move later
 fn process_queries(
-    path: &Path, annotation_module: &AnnotationModule, args: &Args, mut writers: Writers, mut gen_writers: Option<Writers>,
+    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers, mut gen_writers: Option<Writers>,
 ) -> Result<(), RibosomeError> {
     log::ts("started, processing data");
-    let queries = FastaReader::from_path(path)?;
+    let queries = QueryInput::open(path)?;
 
     let mut unimplemented_ctypes = HashSet::new();
 
     for result in queries {
-        let record = QueryRecord::try_from(result?)?;
+        let record = result?;
         let output = match annotation_module.process(record) {
             Ok(output) => output,
             Err(RibosomeError::UnimplementedCtype(ctype)) => {

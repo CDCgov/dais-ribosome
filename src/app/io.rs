@@ -26,12 +26,17 @@ pub fn optional_writers(path: &Option<PathBuf>) -> Result<Option<Writers>, Ribos
         let mut p = p.clone();
         p.set_extension("gen_seq.txt");
         let seq = BufWriter::new(File::create(&p).with_path_context("Could not open writer for genome sequence file", &p)?);
+
+        p.set_extension("");
+        p.set_extension("");
         p.set_extension("gen_ins.txt");
         let ins = BufWriter::new(File::create(&p).with_path_context(
             format!("Could not open writer for genome insertion file: {}", p.display()),
             &p,
         )?);
 
+        p.set_extension("");
+        p.set_extension("");
         p.set_extension("gen_del.txt");
         let del = BufWriter::new(File::create(&p).with_path_context("Could not open writer for genome deletion file", &p)?);
 

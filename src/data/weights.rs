@@ -68,7 +68,8 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
     let mut current_weights = HashMap::new();
     let mut current_key: Option<SpecKey> = None;
 
-    for line in reader.lines().map_while(Result::ok) {
+    for line in reader.lines() {
+        let line = line?;
         if line.contains('|') {
             // Save previous section if it exists
             if let Some(key) = current_key.take()
@@ -93,10 +94,10 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
         // Parse weight entry: position<TAB>codon<TAB>count
         let mut parts = line.split_ascii_whitespace();
         if let (Some(position_str), Some(codon_str), Some(count_str)) = (parts.next(), parts.next(), parts.next())
-            && let (Ok(position), Ok(count), Ok(codon)) = (
+            && let (Ok(position), Ok(count), Some(Ok(codon))) = (
                 position_str.trim_ascii().parse(),
                 count_str.trim_ascii().parse::<u32>(),
-                codon_str.trim_ascii().as_bytes()[..3].try_into(),
+                codon_str.trim_ascii().as_bytes().get(..3).map(TryInto::try_into),
             )
         {
             let mut key = CodonKey { position, codon };

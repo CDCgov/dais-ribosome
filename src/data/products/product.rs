@@ -25,7 +25,10 @@ impl<'a> Product<'a> {
             && let Some(CdsStateRange::M(m)) = self.product_ranges.first()
             && m.cds_range.start == 0
             && m.cds_range.end >= 3
-            && let Some(mut first) = query.as_ref().first_chunk().copied()
+            && let Some(mut first) = query
+                .as_ref()
+                .get(m.query_range.start..)
+                .and_then(|s| s.first_chunk().copied())
         {
             first.make_ascii_uppercase();
             first != required
@@ -35,19 +38,30 @@ impl<'a> Product<'a> {
     }
 
     pub(crate) fn leading_cds_gap_len(&self) -> usize {
-        if let Some(CdsStateRange::M(m)) = self.product_ranges.iter().find(|s| matches!(s, CdsStateRange::M(_))) {
-            m.cds_range.start
-        } else {
-            0
-        }
+        self.product_ranges
+            .iter()
+            .find_map(|s| match s {
+                CdsStateRange::M(m) => Some(m.cds_range.start),
+                CdsStateRange::D(d) => Some(d.cds_range.start),
+                _ => None,
+            })
+            .unwrap_or(0)
     }
 
     pub(crate) fn trailing_cds_gap_len(&self) -> usize {
-        if let Some(CdsStateRange::M(m)) = self.product_ranges.iter().rfind(|s| matches!(s, CdsStateRange::M(_))) {
-            self.total_cds_len() - m.cds_range.end
-        } else {
-            0
-        }
+        // Use the furthest CDS end from any M or D state to avoid
+        // double-padding when a deletion covers trailing positions.
+        let last_cds_end = self
+            .product_ranges
+            .iter()
+            .rev()
+            .find_map(|s| match s {
+                CdsStateRange::M(m) => Some(m.cds_range.end),
+                CdsStateRange::D(d) => Some(d.cds_range.end),
+                _ => None,
+            })
+            .unwrap_or(0);
+        self.total_cds_len() - last_cds_end
     }
 
     pub(crate) fn total_cds_len(&self) -> usize {
@@ -58,7 +72,7 @@ impl<'a> Product<'a> {
     /// exons, this method merges adjacent deletion CDS for downstream correctness.
     pub(crate) fn condense_deletions(&mut self) {
         let mut i = 0;
-        let mut len = self.product_ranges.len() - 1;
+        let mut len = self.product_ranges.len().saturating_sub(1);
         while i < len {
             if let Some([CdsStateRange::D(current), CdsStateRange::D(next)]) = self.product_ranges.get_mut(i..i + 2) {
                 current.merge(next);
@@ -332,26 +346,29 @@ impl Product<'_> {
             let query_bytes = query.as_bytes();
             let range_count = self.product_ranges.len();
 
+            // Pre-pad CDS alignment for proper 5' reading frame
+            let leading = self.leading_cds_gap_len();
             let mut cds_seq_bytes = Vec::new();
-            let mut cds_aln_bytes = Vec::new();
+            let mut cds_aln_bytes = vec![b'.'; leading];
             let mut query_coords = String::with_capacity((5 + 2 + 5) * range_count);
             let mut cds_coords = String::with_capacity((5 + 2 + 5) * range_count);
             let mut insertions = Vec::new();
             let mut deletions = Vec::new();
             let mut has_shift_indel = false;
 
-            for (k, state) in self.product_ranges.iter().enumerate() {
-                if k > 0 {
-                    query_coords.push(';');
-                    cds_coords.push(';');
-                }
-
+            let mut has_coords = false;
+            for state in self.product_ranges.iter() {
                 match state {
                     CdsStateRange::M(m) => {
                         let slice = &query_bytes[m.query_range.clone()];
                         cds_seq_bytes.extend_from_slice(slice);
                         cds_aln_bytes.extend_from_slice(slice);
 
+                        if has_coords {
+                            query_coords.push(';');
+                            cds_coords.push(';');
+                        }
+                        has_coords = true;
                         query_coords.push_range(&m.query_range);
                         cds_coords.push_range(&m.cds_range);
                     }
@@ -359,6 +376,11 @@ impl Product<'_> {
                         let slice = &query_bytes[ins.query_range.clone()];
 
                         cds_seq_bytes.extend_from_slice(slice);
+                        if has_coords {
+                            query_coords.push(';');
+                            cds_coords.push(';');
+                        }
+                        has_coords = true;
                         query_coords.push_range(&ins.query_range);
                         cds_coords.push_upstream(ins.upstream_cds_index);
 
@@ -420,10 +442,33 @@ impl Product<'_> {
             let cds_seq: Nucleotides = cds_seq_bytes.into();
             let cds_aln: Nucleotides = cds_aln_bytes.into();
 
-            let aa_seq = cds_seq.translate_to_stop();
             let aa_aln = cds_aln.translate_to_stop();
-            let cds_id = nt_id(&cds_seq).unwrap_or_else(|| "\\N".to_string());
-            let variant_hash = variant_hash(&aa_seq).unwrap_or_else(|| "\\N".to_string());
+
+            // Derive aa_seq from aa_aln: strip alignment characters (`-` and `.`),
+            // then splice in insertion residues at their correct AA positions.
+            // This mirrors the Perl pipeline's `fa2delim -B -I` behavior and
+            // ensures shift-deletions don't corrupt the reading frame.
+            let mut aa_seq_bytes: Vec<u8> = aa_aln
+                .as_bytes()
+                .iter()
+                .filter(|&&b| b != b'-' && b != b'.')
+                .copied()
+                .collect();
+
+            let mut offset = 0;
+            for ins in &insertions {
+                let pos = ins.upstream_aa + offset;
+                let residue_bytes = ins.inserted_residues.as_bytes();
+                let insert_at = pos.min(aa_seq_bytes.len());
+                for (j, &b) in residue_bytes.iter().enumerate() {
+                    aa_seq_bytes.insert(insert_at + j, b);
+                }
+                offset += residue_bytes.len();
+            }
+
+            let aa_seq = AminoAcids::from_vec_unchecked(aa_seq_bytes);
+            let cds_id = nt_id(&cds_seq).unwrap_or_default();
+            let variant_hash = variant_hash(&aa_seq).unwrap_or_default();
 
             ComputedProduct {
                 cds_seq,
