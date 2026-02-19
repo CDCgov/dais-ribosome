@@ -1,7 +1,13 @@
 #![feature(string_from_utf8_lossy_owned, bufreader_peek, try_trait_v2)]
-//use rayon::{ThreadPoolBuilder, iter::ParallelBridge, prelude::ParallelIterator};
 
-use app::{args::Args, input::QueryInput, io::Writers, log};
+use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
+
+use app::{
+    args::Args,
+    grid::{self, Grid},
+    input::QueryInput,
+    io, log,
+};
 
 use clap::Parser;
 use dais_ribosome::{
@@ -9,7 +15,7 @@ use dais_ribosome::{
     config::find_modules_toml,
     data::{ModuleData, RibosomeError},
 };
-use std::{collections::HashSet, io::Write, path::Path};
+use std::{collections::HashSet, path::Path};
 use zoe::data::err::OrFail;
 
 // If we later want to match the shell script, we can use:
@@ -28,15 +34,41 @@ fn main() {
         .build_annotation_module()
         .unwrap_or_die(&format!("Failed to build module '{}'", args.module));
 
+    // Grid submission, blocks on the array
+    if let Some(n) = args.submit_grid_job {
+        let output_paths = args.output_paths_for_grid();
+        grid::submit_job_sync(n, &args.module, &args.data_file, output_paths).unwrap_or_die("Grid job submission failed!");
+        return;
+    }
+
+    // Grid array task
+    if args.is_grid_task {
+        let g = Grid::task_vars_from_env();
+        let writers = args.get_grid_writers(g.task_id).unwrap_or_fail();
+        let gen_writers = args.get_optional_writers().unwrap_or_fail();
+
+        process_queries_grid(&args.data_file, &annotation_module, writers, gen_writers, &g)
+            .unwrap_or_die(&format!("Grid task {id} processing failed", id = g.task_id));
+        return;
+    }
+
+    // Local execution
     let writers = args.get_writers().unwrap_or_fail();
     let gen_writers = args.get_optional_writers().unwrap_or_fail();
 
-    process_queries(&args.data_file, &annotation_module, writers, gen_writers).unwrap_or_die("Query processing failed");
+    let t = app::num_cpus::init_thread_pool(args.threads);
+    if t > 1 {
+        process_queries_parallel(&args.data_file, &annotation_module, writers, gen_writers)
+            .unwrap_or_die("Query processing failed");
+    } else {
+        // Single-threaded, do not use a pool
+        process_queries(&args.data_file, &annotation_module, writers, gen_writers).unwrap_or_die("Query processing failed");
+    }
 }
 
-// TODO: move later
+/// Process queries sequentially (single-threaded).
 fn process_queries(
-    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers, mut gen_writers: Option<Writers>,
+    path: &Path, annotation_module: &AnnotationModule, mut writers: io::Writers, mut gen_writers: Option<io::Writers>,
 ) -> Result<(), RibosomeError> {
     log::ts("started, processing data");
     let queries = QueryInput::open(path)?;
@@ -54,36 +86,75 @@ fn process_queries(
             Err(e) => return Err(e),
         };
 
-        for row in output.seq_rows() {
-            writeln!(writers.seq, "{row}")?;
-        }
-
-        for row in output.ins_rows() {
-            writeln!(writers.ins, "{row}")?;
-        }
-
-        for row in output.del_rows() {
-            writeln!(writers.del, "{row}")?;
-        }
-
-        // Genome output rows
-        if let Some(ref mut w) = gen_writers {
-            for row in output.gen_rows() {
-                writeln!(w.seq, "{row}")?;
-            }
-
-            for row in output.gen_ins_rows() {
-                writeln!(w.ins, "{row}")?;
-            }
-
-            for row in output.gen_del_rows() {
-                writeln!(w.del, "{row}")?;
-            }
-        }
+        io::write_output(&output, &mut writers, &mut gen_writers)?;
     }
 
     log::print_unimplemented_ctypes(unimplemented_ctypes, annotation_module);
     log::ts("finished");
+
+    Ok(())
+}
+
+/// Process queries in parallel using Rayon then write results sequentially.
+fn process_queries_parallel(
+    path: &Path, annotation_module: &AnnotationModule, mut writers: io::Writers, mut gen_writers: Option<io::Writers>,
+) -> Result<(), RibosomeError> {
+    log::ts("started, processing data (parallel)");
+    let queries = QueryInput::open(path)?;
+
+    let results: Vec<_> = queries
+        .filter_map(Result::ok)
+        .par_bridge()
+        .map(|record| {
+            annotation_module.process(record).inspect(|o| {
+                o.materialize();
+            })
+        })
+        .collect();
+
+    let mut unimplemented_ctypes = HashSet::new();
+
+    for result in results {
+        let output = match result {
+            Ok(output) => output,
+            Err(RibosomeError::UnimplementedCtype(ctype)) => {
+                unimplemented_ctypes.insert(ctype);
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
+
+        io::write_output(&output, &mut writers, &mut gen_writers)?;
+    }
+
+    log::print_unimplemented_ctypes(unimplemented_ctypes, annotation_module);
+    log::ts("finished");
+
+    Ok(())
+}
+
+/// Process a grid partition: skip/step through queries based on task geometry.
+fn process_queries_grid(
+    path: &Path, annotation_module: &AnnotationModule, mut writers: io::Writers, mut gen_writers: Option<io::Writers>,
+    g: &Grid,
+) -> Result<(), RibosomeError> {
+    let queries = QueryInput::open(path)?;
+
+    // 0-based offset so we start on our partition
+    let offset = (g.task_id - g.task_first) / g.task_stepsize;
+    // modulus for interleaved partitioning
+    let array_size = (g.task_last - g.task_first + 1).div_ceil(g.task_stepsize);
+
+    for result in queries.skip(offset).step_by(array_size) {
+        let record = result?;
+        let output = match annotation_module.process(record) {
+            Ok(output) => output,
+            Err(RibosomeError::UnimplementedCtype(_)) => continue,
+            Err(e) => return Err(e),
+        };
+
+        io::write_output(&output, &mut writers, &mut gen_writers)?;
+    }
 
     Ok(())
 }

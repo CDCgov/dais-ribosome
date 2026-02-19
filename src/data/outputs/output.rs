@@ -34,6 +34,17 @@ pub(crate) struct GenomeAndProductStates<'a> {
 }
 
 impl<'a> RibosomeOutput<'a> {
+    /// Eagerly materialize all products and genome data for use in
+    /// parallel executors.
+    pub fn materialize(&self) {
+        for state in &self.states {
+            state.materialize_genome(&self.query.nucleotides);
+            for product in &state.products {
+                product.materialize(&self.query.nucleotides);
+            }
+        }
+    }
+
     /// Generate `.seq` output rows for this query.
     pub fn seq_rows(&self) -> impl Iterator<Item = SeqRow<'_>> + '_ {
         self.states.iter().flat_map(move |state| {

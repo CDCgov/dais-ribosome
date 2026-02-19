@@ -1,6 +1,7 @@
 use super::io;
 use clap::Parser;
 use dais_ribosome::data::RibosomeError;
+use std::num::NonZero;
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -35,11 +36,23 @@ pub struct Args {
 
     /// Run in simultaneous multi-threaded mode.
     #[arg(short = 'T', long)]
-    threads: bool,
+    pub threads: Option<NonZero<usize>>,
 
     /// Write data as parquet files.
     #[arg(short = 'q', long)]
     output_parquet: bool,
+
+    /// Automatically detect the array task id from SGE or Slurm environment
+    /// variables and write partition files for downstream collation.
+    ///
+    /// Output files are required and will be suffixed with a partition id.
+    #[arg(short = 'G', long, requires = "output", conflicts_with_all = ["threads", "submit_grid_job"])]
+    pub is_grid_task: bool,
+
+    /// Submit and block on a grid engine (SGE or Slurm) array job of the
+    /// specified size.
+    #[arg(short = 'S', long, conflicts_with_all = ["threads", "is_grid_task"])]
+    pub submit_grid_job: Option<usize>,
 }
 
 impl Args {
@@ -53,5 +66,30 @@ impl Args {
 
     pub fn get_optional_writers(&self) -> Result<Option<io::Writers>, RibosomeError> {
         io::optional_writers(&self.genomic_output_prefix)
+    }
+
+    /// Return the output paths paired with their extension labels for grid partition collation.
+    pub fn output_paths_for_grid(&self) -> Vec<(PathBuf, &str)> {
+        let mut paths = Vec::new();
+        if let Some(ref p) = self.sequence_output {
+            paths.push((p.clone(), "seq"));
+        }
+        if let Some(ref p) = self.insertion_output {
+            paths.push((p.clone(), "ins"));
+        }
+        if let Some(ref p) = self.deletion_output {
+            paths.push((p.clone(), "del"));
+        }
+        // TODO: genomic output grid support
+        paths
+    }
+
+    /// Build partition-suffixed writers for a grid array task.
+    pub fn get_grid_writers(&self, task_id: usize) -> Result<io::Writers, RibosomeError> {
+        Ok(io::Writers {
+            seq: io::open_partition_writer(&self.sequence_output, task_id, "seq")?,
+            ins: io::open_partition_writer(&self.insertion_output, task_id, "ins")?,
+            del: io::open_partition_writer(&self.deletion_output, task_id, "del")?,
+        })
     }
 }

@@ -18,6 +18,7 @@ zoe = { version = "0.0.28", default-features = false, features = [
     "multiversion",
     "rand",
 ] }
+num_cpus = "1"
 sha1_smol = "1"
 md5 = "0.8"
 getrandom = "0.4"

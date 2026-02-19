@@ -1,6 +1,12 @@
-use std::{fs::File, io::BufWriter, path::PathBuf, sync::LazyLock};
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+    path::PathBuf,
+    sync::LazyLock,
+};
 
-use dais_ribosome::data::RibosomeError;
+use super::grid::get_partition_filename;
+use dais_ribosome::data::{RibosomeError, RibosomeOutput};
 use zoe::data::err::ResultWithErrorContext;
 use zoe::prelude::rand_sequence;
 
@@ -18,6 +24,23 @@ pub fn open_writer(path: &Option<PathBuf>, extension: &str) -> Result<BufWriter<
         &new_path
     });
     let f = File::create(p).with_path_context(format!("Could not open writer for {extension} file"), p)?;
+    Ok(BufWriter::new(f))
+}
+
+/// Open a partition writer for grid array tasks.
+///
+/// The partition filename is derived from the output path with a `_NNN` suffix.
+pub fn open_partition_writer(
+    path: &Option<PathBuf>, task_id: usize, extension: &str,
+) -> Result<BufWriter<File>, RibosomeError> {
+    let p = path.as_ref().expect("Grid task mode requires explicit output paths");
+    let partition_name = get_partition_filename(p, task_id, extension);
+    let mut partition_path = p.clone();
+    partition_path.set_file_name(partition_name);
+    let f = File::create(&partition_path).with_path_context(
+        format!("Could not open partition writer for {extension} file"),
+        &partition_path,
+    )?;
     Ok(BufWriter::new(f))
 }
 
@@ -44,6 +67,40 @@ pub fn optional_writers(path: &Option<PathBuf>) -> Result<Option<Writers>, Ribos
     } else {
         Ok(None)
     }
+}
+
+/// Write a single query's output rows to the appropriate writers.
+pub fn write_output(
+    output: &RibosomeOutput<'_>, writers: &mut Writers, gen_writers: &mut Option<Writers>,
+) -> Result<(), RibosomeError> {
+    for row in output.seq_rows() {
+        writeln!(writers.seq, "{row}")?;
+    }
+
+    for row in output.ins_rows() {
+        writeln!(writers.ins, "{row}")?;
+    }
+
+    for row in output.del_rows() {
+        writeln!(writers.del, "{row}")?;
+    }
+
+    // Genome output rows
+    if let Some(w) = gen_writers {
+        for row in output.gen_rows() {
+            writeln!(w.seq, "{row}")?;
+        }
+
+        for row in output.gen_ins_rows() {
+            writeln!(w.ins, "{row}")?;
+        }
+
+        for row in output.gen_del_rows() {
+            writeln!(w.del, "{row}")?;
+        }
+    }
+
+    Ok(())
 }
 
 static TEMP_PREFIX: LazyLock<String> = LazyLock::new(temp_name);

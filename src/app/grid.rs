@@ -1,0 +1,213 @@
+use super::log;
+use std::env;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
+/// Supported grid engine schedulers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GridScheduler {
+    Sge,
+    Slurm,
+    None,
+}
+
+/// Grid array-task environment parsed from SGE or Slurm.
+#[derive(Debug, Clone)]
+pub(crate) struct Grid {
+    pub task_id:       usize,
+    pub task_first:    usize,
+    pub task_last:     usize,
+    pub task_stepsize: usize,
+}
+
+impl Grid {
+    /// Parse array-task variables from SGE or Slurm environment.
+    ///
+    /// Panics if no scheduler is detected or required variables are invalid.
+    pub fn task_vars_from_env() -> Self {
+        match (env::var("SGE_TASK_ID"), env::var("SLURM_ARRAY_TASK_ID")) {
+            (Ok(_), _) => Self::from_sge_env(),
+            (_, Ok(_)) => Self::from_slurm_env(),
+            _ => panic!("No supported grid scheduler detected (SGE or Slurm)."),
+        }
+    }
+
+    fn from_sge_env() -> Self {
+        Self {
+            task_id:       env::var("SGE_TASK_ID")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .expect("Invalid SGE_TASK_ID!"),
+            task_first:    env::var("SGE_TASK_FIRST")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(1),
+            task_last:     env::var("SGE_TASK_LAST")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .expect("Invalid SGE_TASK_LAST!"),
+            task_stepsize: env::var("SGE_TASK_STEPSIZE")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(1),
+        }
+    }
+
+    fn from_slurm_env() -> Self {
+        Self {
+            task_id:       env::var("SLURM_ARRAY_TASK_ID")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .expect("Invalid SLURM_ARRAY_TASK_ID!"),
+            task_first:    env::var("SLURM_ARRAY_TASK_MIN")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(1),
+            task_last:     env::var("SLURM_ARRAY_TASK_MAX")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .expect("Invalid SLURM_ARRAY_TASK_MAX!"),
+            task_stepsize: 1,
+        }
+    }
+}
+
+/// Detect which grid scheduler is available on the submission node by
+/// checking for `qsub` (SGE) or `sbatch` (Slurm) in `PATH`.
+fn detect_submission_scheduler() -> GridScheduler {
+    if command_exists("qsub") {
+        GridScheduler::Sge
+    } else if command_exists("sbatch") {
+        GridScheduler::Slurm
+    } else {
+        GridScheduler::None
+    }
+}
+
+fn command_exists(cmd: &str) -> bool {
+    Command::new("which")
+        .arg(cmd)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+/// Build a partition filename: `{stem}_{id:03}.{extension}`.
+pub(crate) fn get_partition_filename(path: &Path, id: usize, extension: &str) -> String {
+    if let Some(stem) = path.file_stem() {
+        let stem = stem.to_string_lossy();
+        format!("{stem}_{id:03}.{extension}")
+    } else {
+        format!("ribosome_output_{id:03}.{extension}")
+    }
+}
+
+/// Submit an array job (`qsub -sync yes` or `sbatch --wait`) and collate
+/// partition files into final outputs on completion.
+pub fn submit_job_sync(
+    task_count: usize, module: &str, input_path: &Path, output_paths: Vec<(PathBuf, &str)>,
+) -> Result<(), std::io::Error> {
+    log::ts("started, submitting grid job");
+
+    let current_exe = env::current_exe().expect("Failed to get current executable path");
+
+    // Log path derived from first output
+    let log_path = if let Some((first_out, _)) = output_paths.first() {
+        let mut lp = first_out.clone();
+        let log_file = lp
+            .file_stem()
+            .map(|s| {
+                let mut out = s.to_owned();
+                out.push("_log.txt");
+                out
+            })
+            .unwrap_or_else(|| "ribosome_log.txt".into());
+        lp.set_file_name(log_file);
+        lp
+    } else {
+        PathBuf::from("ribosome_log.txt")
+    };
+
+    // Build the base arguments that the child process will receive
+    // The child will be invoked with --is-grid-task
+    let mut child_args: Vec<String> = vec![input_path.to_string_lossy().to_string()];
+
+    // Add output paths as positional args
+    for (path, _) in &output_paths {
+        child_args.push(path.to_string_lossy().to_string());
+    }
+
+    child_args.extend(["--module".to_string(), module.to_string(), "--is-grid-task".to_string()]);
+
+    let output_cmd = match detect_submission_scheduler() {
+        GridScheduler::Sge => {
+            let mut cmd = Command::new("qsub");
+            cmd.args(["-t", &format!("1-{task_count}"), "-sync", "yes", "-cwd", "-j", "yes", "-o"])
+                .arg(&log_path)
+                .args(["-b", "yes"])
+                .arg(&current_exe)
+                .args(&child_args)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+
+            eprintln!("Executing: {cmd:#?}");
+            cmd.output()?
+        }
+        GridScheduler::Slurm => {
+            let mut cmd = Command::new("sbatch");
+            cmd.args([
+                "--wait",
+                &format!("--array=1-{task_count}"),
+                "--output",
+                &log_path.to_string_lossy(),
+                "--wrap",
+            ])
+            .arg(format!(
+                "{exe} {args}",
+                exe = current_exe.to_string_lossy(),
+                args = child_args.join(" "),
+            ))
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+            eprintln!("Executing: {cmd:#?}");
+            cmd.output()?
+        }
+        GridScheduler::None => panic!("No grid scheduler found (SGE or Slurm). Use local execution only!"),
+    };
+
+    if !output_cmd.status.success() {
+        let stderr = String::from_utf8_lossy(&output_cmd.stderr);
+        panic!("Grid submission failed: {stderr}");
+    }
+
+    log::ts("collating data");
+
+    // Collate partition files into final outputs
+    for (output_path, extension) in &output_paths {
+        let mut partition_data = Vec::new();
+        let mut output_file = File::create(output_path)?;
+
+        for id in 1..=task_count {
+            let partition_name = get_partition_filename(output_path, id, extension);
+            let mut partition_path = output_path.clone();
+            partition_path.set_file_name(partition_name);
+
+            if partition_path.exists() {
+                let mut file = File::open(&partition_path)?;
+                file.read_to_end(&mut partition_data)?;
+                output_file.write_all(&partition_data)?;
+                output_file.flush()?;
+                std::fs::remove_file(&partition_path)?;
+                partition_data.clear();
+            }
+        }
+    }
+
+    log::ts("finished");
+
+    Ok(())
+}
