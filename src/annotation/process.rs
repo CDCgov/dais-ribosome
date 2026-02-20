@@ -165,18 +165,14 @@ impl<T> AlignmentExt for zoe::alignment::Alignment<T> {
     }
 
     fn extend_left(&mut self, by_length: usize) {
-        if by_length > 0 {
-            self.query_range.start -= by_length;
-            self.ref_range.start -= by_length;
-            self.states.prepend_inc_op(by_length, b'M');
-        }
+        self.query_range.start -= by_length;
+        self.ref_range.start -= by_length;
+        self.states.prepend_inc_op(by_length, b'M');
     }
 
     fn extend_right(&mut self, by_length: usize) {
-        if by_length > 0 {
-            self.query_range.end += by_length;
-            self.ref_range.end += by_length;
-            self.states.add_inc_op(by_length, b'M');
-        }
+        self.query_range.end += by_length;
+        self.ref_range.end += by_length;
+        self.states.add_inc_op(by_length, b'M');
     }
 }

@@ -20,7 +20,12 @@ impl TomlConfig {
         Ok(toml::from_str::<TomlConfig>(&raw_toml).with_type_context::<TomlConfig>()?)
     }
 
-    /// Find a module by name, returning it along with the other modules' metadata.
+    /// Find a module by name, returning it along with the other modules'
+    /// metadata.
+    ///
+    /// This is used when forming [`ModuleData`]. The other modules' metadata
+    /// are used to populate `other_modules`, which is used in warning messages
+    /// in [`print_unimplemented_ctypes`].
     pub fn find_module(self, name: &str, module_path: &Path) -> Option<(ConfiguredModule, Vec<(String, PathBuf)>)> {
         let mut selected = None;
         let mut others = Vec::new();
@@ -38,18 +43,30 @@ impl TomlConfig {
     }
 }
 
-/// Configuration for a single annotation module (e.g., flu, cov, rsv).
-#[derive(Debug, Clone, Deserialize)]
+/// Configuration for a single annotation module (e.g., `flu`, `cov`, or `rsv`).
+#[derive(Clone, Debug, Deserialize)]
 pub struct ConfiguredModule {
+    /// The name of the module (e.g., `flu`, `cov`, or `rsv`). This must
+    /// correspond to a folder in `ribosome_res`.
     pub name:       String,
+    /// An optional version for the module (e.g., `2.0-alpha`).
     pub version:    Option<String>,
+    /// The file name for the FASTA file containing the references. This should
+    /// be a relative path within the module folder.
     pub references: PathBuf,
+    // TODO: What is this?
     pub weights:    PathBuf,
+    /// The file name for the TSV file containing the coding sequence (CDS)
+    /// specifications. This should be a relative path within the module folder.
     pub cds_spec:   PathBuf,
+    // TODO: What is this?
     pub formatting: Formatting,
+    // TODO: What is this?
     pub rules:      Rules,
     pub alignment:  HashMap<String, AlignmentParams>,
 }
+
+// TODO: What are these fields?
 
 /// Output formatting options for a module.
 #[derive(Debug, Clone, Deserialize)]
@@ -62,6 +79,8 @@ pub struct Formatting {
     pub right_pad_gen: bool,
 }
 
+/// Returns the default value for whether to perform padding. This is used by
+/// `serde` in [`Formatting`].
 const fn pad_default() -> bool {
     true
 }
@@ -75,6 +94,8 @@ pub struct Rules {
     pub repairable_end_limit:       Option<usize>,
 }
 
+// TODO: Should we be negating the mismatch penalty too when parsing?
+
 /// Alignment scoring parameters.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AlignmentParams {
@@ -87,25 +108,13 @@ pub struct AlignmentParams {
     pub gap_extend:  i8,
 }
 
-/// Deserializes a gap penalty, validating the range and normalizing to negative.
+// TODO: Currently it is not validating the range...
+
+/// Deserializes a gap penalty, validating the range and normalizing to
+/// negative.
 fn deserialize_gap_penalty<'de, D>(deserializer: D) -> Result<i8, D::Error>
 where
     D: serde::Deserializer<'de>, {
     let value: i8 = Deserialize::deserialize(deserializer)?;
-    match value {
-        0 => Ok(0),
-        1.. => Ok(-value),
-        ..=-1 => Ok(value),
-    }
-}
-
-/// Suggest which module might contain a given compound type.
-pub fn suggest_module_for_compound_type<'a>(
-    modules: &'a [ConfiguredModule], compound_type: &str, exclude_module: &str,
-) -> Option<&'a str> {
-    modules
-        .iter()
-        .filter(|module| module.name != exclude_module)
-        .find(|module| module.alignment.contains_key(compound_type))
-        .map(|module| module.name.as_str())
+    Ok(-value.abs())
 }

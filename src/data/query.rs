@@ -16,8 +16,9 @@ pub struct QueryRecord {
 
 impl TryFrom<FastaSeq> for QueryRecord {
     type Error = RibosomeError;
-    fn try_from(datum: FastaSeq) -> Result<Self, Self::Error> {
-        let FastaSeq { name, sequence } = datum;
+
+    fn try_from(fasta: FastaSeq) -> Result<Self, Self::Error> {
+        let FastaSeq { name, sequence } = fasta;
         // BREAKING: we previously only removed: '*: .~-'
         let nucleotides = sequence.filter_to_dna_unaligned();
 
@@ -26,12 +27,9 @@ impl TryFrom<FastaSeq> for QueryRecord {
         }
 
         if name.contains('|') {
-            let mut parts = name.split('|');
-            let Some((id, ctype)) = parts
-                .next()
-                .zip(parts.next())
-                .map(|(i, c)| (i.trim_ascii().to_string(), c.trim_ascii().to_string()))
-            else {
+            let mut parts = name.split('|').map(|part| part.trim_ascii().to_string());
+
+            let (Some(id), Some(ctype)) = (parts.next(), parts.next()) else {
                 return Err(RibosomeError::InvalidFastaFormat);
             };
 

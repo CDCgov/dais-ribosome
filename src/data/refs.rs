@@ -1,7 +1,7 @@
 //! Reference sequence loading from FASTA files.
 
 use crate::data::keys::RefKey;
-use std::{collections::HashMap, io::Error as IOError, path::Path};
+use std::{collections::HashMap, path::Path};
 use zoe::{
     data::{fasta::FastaSeq, nucleotides::ToDNA},
     prelude::*,
@@ -14,9 +14,10 @@ pub type ReferenceMap = HashMap<RefKey, Vec<Nucleotides>>;
 ///
 /// Each sequence name must be pipe-delimited: `reference_id|compound_type`
 ///
-/// # Errors
+/// ## Errors
 ///
 /// Returns an error if:
+///
 /// - The file cannot be read
 /// - A sequence name doesn't match the expected format
 pub fn load_references(path: &Path) -> Result<ReferenceMap, std::io::Error> {
@@ -29,7 +30,7 @@ pub fn load_references(path: &Path) -> Result<ReferenceMap, std::io::Error> {
         let forward = sequence.recode_to_dna();
 
         let key = RefKey::parse(&name).ok_or_else(|| {
-            IOError::other(format!(
+            std::io::Error::other(format!(
                 "Reference FASTA header must have format '<reference_id>|<compound_type>', but found '{name}'",
             ))
         })?;

@@ -6,7 +6,6 @@ use crate::data::{
 };
 use std::{
     collections::HashMap,
-    io::Error as IOError,
     io::{BufRead, BufReader},
     path::Path,
     sync::LazyLock,
@@ -50,15 +49,17 @@ pub type CodonWeightMatrix = HashMap<SpecKey, CodonPositionWeights>;
 /// Load codon position weight matrices from a TSV file.
 ///
 /// The file format uses pipe-delimited headers to start new sections:
+///
 /// ```text
 /// reference_id|protein
 /// position<TAB>codon<TAB>count
 /// ...
 /// ```
 ///
-/// # Errors
+/// ## Errors
 ///
 /// Returns an error if:
+///
 /// - The file cannot be read
 /// - A section header is malformed
 pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Error> {
@@ -80,14 +81,13 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
 
             // Parse new section header
             let mut parts = line.trim_start_matches('#').trim_ascii().split('|');
-            current_key = parts
-                .next()
-                .zip(parts.next())
-                .map(|(ref_id, protein)| (ref_id, protein).into());
 
-            if current_key.is_none() {
-                return Err(IOError::other("Issue parsing weight matrix header"));
-            }
+            let (Some(reference_id), Some(protein_product)) = (parts.next(), parts.next()) else {
+                return Err(std::io::Error::other("Issue parsing weight matrix header"));
+            };
+
+            current_key = Some(SpecKey::new(reference_id, protein_product));
+
             continue;
         }
 

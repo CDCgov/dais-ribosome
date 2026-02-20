@@ -1,13 +1,16 @@
 //! Alignment profiles and weight matrices.
 
-use crate::config::{AlignmentParams, ConfiguredModule};
-use std::collections::HashMap;
+use crate::{
+    config::{AlignmentParams, ConfiguredModule},
+    data::error::ModuleLoadError,
+};
+use std::{collections::HashMap, ops::Deref};
 use zoe::{
-    alignment::SharedProfiles,
+    alignment::{ProfileError, SharedProfiles},
     data::{matrices::WeightMatrix, nucleotides::Nucleotides},
 };
 
-const DNA_ALPHABET: usize = 5;
+const DNA_ALPHA_LEN: usize = 5;
 
 /// Gap penalty parameters for alignment.
 #[derive(Debug, Clone, Copy)]
@@ -31,24 +34,25 @@ impl From<&AlignmentParams> for GapParams {
     }
 }
 
-/// Collection of alignment weight matrices for a module.
+/// Collection of alignment weights for a module.
 ///
-/// Provides default scoring parameters plus optional per-compound-type overrides.
+/// Provides default scoring parameters plus optional overrides for specific
+/// compound types.
 #[derive(Debug)]
 pub struct AlignmentWeights {
     /// Default scoring matrix and gap parameters.
-    pub default:   (GapParams, WeightMatrix<'static, i8, DNA_ALPHABET>),
+    pub default:   (GapParams, WeightMatrix<'static, i8, DNA_ALPHA_LEN>),
     /// Per-compound-type overrides.
-    pub overrides: HashMap<String, (GapParams, WeightMatrix<'static, i8, DNA_ALPHABET>)>,
+    pub overrides: HashMap<String, (GapParams, WeightMatrix<'static, i8, DNA_ALPHA_LEN>)>,
 }
 
 impl AlignmentWeights {
     /// Build alignment weights from a module configuration.
     ///
-    /// # Panics
+    /// ## Errors
     ///
-    /// Panics if the module doesn't specify default alignment parameters.
-    pub fn from_config(module: &ConfiguredModule) -> Self {
+    /// The module must specify default alignment parameters.
+    pub fn from_config(module: &ConfiguredModule) -> Result<Self, ModuleLoadError> {
         let default = module
             .alignment
             .get("default")
@@ -58,7 +62,10 @@ impl AlignmentWeights {
                     WeightMatrix::new_dna_matrix(params.match_score, params.mismatch, Some(b'N')),
                 )
             })
-            .unwrap_or_else(|| panic!("Module '{}' must specify default alignment parameters", module.name));
+            .ok_or(ModuleLoadError::invalid_config(
+                &module.name,
+                "No default alignment parameters were specified",
+            ))?;
 
         let mut overrides = HashMap::new();
         for (key, params) in &module.alignment {
@@ -71,13 +78,13 @@ impl AlignmentWeights {
             }
         }
 
-        Self { default, overrides }
+        Ok(Self { default, overrides })
     }
 
     /// Get the scoring parameters for a compound type.
     ///
     /// Returns the override for the compound type if it exists, otherwise returns defaults.
-    pub fn get(&self, compound_type: &str) -> &(GapParams, WeightMatrix<'static, i8, DNA_ALPHABET>) {
+    pub fn get(&self, compound_type: &str) -> &(GapParams, WeightMatrix<'static, i8, DNA_ALPHA_LEN>) {
         self.overrides.get(compound_type).unwrap_or(&self.default)
     }
 }
@@ -86,17 +93,22 @@ impl AlignmentWeights {
 ///
 /// For reverse strand alignment, the query is reverse-complemented instead.
 #[derive(Debug)]
-pub struct AlignmentProfiles<'a> {
-    pub profile: SharedProfiles<'a, 32, 16, 8, DNA_ALPHABET>,
-}
+pub struct AlignmentProfiles<'a>(SharedProfiles<'a, 32, 16, 8, DNA_ALPHA_LEN>);
 
 impl<'a> AlignmentProfiles<'a> {
     /// Build a profile for a reference sequence.
     pub fn new(
-        sequence: &'a Nucleotides, matrix: &'a WeightMatrix<'static, i8, DNA_ALPHABET>, params: &GapParams,
-    ) -> Result<Self, super::error::ProfileBuildError> {
-        let profile = SharedProfiles::new_with_w256(sequence.as_bytes(), matrix, params.gap_open, params.gap_extend)?;
+        sequence: &'a Nucleotides, matrix: &'a WeightMatrix<'static, i8, DNA_ALPHA_LEN>, params: &GapParams,
+    ) -> Result<Self, ProfileError> {
+        SharedProfiles::new_with_w256(sequence.as_bytes(), matrix, params.gap_open, params.gap_extend).map(Self)
+    }
+}
 
-        Ok(Self { profile })
+impl<'a> Deref for AlignmentProfiles<'a> {
+    type Target = SharedProfiles<'a, 32, 16, 8, DNA_ALPHA_LEN>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }

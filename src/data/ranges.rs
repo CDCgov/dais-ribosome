@@ -49,6 +49,17 @@ pub(crate) enum CdsStateRange {
     I(CdsInsertionRange),
 }
 
+impl CdsStateRange {
+    /// Extracts a mutable reference to a [`CdsMatchRanges`], or `None` is a
+    /// different variant is present.
+    pub fn match_range_mut(&mut self) -> Option<&mut CdsMatchRanges> {
+        match self {
+            CdsStateRange::M(cds_match_ranges) => Some(cds_match_ranges),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct CdsMatchRanges {
     pub(crate) query_range: Range<usize>,

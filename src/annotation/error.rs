@@ -61,8 +61,3 @@ impl From<ErrorWithContext> for RibosomeError {
         RibosomeError::IO(std::io::Error::other(e))
     }
 }
-
-// Rather than Regex, we will check for its existence in our module set
-fn _valid_ctype(_c: &str) -> bool {
-    true
-}

@@ -1,22 +1,20 @@
 #![feature(string_from_utf8_lossy_owned, bufreader_peek, try_trait_v2)]
 
-use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
-
 use app::{
     args::Args,
     grid::{self, Grid},
     input::QueryInput,
     io, log,
 };
-
 use clap::Parser;
 use dais_ribosome::{
     annotation::AnnotationModule,
     config::find_modules_toml,
     data::{ModuleData, RibosomeError},
 };
+use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{collections::HashSet, path::Path};
-use zoe::data::err::OrFail;
+use zoe::{data::err::OrFail, iter_utils::ProcessResultsExt};
 
 // If we later want to match the shell script, we can use:
 // <https://docs.rs/git-version/latest/git_version/macro.git_describe.html>
@@ -25,6 +23,7 @@ use zoe::data::err::OrFail;
 fn main() {
     let args = Args::parse();
 
+    // Find the full file-system path to ribosome_res/modules.toml
     let toml_path = find_modules_toml().unwrap_or_fail();
 
     let mut module_data = ModuleData::load_from_file(&toml_path, &args.module)
@@ -102,15 +101,15 @@ fn process_queries_parallel(
     log::ts("started, processing data (parallel)");
     let queries = QueryInput::open(path)?;
 
-    let results: Vec<_> = queries
-        .filter_map(Result::ok)
-        .par_bridge()
-        .map(|record| {
-            annotation_module.process(record).inspect(|o| {
-                o.materialize();
+    let results: Vec<_> = queries.process_results(|iter| {
+        iter.par_bridge()
+            .map(|record| {
+                annotation_module.process(record).inspect(|o| {
+                    o.materialize();
+                })
             })
-        })
-        .collect();
+            .collect::<Vec<_>>()
+    })?;
 
     let mut unimplemented_ctypes = HashSet::new();
 

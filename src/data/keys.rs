@@ -20,21 +20,15 @@ impl RefKey {
         }
     }
 
-    /// Parse a pipe-delimited name: `reference_id|compound_type`
+    /// Parses a pipe-delimited FASTA header of the form
+    /// `reference_id|compound_type`.
+    ///
+    /// Any additional pipe-delimited fields are dropped.
     pub fn parse(name: &str) -> Option<Self> {
         let mut parts = name.split('|');
         let reference_id = parts.next()?;
         let compound_type = parts.next()?;
         Some(Self::new(reference_id, compound_type))
-    }
-}
-
-impl From<(String, String)> for RefKey {
-    fn from((ref_id, ctype): (String, String)) -> Self {
-        Self {
-            reference_id:  ref_id,
-            compound_type: ctype,
-        }
     }
 }
 
@@ -60,12 +54,6 @@ impl SpecKey {
             reference_id:    reference_id.into(),
             protein_product: protein_product.into(),
         }
-    }
-}
-
-impl From<(&str, &str)> for SpecKey {
-    fn from((ref_id, prot): (&str, &str)) -> Self {
-        SpecKey::new(ref_id, prot)
     }
 }
 

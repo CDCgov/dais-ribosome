@@ -1,8 +1,7 @@
 use super::io;
 use clap::Parser;
 use dais_ribosome::data::RibosomeError;
-use std::num::NonZero;
-use std::path::PathBuf;
+use std::{num::NonZero, path::PathBuf};
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]

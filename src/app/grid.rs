@@ -1,20 +1,23 @@
-use super::log;
-use std::env;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use dais_ribosome::config::current_exe;
+
+use crate::app::log;
+use std::{
+    env,
+    fs::File,
+    io::{Read, Write},
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+};
 
 /// Supported grid engine schedulers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub(crate) enum GridScheduler {
     Sge,
     Slurm,
-    None,
 }
 
 /// Grid array-task environment parsed from SGE or Slurm.
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct Grid {
     pub task_id:       usize,
     pub task_first:    usize,
@@ -23,7 +26,7 @@ pub(crate) struct Grid {
 }
 
 impl Grid {
-    /// Parse array-task variables from SGE or Slurm environment.
+    /// Parses array-task variables from SGE or Slurm environment.
     ///
     /// Panics if no scheduler is detected or required variables are invalid.
     pub fn task_vars_from_env() -> Self {
@@ -74,18 +77,25 @@ impl Grid {
     }
 }
 
-/// Detect which grid scheduler is available on the submission node by
-/// checking for `qsub` (SGE) or `sbatch` (Slurm) in `PATH`.
-fn detect_submission_scheduler() -> GridScheduler {
+/// Picks which grid scheduler to use on the submission node by checking for
+/// `qsub` (SGE) or `sbatch` (Slurm) in `PATH`.
+///
+/// ## Errors
+///
+/// If neither command exists, then an error is returned.
+fn pick_submission_scheduler() -> std::io::Result<GridScheduler> {
     if command_exists("qsub") {
-        GridScheduler::Sge
+        Ok(GridScheduler::Sge)
     } else if command_exists("sbatch") {
-        GridScheduler::Slurm
+        Ok(GridScheduler::Slurm)
     } else {
-        GridScheduler::None
+        Err(std::io::Error::other(
+            "No grid scheduler found (SGE or Slurm). Use local execution only!",
+        ))
     }
 }
 
+/// Detects whether a command exists by using `which`.
 fn command_exists(cmd: &str) -> bool {
     Command::new("which")
         .arg(cmd)
@@ -95,24 +105,23 @@ fn command_exists(cmd: &str) -> bool {
         .is_ok_and(|s| s.success())
 }
 
-/// Build a partition filename: `{stem}_{id:03}.{extension}`.
+/// Builds a partition filename of the form `{stem}_{id:03}.{extension}`.
 pub(crate) fn get_partition_filename(path: &Path, id: usize, extension: &str) -> String {
     if let Some(stem) = path.file_stem() {
-        let stem = stem.to_string_lossy();
-        format!("{stem}_{id:03}.{extension}")
+        format!("{stem}_{id:03}.{extension}", stem = stem.display())
     } else {
         format!("ribosome_output_{id:03}.{extension}")
     }
 }
 
-/// Submit an array job (`qsub -sync yes` or `sbatch --wait`) and collate
+/// Submits an array job (`qsub -sync yes` or `sbatch --wait`) and collates
 /// partition files into final outputs on completion.
 pub fn submit_job_sync(
     task_count: usize, module: &str, input_path: &Path, output_paths: Vec<(PathBuf, &str)>,
-) -> Result<(), std::io::Error> {
+) -> std::io::Result<()> {
     log::ts("started, submitting grid job");
 
-    let current_exe = env::current_exe().expect("Failed to get current executable path");
+    let current_exe = current_exe()?;
 
     // Log path derived from first output
     let log_path = if let Some((first_out, _)) = output_paths.first() {
@@ -133,7 +142,7 @@ pub fn submit_job_sync(
 
     // Build the base arguments that the child process will receive
     // The child will be invoked with --is-grid-task
-    let mut child_args: Vec<String> = vec![input_path.to_string_lossy().to_string()];
+    let mut child_args = vec![input_path.to_string_lossy().to_string()];
 
     // Add output paths as positional args
     for (path, _) in &output_paths {
@@ -142,7 +151,7 @@ pub fn submit_job_sync(
 
     child_args.extend(["--module".to_string(), module.to_string(), "--is-grid-task".to_string()]);
 
-    let output_cmd = match detect_submission_scheduler() {
+    let output_cmd = match pick_submission_scheduler()? {
         GridScheduler::Sge => {
             let mut cmd = Command::new("qsub");
             cmd.args(["-t", &format!("1-{task_count}"), "-sync", "yes", "-cwd", "-j", "yes", "-o"])
@@ -176,7 +185,6 @@ pub fn submit_job_sync(
             eprintln!("Executing: {cmd:#?}");
             cmd.output()?
         }
-        GridScheduler::None => panic!("No grid scheduler found (SGE or Slurm). Use local execution only!"),
     };
 
     if !output_cmd.status.success() {

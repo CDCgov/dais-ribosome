@@ -123,7 +123,7 @@ impl<'a> Product<'a> {
         }
     }
 
-    /// Fix an insertion at `idx` by shifting it to an in-frame position.
+    /// Fixes an insertion at `idx` by shifting it to an in-frame position.
     ///
     /// Uses the A1/A2 shift logic from `codonCorrectStats.pl`:
     /// - A1 (frame 1): Compare codons formed by:
@@ -133,13 +133,12 @@ impl<'a> Product<'a> {
     /// - A2 (frame 2): Compare codons formed by:
     ///   - 2 preceding bases + first 1 insert base
     ///   - last 2 insert bases + 1 following
-    fn fix_insertion_frame(&mut self, idx: usize, query: impl AsRef<[u8]>) -> Option<()> {
+    fn fix_insertion_frame(&mut self, idx: usize, query_seq: &[u8]) -> Option<()> {
         let Product {
             product_ranges,
             product_spec,
             ..
         } = self;
-        let query_seq = query.as_ref();
 
         // In practice this is idx +/- 1 since insertions cannot be split over exons.
         // However, if the alignment algorithm permits a deletion after an insertion, then yes, search away.
@@ -298,16 +297,8 @@ impl<'a> Product<'a> {
     ) -> Option<(&mut CdsMatchRanges, &mut CdsStateRange, &mut CdsMatchRanges)> {
         let (left, mid, right) = product_ranges.split_around_mut(idx)?;
 
-        let l = left
-            .iter_mut()
-            .rev()
-            .filter_map(|state| if let CdsStateRange::M(m) = state { Some(m) } else { None })
-            .next()?;
-
-        let r = right
-            .iter_mut()
-            .filter_map(|state| if let CdsStateRange::M(m) = state { Some(m) } else { None })
-            .next()?;
+        let l = left.iter_mut().rev().filter_map(CdsStateRange::match_range_mut).next()?;
+        let r = right.iter_mut().filter_map(CdsStateRange::match_range_mut).next()?;
 
         Some((l, mid, r))
     }
@@ -448,12 +439,7 @@ impl Product<'_> {
             // then splice in insertion residues at their correct AA positions.
             // This mirrors the Perl pipeline's `fa2delim -B -I` behavior and
             // ensures shift-deletions don't corrupt the reading frame.
-            let mut aa_seq_bytes: Vec<u8> = aa_aln
-                .as_bytes()
-                .iter()
-                .filter(|&&b| b != b'-' && b != b'.')
-                .copied()
-                .collect();
+            let mut aa_seq_bytes: Vec<u8> = aa_aln.iter().filter(|&&b| b != b'-' && b != b'.').copied().collect();
 
             let mut offset = 0;
             for ins in &insertions {

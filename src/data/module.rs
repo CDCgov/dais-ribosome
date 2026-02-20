@@ -30,22 +30,19 @@ pub struct ModuleData {
 
 impl ModuleData {
     /// Load module data from a `modules.toml` configuration file.
-    pub fn load_from_file(modules_path: &std::path::Path, module_name: &str) -> Result<Self, ModuleLoadError> {
-        let config = TomlConfig::from_file(modules_path).map_err(|err| ModuleLoadError::io(modules_path, err))?;
-        Self::from_config(modules_path, config, module_name)
+    pub fn load_from_file(toml_path: &Path, module_name: &str) -> Result<Self, ModuleLoadError> {
+        let config = TomlConfig::from_file(toml_path).map_err(|err| ModuleLoadError::io(toml_path, err))?;
+        Self::from_config(toml_path, config, module_name)
     }
 
     /// Build module data from a parsed configuration.
-    pub fn from_config(
-        modules_path: &std::path::Path, config: TomlConfig, module_name: &str,
-    ) -> Result<Self, ModuleLoadError> {
-        let modules_dir = modules_path
+    pub fn from_config(toml_path: &Path, config: TomlConfig, module_name: &str) -> Result<Self, ModuleLoadError> {
+        let modules_dir = toml_path
             .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."));
+            .expect("The modules.toml path must have parent ribosome_res");
 
         let (module, other_modules) = config
-            .find_module(module_name, &modules_dir)
+            .find_module(module_name, modules_dir)
             .ok_or_else(|| ModuleLoadError::module_not_found(module_name))?;
 
         let module_root = modules_dir.join(&module.name);
@@ -57,7 +54,7 @@ impl ModuleData {
         let references = load_references(&references_path).map_err(|err| ModuleLoadError::io(&references_path, err))?;
         let codon_weights = load_codon_weights(&weights_path).map_err(|err| ModuleLoadError::io(&weights_path, err))?;
         let cds_spec = load_cds_spec(&cds_spec_path).map_err(|err| ModuleLoadError::io(&cds_spec_path, err))?;
-        let weight_matrices = AlignmentWeights::from_config(&module);
+        let weight_matrices = AlignmentWeights::from_config(&module)?;
 
         Ok(Self {
             name: module.name,

@@ -5,10 +5,13 @@
 use dais_ribosome::data::{QueryRecord, RibosomeError};
 use std::{
     fs::File,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Lines},
     path::Path,
 };
-use zoe::{data::nucleotides::ToDNA, prelude::*};
+use zoe::{
+    data::{err::ResultWithErrorContext, nucleotides::ToDNA},
+    prelude::*,
+};
 
 /// FASTA → [`QueryRecord`] adapter over Zoe's [`FastaReader`].
 pub struct FastaQueryIter {
@@ -37,26 +40,21 @@ impl Iterator for FastaQueryIter {
 /// Supports 3-column annotated (`ID\tctype\tsequence`) and 2-column
 /// unannotated (`ID\tsequence`, currently stubbed) input.
 pub struct TsvQueryIter {
-    reader: BufReader<File>,
-    line:   String,
+    reader: Lines<BufReader<File>>,
 }
 
 impl TsvQueryIter {
     fn from_bufreader(buf: BufReader<File>) -> Self {
-        Self {
-            reader: buf,
-            line:   String::new(),
-        }
+        Self { reader: buf.lines() }
     }
 
     /// Parse a single TSV line into a [`QueryRecord`].
+    ///
+    /// ## Validity
+    ///
+    /// The line should already have the `\n` or `\r\n` removed from the end,
+    /// and should be non-empty and not solely contain whitespace.
     fn parse_line(line: &str) -> Result<QueryRecord, RibosomeError> {
-        let line = line.trim_end_matches(['\r', '\n']);
-
-        if line.is_empty() || line.bytes().all(|b| b.is_ascii_whitespace()) {
-            return Err(RibosomeError::InvalidTsvFormat);
-        }
-
         let mut columns = line.split('\t');
 
         let id = columns.next().unwrap_or_default(); // always exists after split
@@ -105,15 +103,13 @@ impl Iterator for TsvQueryIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            self.line.clear();
-            match self.reader.read_line(&mut self.line) {
-                Ok(0) => return None,
-                Ok(_) => {
-                    // Skip blank lines
-                    if self.line.trim().is_empty() {
-                        continue;
+            match self.reader.next()? {
+                Ok(line) => {
+                    if !line.trim().is_empty() {
+                        // Validity: Lines removes trailing line breaks, and we
+                        // ensure it is non-empty and not solely whitespace
+                        return Some(Self::parse_line(&line));
                     }
-                    return Some(Self::parse_line(&self.line));
                 }
                 Err(e) => return Some(Err(RibosomeError::IO(e))),
             }
@@ -139,8 +135,8 @@ impl QueryInput {
     /// Open `path`, peek at the first byte to detect format, and return
     /// the appropriate reader.
     pub fn open(path: &Path) -> Result<Self, RibosomeError> {
-        // TODO: Check non-empty
-        let file = File::open(path)?;
+        let file = File::open(path).with_path_context("Failed to open file", path)?;
+
         let mut buffer = BufReader::new(file);
 
         let first = buffer.peek(1)?;
