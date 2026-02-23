@@ -45,11 +45,14 @@ pub(crate) struct DeletionRange {
 }
 
 /// The range within the query where an insertion occurs, as well as the
-/// corresponding position in the reference TODO (at which, before which??)
+/// corresponding index in the reference after which it occurs.
 #[derive(Clone, Debug)]
 pub(crate) struct InsertionRange {
     // TODO: could rename this to make it clear
-    /// The in the reference *after* which the insertion occurs.
+    /// The base in the reference *after* which the insertion occurs.
+    ///
+    /// For example, `0` represents an insertion after the first base in the
+    /// reference.
     pub(crate) upstream_ref_index: usize,
     pub(crate) query_range:        Range<usize>,
 }
@@ -152,6 +155,7 @@ impl CdsDeletionRange {
 
 #[derive(Clone, Debug)]
 pub(crate) struct CdsInsertionRange {
+    /// The index in the coding sequence *after* which the insertion occurs.
     pub(crate) upstream_cds_index: usize,
     pub(crate) query_range:        Range<usize>,
 }

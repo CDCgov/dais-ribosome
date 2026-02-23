@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use std::{ops::Range, sync::OnceLock};
-use zoe::{alignment::Alignment, data::types::nucleotides::CodonExtension, prelude::*};
+use zoe::{alignment::Alignment, data::types::nucleotides::CodonExtension, prelude::*, search::ToRangeSearch};
 
 impl<'a> AnnotationModule<'a> {
     /// Processes a single query TODO: what does it return?
@@ -92,31 +92,33 @@ impl<'a> AnnotationModule<'a> {
         })
     }
 
-    // TODO: Slicing the query and then searching in frame could cause issues if
-    // the slice disrupts the frame
-
+    /// If the `list_contig_stop_extension` rule is enabled, and there are
+    /// unaligned bases at the end of the query, represent the bases up through
+    /// the first in-frame stop codon with an insertion.
     fn rule_stop_extension<'b>(
         &self, query_seq: &'b NucleotidesView<'b>, genome_aln: &Alignment<u32>,
     ) -> Option<InsertionRange> {
         if self.data.rules.list_contig_stop_extension
             && genome_aln.unaligned_query_tail() >= 3
+            // TODO: This codon might not be in-frame!
             && let Some(last_aligned_codon) = query_seq.slice(genome_aln.aln_query_range()).get_tail_codon()
             && last_aligned_codon.is_amino_acid()
-            && let Some(stop_codon_index) = query_seq.slice(genome_aln.query_range.end..).find_next_aa_in_frame(b'*')
+            // TODO: Maybe we don't want to call in-frame?
+            && let Some(stop_codon_index) = query_seq.search_in(genome_aln.query_range.end..).find_next_aa_in_frame(b'*')
         {
             // The exclusive end of the last alignment range is the inclusive
             // start of the insertion
             let start_index = genome_aln.query_range.end;
 
-            // TODO: WE HAVE ISSUES!
-            let end_index = start_index + stop_codon_index + 3;
+            // Convert inclusive start of codon to exclusive end of codon
+            let end_index = stop_codon_index + 3;
 
             Some(InsertionRange {
                 // The last aligned residue is ref_range.end - 1 (converting
                 // exclusive to inclusive). The insertion occurs after this
                 // residue.
                 upstream_ref_index: genome_aln.ref_range.end - 1,
-                query_range:        start_index..start_index + stop_codon_index + 3,
+                query_range:        start_index..end_index,
             })
         } else {
             None
