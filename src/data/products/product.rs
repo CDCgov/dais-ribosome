@@ -13,8 +13,8 @@ pub(crate) struct Product<'a> {
     pub(crate) product_ranges:             Vec<CdsStateRange>,
     pub(crate) product_spec:               &'a ProductSpec,
     pub(crate) computed_product:           OnceLock<ComputedProduct>,
-    /// If this product's last exon ends at the stop extension position,
-    /// this holds the query range of the stop extension nucleotides.
+    /// If this product's last exon ends at the stop extension position, this
+    /// holds the query range of the stop extension nucleotides.
     pub(crate) stop_extension_query_range: Option<Range<usize>>,
 }
 
@@ -114,7 +114,7 @@ impl<'a> Product<'a> {
             match &self.product_ranges[i] {
                 CdsStateRange::I(ins) => {
                     // Upstream index becomes upstream 1-based position
-                    let frame = (ins.upstream_cds_index + 1) % 3;
+                    let frame = ins.frame();
 
                     // Only correct in-frame insertions at out-of-frame positions
                     if frame != 0 && ins.len() % 3 == 0 {
@@ -167,9 +167,8 @@ impl<'a> Product<'a> {
             return None;
         };
 
-        let upstream_cds_position = ins.upstream_cds_index + 1;
-        let frame = upstream_cds_position % 3;
-        let codon_index = upstream_cds_position / 3;
+        let frame = ins.frame();
+        let codon_index = ins.codon_index();
         let insert_len = ins.len();
 
         // for weight lookup
@@ -392,13 +391,20 @@ impl Product<'_> {
                         }
                         has_coords = true;
                         query_coords.push_range(&ins.query_range);
-                        cds_coords.push_upstream(ins.upstream_cds_index);
+
+                        // If the insertion happens at the beginning of the
+                        // sequence, do not include this coordinate in cds_coords.
+                        if ins.cds_index.index_after_ins() > 0 {
+                            cds_coords.push_upstream(ins.cds_index.index_before_ins());
+                        }
 
                         if !ins.len().is_multiple_of(3) {
                             has_shift_indel = true;
                         }
 
-                        let upstream_nt = ins.upstream_cds_index + 1;
+                        // 0-based index after is equivalent to 1-based
+                        // index before
+                        let upstream_nt = ins.cds_index.index_after_ins();
                         insertions.push(ComputedInsertion::new(upstream_nt, slice));
                     }
                     CdsStateRange::D(del) => {

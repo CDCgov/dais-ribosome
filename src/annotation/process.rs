@@ -5,7 +5,7 @@ use crate::{
         GenomeAndProductStates, RibosomeOutput,
         ctype::ReferenceGroup,
         query::QueryRecord,
-        ranges::{InsertionRange, StateRange},
+        ranges::{InsertionIdx, InsertionRange, StateRange},
     },
 };
 use std::{ops::Range, sync::OnceLock};
@@ -25,16 +25,17 @@ impl<'a> AnnotationModule<'a> {
         for ref_id_data in reference_data.iter() {
             let (query_ori_offset, query_seq) = self.rule_chew_to_start(&query, ref_id_data);
 
+            // TODO: Do we ever do revcomp alignment?
+
             // Get the alignment to the best reference
             let Some(mut genome_aln) = ref_id_data.best_alignment(&query_seq) else {
                 return Err(RibosomeError::Unmappable(query.id.to_string()));
             };
 
-            //eprintln!("{}\t{}", query.id, genome_aln.states);
-
             // Extend the left and right side of the alignments
             self.rule_repairable_ends(&mut genome_aln);
 
+            // Compute the stop extension
             let stop_extension = self.rule_stop_extension(&query_seq, &genome_aln);
             let mut genome_aln_states = StateRange::state_ranges_from_aligment(&genome_aln);
             let mut products = Vec::with_capacity(ref_id_data.proteins.len());
@@ -61,10 +62,15 @@ impl<'a> AnnotationModule<'a> {
                     ext.shift_query_right(query_ori_offset);
                 }
 
-                let ext_ref_end = ext.upstream_ref_index + 1;
                 for product in &mut products {
+                    // Check whether the last exon ends at the index before
+                    // which the insertion occurs, in which case the insertion
+                    // can be added to the product.
+                    //
+                    // Validity: subtracting 1 from the end will not underflow
+                    // since ref_range is non-empty
                     if let Some(last_exon) = product.product_spec.exons.coords.last()
-                        && last_exon.ref_range.end == ext_ref_end
+                        && last_exon.ref_range.end - 1 == ext.ref_index.index_before_ins()
                     {
                         product.stop_extension_query_range = Some(ext.query_range.clone());
                     }
@@ -95,7 +101,8 @@ impl<'a> AnnotationModule<'a> {
 
     /// If the `list_contig_stop_extension` rule is enabled, and there are
     /// unaligned bases at the end of the query, represent the bases up through
-    /// the first in-frame stop codon with an insertion.
+    /// the first in-frame stop codon with an insertion. This is called the
+    /// "stop extension".
     fn rule_stop_extension<'b>(
         &self, query_seq: &'b NucleotidesView<'b>, genome_aln: &Alignment<u32>,
     ) -> Option<InsertionRange> {
@@ -115,11 +122,11 @@ impl<'a> AnnotationModule<'a> {
             let end_index = stop_codon_index + 3;
 
             Some(InsertionRange {
-                // The last aligned residue is ref_range.end - 1 (converting
-                // exclusive to inclusive). The insertion occurs after this
-                // residue.
-                upstream_ref_index: genome_aln.ref_range.end - 1,
-                query_range:        start_index..end_index,
+                // The insertion occurs at the end, so the reference index after
+                // the insertion is ref_range.end (not an actual base in the
+                // reference)
+                ref_index:   InsertionIdx::new(genome_aln.ref_range.end),
+                query_range: start_index..end_index,
             })
         } else {
             None

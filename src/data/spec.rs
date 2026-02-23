@@ -108,6 +108,8 @@ fn parse_coordinate_ranges(coords: &str, path: &Path) -> Result<Vec<ExonCoords>,
             ref_range.start
         };
 
+        // Validity: ref_range is non-empty per guarantees from
+        // parse_coordinate_range
         exon_ranges.push(ExonCoords {
             ref_range,
             ref_to_cds_offset,
@@ -121,6 +123,8 @@ fn parse_coordinate_ranges(coords: &str, path: &Path) -> Result<Vec<ExonCoords>,
 
 /// Parses a string containing a 1-based inclusive range, converting it to a
 /// 0-based [`Range`].
+///
+/// The returned range is guaranteed to be non-empty.
 fn parse_coordinate_range(coord_range: &str, path: &Path) -> std::io::Result<Range<usize>> {
     let coord_range = coord_range.trim();
     let range_parts: Vec<&str> = coord_range.split("..").collect();

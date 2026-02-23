@@ -54,6 +54,10 @@ pub(crate) struct Exons {
 #[derive(Debug, Clone)]
 pub struct ExonCoords {
     /// The range where the exon occurs within the reference sequence.
+    ///
+    /// ## Validity
+    ///
+    /// This range is always non-empty.
     pub(crate) ref_range:         Range<usize>,
     /// The offset of this exon from the previous exon (i.e., the length of the
     /// intron between them).

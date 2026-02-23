@@ -168,7 +168,9 @@ impl<'a> GenomeAndProductStates<'a> {
 
                         let inserted_nucleotides = Nucleotides::from_vec_unchecked(slice.to_vec());
                         insertions.push(ComputedGenomeInsertion {
-                            upstream_nt: ins.upstream_ref_index + 1,
+                            // 1-based index before is equivalent to 0-based
+                            // index after
+                            upstream_nt: ins.ref_index.index_after_ins(),
                             inserted_nucleotides,
                         });
                     }
