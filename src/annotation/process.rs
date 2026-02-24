@@ -1,4 +1,5 @@
 use crate::{
+    AlignmentStatesExt,
     annotation::{AnnotationModule, error::RibosomeError},
     data::{
         GenomeAndProductStates, RibosomeOutput,
@@ -228,12 +229,12 @@ impl<T> AlignmentExt for Alignment<T> {
     fn extend_left(&mut self, by_length: usize) {
         self.query_range.start -= by_length;
         self.ref_range.start -= by_length;
-        self.states.prepend_inc_op(by_length, b'M');
+        self.states.extend_left(by_length);
     }
 
     fn extend_right(&mut self, by_length: usize) {
         self.query_range.end += by_length;
         self.ref_range.end += by_length;
-        self.states.add_inc_op(by_length, b'M');
+        self.states.extend_right(by_length);
     }
 }

@@ -12,6 +12,7 @@ right_pad_cds = true
 [module.rules]
 list_contig_stop_extension = true
 chew_to_start = true
+repairable_end_limit = 9
 
 [module.alignment]
 default = { match = 14, mismatch = -1, gap_open = 40, gap_extend = 1 }
