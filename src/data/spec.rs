@@ -4,13 +4,19 @@ use crate::data::{
     exons::{ExonCoords, Exons},
     keys::RefKey,
 };
-use std::{collections::HashMap, fs::File, io::BufRead, ops::Range, path::Path};
-use zoe::data::err::ResultWithErrorContext;
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufRead, BufReader, Lines},
+    iter::Enumerate,
+    ops::Range,
+    path::Path,
+    str::FromStr,
+};
+use zoe::{data::err::ResultWithErrorContext, unwrap_or_return_some_err};
 
 /// Map from spec key to exon specification (with ctype for grouping).
 pub type CdsSpecMap = HashMap<RefKey, Vec<(String, Exons)>>;
-
-// TODO: Switch this to returning ModuleLoadError directly?
 
 /// Load CDS specifications from a TSV file.
 ///
@@ -21,60 +27,24 @@ pub type CdsSpecMap = HashMap<RefKey, Vec<(String, Exons)>>;
 ///
 /// ## Errors
 ///
-/// Returns an error if:
+/// Returns an error (without path context) if:
 ///
 /// - The file cannot be read
-/// - A line is missing required fields
-/// - Coordinate ranges are invalid
-pub fn load_cds_spec(path: &Path) -> Result<CdsSpecMap, std::io::Error> {
-    // TODO: Check non-empty
-    let file = File::open(path)?;
-    let reader = std::io::BufReader::new(file);
+/// - A parsing error occurs on one of the lines (e.g., missing required field
+///   or invalid range)
+pub fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
+    let reader = TsvReader::new(path)?;
 
-    let mut result: HashMap<RefKey, Vec<(String, Exons)>> = HashMap::new();
+    let mut cds_specs: HashMap<RefKey, Vec<(String, Exons)>> = HashMap::new();
 
-    for line in reader.lines() {
-        let line = line.with_path_context("line read failed", path)?;
-        let line = line.trim();
-
-        // Skip empty lines and headers
-        if line.is_empty() || line.starts_with("Reference ID") || line.starts_with('#') {
-            continue;
-        }
-
-        let mut parts = line.split('\t').map(str::trim_ascii);
-        let (Some(reference_id), Some(ctype), Some(protein), Some(coords)) =
-            (parts.next(), parts.next(), parts.next(), parts.next())
-        else {
-            return Err(std::io::Error::other(format!(
-                "Missing required field(s): {}",
-                path.display()
-            )));
-        };
-
-        let ctype = ctype.to_string();
-
-        // TODO: Why are we trimming quotation marks?
-        let coords = coords.trim_matches('"');
-        // Parse coordinate ranges (e.g., "1..54" or "1..36;692..1027")
-        let coords = parse_coordinate_ranges(coords, path)?;
-
-        // TODO: Error on invalid contents in Required Beginning, don't just
-        // silently ignore. And if it is longer than a single codon, perhaps
-        // also error.
-
-        // TODO: Can we use AminoAcidsView to make any of this more clear?
-
-        // Parse optional required start codon
-        let required_start = parts
-            .next()
-            .map(|s| s.trim_ascii().as_bytes())
-            .and_then(|s| s.split_first_chunk::<3>())
-            .map(|ch| {
-                let mut c = *ch.0;
-                c.make_ascii_uppercase();
-                c
-            });
+    for row in reader {
+        let TsvRow {
+            reference_id,
+            protein,
+            ctype,
+            coords,
+            required_start,
+        } = row?;
 
         let total_cds_length: usize = coords.iter().map(|r| r.ref_range.len()).sum();
 
@@ -95,27 +65,156 @@ pub fn load_cds_spec(path: &Path) -> Result<CdsSpecMap, std::io::Error> {
         };
 
         let key = RefKey::new(reference_id, ctype);
-        result.entry(key).or_default().push((protein.to_string(), exons));
+        cds_specs.entry(key).or_default().push((protein.to_string(), exons));
     }
 
-    Ok(result)
+    Ok(cds_specs)
+}
+
+// TODO: Switch this to returning ModuleLoadError directly?
+
+/// The parsed data from a single row of the `cds-spec.tsv` file for the module.
+#[derive(Clone, Debug)]
+struct TsvRow {
+    /// The reference ID (column 1).
+    reference_id:   String,
+    /// The compound type (column 2).
+    ctype:          String,
+    /// The protein product name (column 3).
+    protein:        String,
+    /// A list of the exon coordinates (column 4).
+    coords:         Vec<ExonCoords>,
+    /// An optional required codon at the start (column 5).
+    required_start: Option<[u8; 3]>,
+}
+
+impl FromStr for TsvRow {
+    type Err = std::io::Error;
+
+    /// Parses a string `line` to a [`TsvRow`]. The string must be trimmed and
+    /// non-empty, and should not be the header row or a commented line.
+    fn from_str(line: &str) -> std::io::Result<Self> {
+        // End the iterator on empty fields, so that missing field errors appear
+        let mut parts = line.split('\t').map(str::trim_ascii).take_while(|s| !s.is_empty());
+
+        // Get fields as string slices
+        let Some(reference_id) = parts.next() else {
+            return Err(std::io::Error::other("Missing Reference ID field (first field)"));
+        };
+
+        let Some(ctype) = parts.next() else {
+            return Err(std::io::Error::other("Missing Compound Type field (second field)"));
+        };
+
+        let Some(protein) = parts.next() else {
+            return Err(std::io::Error::other("Missing Protein field (third field)"));
+        };
+
+        let Some(coords) = parts.next() else {
+            return Err(std::io::Error::other("Missing Coords field (fourth field)"));
+        };
+        let required_start = parts.next();
+
+        let reference_id = reference_id.to_string();
+        let protein = protein.to_string();
+        let ctype = ctype.to_string();
+
+        // TODO: Why are we trimming quotation marks?
+        //
+        // Parse coordinate ranges (e.g., "1..54" or "1..36;692..1027")
+        let coords = parse_coordinate_ranges(coords.trim_matches('"'))?;
+
+        // Parse optional required start codon
+        let required_start = match required_start {
+            Some(required_start) => {
+                let mut codon: [u8; 3] = required_start.as_bytes().try_into().map_err(|_| {
+                    std::io::Error::other(format!(
+                        "If provided, Required Beginning must contain exactly 3 amino acids (not {})",
+                        required_start.len()
+                    ))
+                })?;
+                codon.make_ascii_uppercase();
+                Some(codon)
+            }
+            None => None,
+        };
+
+        Ok(TsvRow {
+            reference_id,
+            protein,
+            ctype,
+            coords,
+            required_start,
+        })
+    }
+}
+
+/// A reader over the `cds-spec.tsv` file of a module, automatically parsing
+/// each line into a [`CdsSpecsTsvRow`].
+///
+/// ## Errors
+///
+/// Any IO errors are propagated without context. Context with the line number
+/// is added for parsing errors.
+struct TsvReader {
+    lines: Enumerate<Lines<BufReader<File>>>,
+}
+
+impl TsvReader {
+    fn new(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        // TODO: Check non-empty
+        let file = File::open(path.as_ref())?;
+        let reader = std::io::BufReader::new(file);
+        Ok(Self {
+            lines: reader.lines().enumerate(),
+        })
+    }
+}
+
+impl Iterator for TsvReader {
+    type Item = std::io::Result<TsvRow>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (line_idx, line) = self.lines.next()?;
+        let line = unwrap_or_return_some_err!(line);
+        let line = line.trim();
+
+        // Skip empty lines and headers
+        if line.is_empty() || line.starts_with("Reference ID") || line.starts_with('#') {
+            return self.next();
+        }
+
+        Some(
+            line.parse()
+                .with_context(format!("Failed to parse line {line_num}: {line}", line_num = line_idx + 1))
+                .map_err(Into::into),
+        )
+    }
 }
 
 /// Parses a semicolon-delimited list of 1-based ranges, converting them to
 /// 0-based [`ExonCoords`] ranges. (TODO)
-fn parse_coordinate_ranges(coords: &str, path: &Path) -> Result<Vec<ExonCoords>, std::io::Error> {
+fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
     let mut exon_ranges: Vec<ExonCoords> = Vec::new();
     let mut ref_to_cds_offset = 0;
 
     // Parses and pushes a range to exon_ranges. Iterators do not work since we
     // need to access the previous ExonCoords to compute offset.
     for coord_range in coords.split(';') {
-        let ref_range = parse_coordinate_range(coord_range, path)?;
+        let ref_range = parse_coordinate_range(coord_range)?;
 
         // Compute offset from previous exon (i.e., length of intron)
         ref_to_cds_offset += if let Some(last) = exon_ranges.last() {
             // 0-based inclusive minus exclusive will yield length of intron
-            ref_range.start - last.ref_range.end
+            ref_range.start.checked_sub(last.ref_range.end).ok_or_else(|| {
+                std::io::Error::other(format!(
+                    "The coordinate ranges must be non-overlapping and sorted. Found range {last_start}..{last_end} followed by {current_start}..{current_end}",
+                    last_start = last.ref_range.start + 1,
+                    last_end = last.ref_range.end,
+                    current_start = ref_range.start + 1,
+                    current_end = ref_range.end,
+                ))
+            })?
         } else {
             ref_range.start
         };
@@ -137,16 +236,12 @@ fn parse_coordinate_ranges(coords: &str, path: &Path) -> Result<Vec<ExonCoords>,
 /// 0-based [`Range`].
 ///
 /// The returned range is guaranteed to be non-empty.
-fn parse_coordinate_range(coord_range: &str, path: &Path) -> std::io::Result<Range<usize>> {
+fn parse_coordinate_range(coord_range: &str) -> std::io::Result<Range<usize>> {
     let coord_range = coord_range.trim();
     let range_parts: Vec<&str> = coord_range.split("..").collect();
 
     let &[start_part, end_part] = range_parts.as_slice() else {
-        // TODO: Have path context added where this function is called
-        return Err(std::io::Error::other(format!(
-            "Invalid coordinate range '{coord_range}': {}",
-            path.display()
-        )));
+        return Err(std::io::Error::other(format!("Invalid coordinate range '{coord_range}'")));
     };
 
     // Parse 1-based inclusive range
@@ -161,17 +256,13 @@ fn parse_coordinate_range(coord_range: &str, path: &Path) -> std::io::Result<Ran
     // non-empty
     if end < start {
         return Err(std::io::Error::other(format!(
-            "End coordinate must be >= start ({start}..{end}): {}",
-            path.display(),
+            "End coordinate must be >= start ({start}..{end})",
         )));
     }
 
     // Convert to 0-based half-open range (inclusive start, exclusive end)
     let Some(start) = start.checked_sub(1) else {
-        return Err(std::io::Error::other(format!(
-            "Start coordinate must be at least 1: {}",
-            path.display()
-        )));
+        return Err(std::io::Error::other("Start coordinate must be at least 1"));
     };
 
     Ok(start..end)

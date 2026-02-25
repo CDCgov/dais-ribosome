@@ -1,15 +1,24 @@
 use crate::{
     annotation::hashing::{nt_id, variant_hash},
     data::{
-        products::{ComputedDeletion, ComputedInsertion, ComputedProduct, ProductSpec, ShiftPreference},
+        products::{ComputedDeletion, ComputedInsertion, ComputedProduct, ProductSpec},
         ranges::{CdsMatchRanges, CdsStateRange},
     },
 };
-use std::{iter::Extend, ops::Range};
+use std::{cmp::Ordering, iter::Extend, ops::Range};
 use zoe::prelude::*;
 
 #[derive(Debug)]
 pub(crate) struct Product<'a> {
+    /// The ranges within the exons that the query covers. This is initially
+    /// formed by intersecting the query ranges with the exon ranges, then is
+    /// tweaked.
+    ///
+    /// This is guaranteed to contain ordered and non-overlapping ranges. It
+    /// does not begin or end with [`CdsStateRange::I`]. Within the aligned
+    /// portion of the coding sequence (the exons), the ranges will be adjacent
+    /// (forming a partition). However, there may be exons at the beginning or
+    /// end which are not aligned against (or partially aligned against).
     pub(crate) product_ranges:             Vec<CdsStateRange>,
     pub(crate) product_spec:               &'a ProductSpec,
     /// If this product's last exon ends at the stop extension position, this
@@ -117,6 +126,9 @@ impl<'a> Product<'a> {
         }
     }
 
+    // TODO: Can fixing frame mess up order of partition in case of flanking
+    // deletion?
+
     /// Fixes an insertion at `idx` by shifting it to an in-frame position.
     ///
     /// Uses the A1/A2 shift logic from `codonCorrectStats.pl`:
@@ -169,6 +181,8 @@ impl<'a> Product<'a> {
             let a2l2 = [insert_seq[insert_len - 2], insert_seq[insert_len - 1], cp3];
             let a2r1 = [cp1, cp2, insert_seq[0]];
 
+            // Validity: The codons are uppercase because they are derived from
+            // bases in query_seq
             if product_spec.codon_left_ge_right(a2r1, a2l2, codon_position as u32) {
                 // Insertion shifts right 1 for frame 2 split codon
                 left_match.extend_end(1);
@@ -196,6 +210,8 @@ impl<'a> Product<'a> {
             let a1l1 = [insert_seq[insert_len - 1], cp2, cp3];
             let a1r2 = [cp1, insert_seq[0], insert_seq[1]];
 
+            // Validity: The codons are uppercase because they are derived from
+            // bases in query_seq
             if product_spec.codon_left_ge_right(a1l1, a1r2, codon_position as u32) {
                 // Insertion shifts left 1 for frame 1 split codon
                 left_match.shrink_end(1);
@@ -241,11 +257,18 @@ impl<'a> Product<'a> {
 
             let pivot = [cp1, cp2, cp3];
 
-            // Prefer right shift for frame 1
-            //
-            // Validity: The codon is uppercase because it is derived from bases
-            // in query
-            if product_spec.codon_pos_left_ge_right(pos_left as u32, pos_right as u32, pivot, ShiftPreference::Right) {
+            // TODO: Likely want to compare with Ordering::is_gt instead, so
+            // that ties resolve as right shift.
+
+            // By default, we shift right for frame 1 (causes movement of 1
+            // base, rather than 2). Only if there is evidence for left shift do
+            // we shift left. Validity: The codon is uppercase because it is
+            // derived from bases in query
+            let shift_left = product_spec
+                .compare_codon_positions(pos_left as u32, pos_right as u32, pivot)
+                .is_some_and(Ordering::is_ge);
+
+            if shift_left {
                 // Deletion shift right 2 for frame 1 (2 bases move left)
                 left_match.extend_end(2);
                 del.shift_right(2);
@@ -264,20 +287,26 @@ impl<'a> Product<'a> {
 
             let pivot = [cp1, cp2, cp3];
 
-            // Prefer left shift for frame 2
-            //
-            // Validity: The codon is uppercase because it is derived from bases
-            // in query
-            if product_spec.codon_pos_left_ge_right(pos_left as u32, pos_right as u32, pivot, ShiftPreference::Left) {
-                // Deletion right shift 1 for frame 2 (1 base moves left)
-                left_match.extend_end(1);
-                del.shift_right(1);
-                right_match.shrink_start(1);
-            } else {
+            // By default, we shift the deletion right for frame 2 (causing 1
+            // match to shift left, rather than 2). Only if there is evidence
+            // for a left shift do we do that. pos_right being better means
+            // shifting matches right is better, which means shifting deletion
+            // left is better. Validity: The codon is uppercase because it is
+            // derived from bases in query
+            let shift_del_left = product_spec
+                .compare_codon_positions(pos_left as u32, pos_right as u32, pivot)
+                .is_some_and(Ordering::is_lt);
+
+            if shift_del_left {
                 // Deletion left shift 2 for frame 2 (2 bases move right)
                 left_match.shrink_end(2);
                 del.shift_left(2);
                 right_match.extend_start(2);
+            } else {
+                // Deletion right shift 1 for frame 2 (1 base moves left)
+                left_match.extend_end(1);
+                del.shift_right(1);
+                right_match.shrink_start(1);
             }
         }
 

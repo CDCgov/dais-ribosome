@@ -77,17 +77,6 @@ pub struct CodonKey {
     pub codon:    [u8; 3],
 }
 
-impl CodonKey {
-    // TODO: We uppercase in so many places, I suggest not doing it here too
-
-    /// Creates a new CodonKey, normalizing the codon to uppercase.
-    pub fn new(position: u32, codon: [u8; 3]) -> Self {
-        let mut key = Self { position, codon };
-        key.codon.make_ascii_uppercase();
-        key
-    }
-}
-
 impl fmt::Debug for CodonKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -122,11 +111,5 @@ mod tests {
     #[test]
     fn test_ref_key_parse_missing_pipe() {
         assert!(RefKey::parse("no_pipe").is_none());
-    }
-
-    #[test]
-    fn test_codon_key_uppercase() {
-        let key = CodonKey::new(42, *b"atg");
-        assert_eq!(key.codon, *b"ATG");
     }
 }

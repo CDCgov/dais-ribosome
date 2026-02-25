@@ -49,7 +49,7 @@ impl TsvQueryIter {
         Self { reader: buf.lines() }
     }
 
-    /// Parse a single TSV line into a [`QueryRecord`].
+    /// Parses a single TSV line into a [`QueryRecord`].
     ///
     /// ## Validity
     ///

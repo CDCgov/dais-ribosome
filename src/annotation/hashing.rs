@@ -49,10 +49,15 @@ fn filter_amino_acids(seq: &AminoAcids) -> Vec<u8> {
 }
 
 /// Compute SHA1 hex digest of byte slice.
+///
+/// The string will always be a 40 character hexadecimal number.
 #[inline]
 fn sha1_hex(data: &[u8]) -> String {
     sha1_smol::Sha1::from(data).digest().to_string()
 }
+
+// TODO: Currently this can produce a variable-length string since leading zeros
+// are not included. This could cause the variant hash to be the wrong length.
 
 /// Compute MD5 hex digest of byte slice.
 #[inline]

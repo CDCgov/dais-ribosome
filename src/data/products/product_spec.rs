@@ -1,6 +1,7 @@
+use std::cmp::Ordering;
+
 use crate::data::{
     exons::Exons,
-    keys::CodonKey,
     products::Product,
     ranges::StateRange,
     weights::{CodonPositionWeights, DEFAULT_CODON_STATS},
@@ -37,75 +38,67 @@ impl ProductSpec {
         }
     }
 
-    /// Compare two codons at the same position: returns true if `left >=
-    /// right`.
+    /// Compares the counts of two codons at the specified 1-based position,
+    /// returning true if `left >= right`.
     ///
-    /// Uses position-specific weights if available, falling back to
-    /// `DEFAULT_CODON_STATS` when both position-specific counts are zero.
-    ///
-    /// ## Arguments
-    ///
-    /// - `left` - Left codon (uppercase)
-    /// - `right` - Right codon (uppercase)
-    /// - `codon_position` - 1-based codon position for weight lookup
+    /// This uses position-specific weights if available, falling back to
+    /// [`DEFAULT_CODON_STATS`] when both position-specific counts are zero.
     ///
     /// ## Validity
     ///
     /// The `left` and `right` codons must contain unaligned, uppercase IUPAC
     /// bases.
     pub(crate) fn codon_left_ge_right(&self, left: [u8; 3], right: [u8; 3], codon_position: u32) -> bool {
-        let (mut x, mut y) = (0u32, 0u32);
-
-        if let Some(w) = &self.codon_weights {
-            x = w.get(&CodonKey::new(codon_position, left)).copied().unwrap_or(0);
-            y = w.get(&CodonKey::new(codon_position, right)).copied().unwrap_or(0);
+        // Validity: both codons are in uppercase
+        if let Some(w) = &self.codon_weights
+            && let Some(cmp) = w.compare_codons(left, right, codon_position)
+        {
+            cmp.is_ge()
+        } else {
+            let left_count = DEFAULT_CODON_STATS.get(&left).copied().unwrap_or(0);
+            let right_count = DEFAULT_CODON_STATS.get(&right).copied().unwrap_or(0);
+            left_count >= right_count
         }
-
-        // Fall back to default stats if both position-specific counts are zero
-        if x == 0 && y == 0 {
-            x = DEFAULT_CODON_STATS.get(&left).copied().unwrap_or(0);
-            y = DEFAULT_CODON_STATS.get(&right).copied().unwrap_or(0);
-        }
-
-        x >= y
     }
 
-    /// Compares the same codon at two different positions: returns true if
-    /// `pos_left >= pos_right`.
-    ///
-    /// Used for deletion frame correction where we need to decide which
-    /// position the pivot codon should be assigned to.
-    ///
-    /// ## Arguments
-    ///
-    /// - `pos_left` - 1-based left codon position
-    /// - `pos_right` - 1-based right codon position
-    /// - `codon` - The codon to compare (uppercase)
-    /// - `preference` - Which direction to prefer when both counts are zero
-    pub(crate) fn codon_pos_left_ge_right(
-        &self, pos_left: u32, pos_right: u32, codon: [u8; 3], preference: ShiftPreference,
-    ) -> bool {
-        let (mut x, mut y) = (0u32, 0u32);
+    // TODO: Use this!!
 
-        if let Some(w) = &self.codon_weights {
-            x = w.get(&CodonKey::new(pos_left, codon)).copied().unwrap_or(0);
-            y = w.get(&CodonKey::new(pos_right, codon)).copied().unwrap_or(0);
-        }
-
-        // Use preference to break ties when both are zero
-        if x == 0 && y == 0 {
-            return preference == ShiftPreference::Left;
-        }
-
-        x >= y
+    /// Compares the likelihood of two codons at the specified 1-based position,
+    /// returning an ordering based on the observed counts.
+    ///
+    /// If both observed counts are 0, or if there are no position-specific
+    /// weights are available, [`DEFAULT_CODON_STATS`] is used.
+    ///
+    /// ## Validity
+    ///
+    /// The `left` and `right` codons must contain unaligned, uppercase IUPAC
+    /// bases.
+    #[allow(dead_code)]
+    pub(crate) fn compare_codons(&self, left: [u8; 3], right: [u8; 3], position: u32) -> Ordering {
+        // Validity: both codons are in uppercase
+        self.codon_weights
+            .as_ref()
+            .and_then(|w| w.compare_codons(left, right, position))
+            .unwrap_or_else(|| {
+                let left_count = DEFAULT_CODON_STATS.get(&left).copied().unwrap_or(0);
+                let right_count = DEFAULT_CODON_STATS.get(&right).copied().unwrap_or(0);
+                left_count.cmp(&right_count)
+            })
     }
-}
 
-/// Direction preference for tie-breaking when comparing codon positions.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ShiftPreference {
-    /// Prefer left shift on tie
-    Left,
-    /// Prefer right shift on tie
-    Right,
+    /// Compares the likelihood of a codon appearing at the 1-based positions
+    /// `pos_left` and `pos_right`, returning an ordering based on the observed
+    /// counts.
+    ///
+    /// If both observed counts are 0, or if there are no observed counts
+    /// available, `None` is returned.
+    ///
+    /// ## Validity
+    ///
+    /// The `codon` must contain unaligned, uppercase IUPAC bases.
+    pub(crate) fn compare_codon_positions(&self, pos_left: u32, pos_right: u32, codon: [u8; 3]) -> Option<Ordering> {
+        self.codon_weights
+            .as_ref()
+            .and_then(|w| w.compare_positions(pos_left, pos_right, codon))
+    }
 }
