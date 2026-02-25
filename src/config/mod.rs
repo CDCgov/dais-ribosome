@@ -5,7 +5,8 @@
 //! - Parsing module configurations from TOML
 //! - Resolving paths to module resources
 
-pub mod toml;
+mod toml;
+pub use toml::*;
 
 use std::{io::Error, path::PathBuf};
 use zoe::data::err::ResultWithErrorContext;

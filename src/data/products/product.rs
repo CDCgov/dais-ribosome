@@ -8,8 +8,22 @@ use crate::{
 use std::{cmp::Ordering, ops::Range};
 use zoe::prelude::*;
 
+/// The aligned ranges for a single query against a single reference, using the
+/// exons for one of the protein products.
+///
+/// Many [`Product`] values are stored in [`GenomeAndProductStates`], which
+/// holds the alignments for all the protein products. Many of these are stored
+/// in [`RibosomeOutput`], which holds the alignments for all reference IDs.
+/// Many [`RibosomeOutput`] are generated and written in `main.rs` for each
+/// query.
+///
+/// [`GenomeAndProductStates`]: crate::data::outputs::GenomeAndProductStates
+/// [`RibosomeOutput`]: crate::data::outputs::RibosomeOutput
 #[derive(Debug)]
 pub(crate) struct Product<'a> {
+    /// The information for the protein product being aligned against, including
+    /// the name and exons.
+    pub(crate) product_spec:               &'a ProductSpec,
     /// The ranges within the exons that the query covers. This is initially
     /// formed by intersecting the query ranges with the exon ranges, then is
     /// tweaked.
@@ -20,25 +34,40 @@ pub(crate) struct Product<'a> {
     /// (forming a partition). However, there may be exons at the beginning or
     /// end which are not aligned against (or partially aligned against).
     pub(crate) product_ranges:             Vec<CdsStateRange>,
-    pub(crate) product_spec:               &'a ProductSpec,
     /// If this product's last exon ends at the stop extension position, this
     /// holds the query range of the stop extension nucleotides.
     pub(crate) stop_extension_query_range: Option<Range<usize>>,
 }
 
 impl<'a> Product<'a> {
-    /// Returns true only if the requirement exists and the codon did not match.
-    pub(crate) fn missing_required_start(&self, query: impl AsRef<[u8]>) -> bool {
+    // TODO: If the deletion is short enough (e.g., 1 or 2 bases), should we
+    // still apply the rule as much as possible?? Or if the match range is
+    // shorter than 3 in length?
+
+    /// Returns true if a required start codon is required for the exons, a
+    /// long-enough match state occurs in the [`Product`] to span this codon,
+    /// and yet the codon is not equal to the required one.
+    ///
+    /// If any of these conditions are not true, then `false` is returned.
+    ///
+    /// ## Validity
+    ///
+    /// The `query` should contain unaligned, uppercase IUPAC bases. It should
+    /// be the same query which the alignment used to create `self` was formed
+    /// from.
+    pub(crate) fn missing_required_start(&self, query: NucleotidesView) -> bool {
         if let Some(required) = self.product_spec.exons.required_start
+            // Note that the first product range is either a match or deletion
             && let Some(CdsStateRange::M(m)) = self.product_ranges.first()
+            // This might not be true if the aligned query failed to cover the
+            // beginning of the exons (the CDS)
             && m.cds_range.start == 0
             && m.cds_range.end >= 3
-            && let Some(mut first) = query
-                .as_ref()
-                .get(m.query_range.start..)
-                .and_then(|s| s.first_chunk().copied())
         {
-            first.make_ascii_uppercase();
+            // Validity: query_range always refers to valid indices in query. At
+            // least 3 residues exist since cds_range and query_range are the
+            // same length
+            let first: [u8; 3] = *query[m.query_range.start..].first_chunk().expect("The length of the query_range should be at least 3, and the query_range should not refer to out of bounds indices");
             first != required
         } else {
             false
@@ -56,9 +85,11 @@ impl<'a> Product<'a> {
             .unwrap_or(0)
     }
 
-    /// Because the exon intersection algorithm can split deletions spanning
-    /// multiple exons, this method merges adjacent deletion CDS for downstream
-    /// correctness.
+    /// Condenses adjacent deletions in the coding sequence.
+    ///
+    /// If a deletion spans multiple exons, the intersection algorithm will
+    /// split it into separate ranges. This method combines them again for
+    /// downstream correctness.
     pub(crate) fn condense_deletions(&mut self) {
         // The order of the closure arguments in dedup_by gets reversed.
         self.product_ranges.dedup_by(|range2, range1| {
@@ -81,7 +112,7 @@ impl<'a> Product<'a> {
         });
     }
 
-    /// Fix indel frames by repositioning insertions and deletions to in-frame
+    /// Fixes indel frames by repositioning insertions and deletions to in-frame
     /// boundaries.
     ///
     /// This corrects in-frame indels (length divisible by 3) that occur at
@@ -91,24 +122,23 @@ impl<'a> Product<'a> {
     ///
     /// ## Validity
     ///
-    /// `query_seq` should contain unaligned, uppercase IUPAC bases.
+    /// The `query` should contain unaligned, uppercase IUPAC bases.
     pub(crate) fn fix_frames(&mut self, query: impl AsRef<[u8]>) {
         let len = self.product_ranges.len();
-        let query_seq = query.as_ref();
+        let query = query.as_ref();
 
         // We iterate by index because we need to access neighbors
         let mut i = 0;
         while i < len {
             match &self.product_ranges[i] {
                 CdsStateRange::I(ins) => {
-                    // Upstream index becomes upstream 1-based position
-                    let frame = ins.frame();
+                    let codon_shift = ins.cds_index.codon_shift();
 
                     // Only correct in-frame insertions at out-of-frame positions
-                    if frame != 0 && ins.len() % 3 == 0 {
+                    if codon_shift != 0 && ins.len() % 3 == 0 {
                         // Validity: this function requires the same
-                        // requirements on query_seq
-                        self.fix_insertion_frame(i, query_seq);
+                        // requirements on query
+                        self.fix_insertion_frame(i, query);
                     }
                 }
                 CdsStateRange::D(del) => {
@@ -117,7 +147,9 @@ impl<'a> Product<'a> {
 
                     // Only correct in-frame deletions at out-of-frame positions
                     if frame != 0 && del.len() % 3 == 0 {
-                        self.fix_deletion_frame(i, query_seq);
+                        // Validity: this function requires the same
+                        // requirements on query
+                        self.fix_deletion_frame(i, query);
                     }
                 }
                 CdsStateRange::M(_) => {}
@@ -142,8 +174,8 @@ impl<'a> Product<'a> {
     ///
     /// ## Validity
     ///
-    /// `query_seq` should contain unaligned, uppercase IUPAC bases.
-    fn fix_insertion_frame(&mut self, idx: usize, query_seq: &[u8]) -> Option<()> {
+    /// The `query` should contain unaligned, uppercase IUPAC bases.
+    fn fix_insertion_frame(&mut self, idx: usize, query: &[u8]) -> Option<()> {
         let Product {
             product_ranges,
             product_spec,
@@ -158,15 +190,14 @@ impl<'a> Product<'a> {
             return None;
         };
 
-        let frame = ins.frame();
-        let codon_index = ins.codon_index();
+        let codon_shift = ins.cds_index.codon_shift();
+        let codon_position = ins.cds_index.to_aa_idx().right_pos();
         let insert_len = ins.len();
 
         // for weight lookup
-        let codon_position = codon_index + 1;
-        let insert_seq = &query_seq[ins.query_range.clone()];
+        let insert_seq = &query[ins.query_range.clone()];
 
-        if frame == 2 {
+        if codon_shift == 2 {
             // A2: insertion after 2nd codon base
             //
             // A2/L2: shift insert left 2
@@ -174,15 +205,15 @@ impl<'a> Product<'a> {
             //
             // A2/R1: shift insert right 1
             //   New codon: cp1 + cp2 + first 1 base of insert
-            let cp1 = *query_seq.get(left_match.query_range.end - 2)?;
-            let cp2 = *query_seq.get(left_match.query_range.end - 1)?;
-            let cp3 = *query_seq.get(right_match.query_range.start)?;
+            let cp1 = *query.get(left_match.query_range.end - 2)?;
+            let cp2 = *query.get(left_match.query_range.end - 1)?;
+            let cp3 = *query.get(right_match.query_range.start)?;
 
             let a2l2 = [insert_seq[insert_len - 2], insert_seq[insert_len - 1], cp3];
             let a2r1 = [cp1, cp2, insert_seq[0]];
 
             // Validity: The codons are uppercase because they are derived from
-            // bases in query_seq
+            // bases in query
             if product_spec.codon_left_ge_right(a2r1, a2l2, codon_position as u32) {
                 // Insertion shifts right 1 for frame 2 split codon
                 left_match.extend_end(1);
@@ -194,7 +225,7 @@ impl<'a> Product<'a> {
                 ins.shift_left(2);
                 right_match.extend_start(2);
             }
-        } else if frame == 1 {
+        } else if codon_shift == 1 {
             // A1 insertion: insertion after 1st base of codon
             //
             // A1/L1: shift insert left 1
@@ -203,15 +234,15 @@ impl<'a> Product<'a> {
             // A1/R2: shift insert right 2
             //   New codon: cp1 + first 2 bases of insert
 
-            let cp1 = *query_seq.get(left_match.query_range.end - 1)?;
-            let cp2 = *query_seq.get(right_match.query_range.start)?;
-            let cp3 = *query_seq.get(right_match.query_range.start + 1)?;
+            let cp1 = *query.get(left_match.query_range.end - 1)?;
+            let cp2 = *query.get(right_match.query_range.start)?;
+            let cp3 = *query.get(right_match.query_range.start + 1)?;
 
             let a1l1 = [insert_seq[insert_len - 1], cp2, cp3];
             let a1r2 = [cp1, insert_seq[0], insert_seq[1]];
 
             // Validity: The codons are uppercase because they are derived from
-            // bases in query_seq
+            // bases in query
             if product_spec.codon_left_ge_right(a1l1, a1r2, codon_position as u32) {
                 // Insertion shifts left 1 for frame 1 split codon
                 left_match.cut_end(1);
@@ -229,6 +260,10 @@ impl<'a> Product<'a> {
     }
 
     /// Fix a deletion at index `i` by shifting it to an in-frame position.
+    ///
+    /// ## Validity
+    ///
+    /// The `query` should contain unaligned, uppercase IUPAC bases.
     fn fix_deletion_frame(&mut self, idx: usize, query: &[u8]) -> Option<()> {
         let Product {
             product_ranges,
@@ -251,11 +286,11 @@ impl<'a> Product<'a> {
         if frame == 1 {
             // Frame 1 pivot codon: is last 1 base before gap + first 2 bases
             // after gap
-            let cp1 = query.get(left_match.query_range.end - 1)?.to_ascii_uppercase();
-            let cp2 = query.get(right_match.query_range.start)?.to_ascii_uppercase();
-            let cp3 = query.get(right_match.query_range.start + 1)?.to_ascii_uppercase();
+            let cp1 = query.get(left_match.query_range.end - 1)?;
+            let cp2 = query.get(right_match.query_range.start)?;
+            let cp3 = query.get(right_match.query_range.start + 1)?;
 
-            let pivot = [cp1, cp2, cp3];
+            let pivot = [*cp1, *cp2, *cp3];
 
             // TODO: Likely want to compare with Ordering::is_gt instead, so
             // that ties resolve as right shift.
@@ -284,11 +319,11 @@ impl<'a> Product<'a> {
         } else if frame == 2 {
             // Frame2 pivot codon is last 2 bases before gap + first 1 base
             // after gap.
-            let cp1 = query.get(left_match.query_range.end - 2)?.to_ascii_uppercase();
-            let cp2 = query.get(left_match.query_range.end - 1)?.to_ascii_uppercase();
-            let cp3 = query.get(right_match.query_range.start)?.to_ascii_uppercase();
+            let cp1 = query.get(left_match.query_range.end - 2)?;
+            let cp2 = query.get(left_match.query_range.end - 1)?;
+            let cp3 = query.get(right_match.query_range.start)?;
 
-            let pivot = [cp1, cp2, cp3];
+            let pivot = [*cp1, *cp2, *cp3];
 
             // By default, we shift the deletion right for frame 2 (causing 1
             // match to shift left, rather than 2). Only if there is evidence
@@ -396,7 +431,7 @@ impl<'a> Product<'a> {
             for insertion in &insertions {
                 // 1-based index after which insertion occurs is equivalently
                 // the count of the number of amino acids before the insertion.
-                let num_to_consume = insertion.upstream_aa - num_consumed;
+                let num_to_consume = insertion.upstream_aa_pos - num_consumed;
 
                 out.extend(aa_aln_without_deletions.by_ref().take(num_to_consume));
                 out.extend_from_slice(&insertion.inserted_residues);

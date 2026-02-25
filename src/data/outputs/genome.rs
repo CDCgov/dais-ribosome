@@ -1,5 +1,5 @@
 use crate::{
-    config::toml::Formatting,
+    config::Formatting,
     data::{Nullable, ranges::DeletionRange},
 };
 use std::fmt::{self, Display};
@@ -9,7 +9,7 @@ use zoe::prelude::*;
 #[derive(Debug)]
 pub struct ComputedGenomeInsertion {
     /// Upstream nucleotide position (1-based)
-    pub upstream_nt:          usize,
+    pub upstream_nt_pos:      usize,
     /// Inserted nucleotides
     pub inserted_nucleotides: Nucleotides,
 }
@@ -83,7 +83,7 @@ impl Display for GenInsRow<'_> {
         write!(
             f,
             "{}\t{}\t{}\t{}\t{}",
-            self.id, self.ctype, self.ref_id, ins.upstream_nt, ins.inserted_nucleotides,
+            self.id, self.ctype, self.ref_id, ins.upstream_nt_pos, ins.inserted_nucleotides,
         )
     }
 }

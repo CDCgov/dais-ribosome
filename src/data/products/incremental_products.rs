@@ -273,9 +273,9 @@ impl DependentFields {
 
         self.query_coords.push_range(&range.query_range);
 
-        // If the insertion happens at the beginning of the
-        // sequence, do not include this coordinate in cds_coords.
-        if range.cds_index.index_after_ins() > 0 {
+        // If the insertion happens at the beginning of the sequence, do not
+        // include this coordinate in cds_coords.
+        if !range.cds_index.at_start() {
             self.cds_coords.push_upstream(range.cds_index);
         }
 
@@ -322,7 +322,7 @@ impl DependentFields {
     /// Extends the dependent fields from a stop extension.
     fn extend_from_stop_extension(&mut self, query: &Nucleotides, ext_range: &Range<usize>, total_cds_length: usize) {
         if let Some(slice) = query.get(ext_range.clone()) {
-            let upstream_nt_pos = InsertionIdx::new(total_cds_length);
+            let upstream_nt_pos = InsertionIdx::from_right_idx(total_cds_length);
             // Validity: slice is from query, which meets validity requirements
             let (ins, filtered) = ComputedInsertion::new(upstream_nt_pos, slice);
             if !filtered {
@@ -384,8 +384,7 @@ impl Coords {
 
         let mut buff = core::fmt::NumBuffer::new();
 
-        // 0-based index after is equivalent to 1-based upstream position
-        self.0.push_str(index.index_after_ins().format_into(&mut buff));
+        self.0.push_str(index.left_pos().format_into(&mut buff));
     }
 }
 

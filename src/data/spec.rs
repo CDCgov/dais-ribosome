@@ -15,15 +15,17 @@ use std::{
 };
 use zoe::{data::err::ResultWithErrorContext, unwrap_or_return_some_err};
 
-/// Map from spec key to exon specification (with ctype for grouping).
+/// A hash map from [`RefKey`] values to a vector of the proteins (e.g., `HA`,
+/// `HA-signal`) and their [`Exons`].
 pub type CdsSpecMap = HashMap<RefKey, Vec<(String, Exons)>>;
 
-/// Load CDS specifications from a TSV file.
+/// Loads the coding sequence specifications from a TSV file.
 ///
-/// Expected columns: reference_id, protein, ctype, coords, [required_start]
+/// The expected columns are `reference_id`, `protein`, `ctype`, `coords`, and
+/// then optionally `required_start`.
 ///
-/// Coordinates are in "start..end" format (1-based inclusive), with multiple
-/// exons separated by semicolons.
+/// The coordinates are in `start..end` format (1-based inclusive-end), with
+/// multiple exons separated by semicolons.
 ///
 /// ## Errors
 ///
@@ -65,7 +67,7 @@ pub fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
         };
 
         let key = RefKey::new(reference_id, ctype);
-        cds_specs.entry(key).or_default().push((protein.to_string(), exons));
+        cds_specs.entry(key).or_default().push((protein, exons));
     }
 
     Ok(cds_specs)
@@ -76,15 +78,18 @@ pub fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
 /// The parsed data from a single row of the `cds-spec.tsv` file for the module.
 #[derive(Clone, Debug)]
 struct TsvRow {
-    /// The reference ID (column 1).
+    /// The reference ID in column 1 (e.g., `ANHUI01`, `PHUKET3073`).
     reference_id:   String,
-    /// The compound type (column 2).
+    /// The compound type in column 2 (e.g., `A_HA_H7`, `B_HA`).
     ctype:          String,
-    /// The protein product name (column 3).
+    /// The protein product name in column 3 (e.g., `HA`, `HA-signal`).
     protein:        String,
-    /// A list of the exon coordinates (column 4).
+    /// A list of the exon coordinates in column 4 (e.g., `55..1683`,
+    /// `1..33;689..1024`).
+    ///
+    /// These are guaranteed to be in order and non-overlapping.
     coords:         Vec<ExonCoords>,
-    /// An optional required codon at the start (column 5).
+    /// An optional required codon at the start in column 5 (e.g., `ATG`).
     required_start: Option<[u8; 3]>,
 }
 
@@ -150,7 +155,7 @@ impl FromStr for TsvRow {
 }
 
 /// A reader over the `cds-spec.tsv` file of a module, automatically parsing
-/// each line into a [`CdsSpecsTsvRow`].
+/// each line into a [`TsvRow`].
 ///
 /// ## Errors
 ///
@@ -210,9 +215,11 @@ fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
     for coord_range in coords.split(';') {
         let ref_range = parse_coordinate_range(coord_range)?;
 
-        // Compute offset from previous exon (i.e., length of intron)
-        ref_to_cds_offset += if let Some(last) = exon_ranges.last() {
-            // 0-based inclusive minus exclusive will yield length of intron
+        // Compute offset from previous exon (i.e., length of non-coding
+        // sequence between them)
+        let len_of_gap_between_exons = if let Some(last) = exon_ranges.last() {
+            // 0-based inclusive minus exclusive will yield length of gap
+            // between exons
             ref_range.start.checked_sub(last.ref_range.end).ok_or_else(|| {
                 std::io::Error::other(format!(
                     "The coordinate ranges must be non-overlapping and sorted. Found range {last_start}..{last_end} followed by {current_start}..{current_end}",
@@ -225,6 +232,9 @@ fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
         } else {
             ref_range.start
         };
+
+        // Increment the reference to coding sequence coordinate offset
+        ref_to_cds_offset += len_of_gap_between_exons;
 
         // Validity: ref_range is non-empty per guarantees from
         // parse_coordinate_range
@@ -239,7 +249,7 @@ fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
     Ok(exon_ranges)
 }
 
-/// Parses a string containing a 1-based inclusive range, converting it to a
+/// Parses a string containing a 1-based end-inclusive range, converting it to a
 /// 0-based [`Range`].
 ///
 /// The returned range is guaranteed to be non-empty.

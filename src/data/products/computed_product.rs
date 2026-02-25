@@ -51,10 +51,10 @@ pub struct ComputedInsertion {
     /// the split codon). This means that this field may be 0, which would
     /// represent an insertion within the first codon (before the first amino
     /// acid).
-    pub upstream_aa:          usize,
+    pub upstream_aa_pos:      usize,
     /// The upstream nucleotide position (1-based) after which the insertion
     /// occurs.
-    pub upstream_nt:          usize,
+    pub upstream_nt_pos:      usize,
     /// All the inserted nucleotides, including any after a stop codon in
     /// `inserted_residues`.
     pub inserted_nucleotides: Nucleotides,
@@ -84,19 +84,12 @@ impl ComputedInsertion {
     ///
     /// The slice of the query range representing the insertion should contain
     /// unaligned, uppercase IUPAC bases.
-    pub fn new(upstream_nt_pos: InsertionIdx, slice: &[u8]) -> (Self, bool) {
-        // 0-based index after -> 1-based index before
-        let upstream_nt_pos = upstream_nt_pos.index_after_ins();
-
+    pub fn new(nt_insertion_idx: InsertionIdx, slice: &[u8]) -> (Self, bool) {
         let ins_len = slice.len();
         let inserted_nucleotides = Nucleotides::from(slice.to_vec());
 
-        // Normally 1-based positions would require converting to 0-based before
-        // using division/modulo. However, the 1-based position after which the
-        // insertion occurs is equivalent to the 0-based index before which the
-        // insertion occurs.
-        let upstream_aa = upstream_nt_pos / 3;
-        let codon_shift = upstream_nt_pos % 3;
+        let aa_insertion_idx = nt_insertion_idx.to_aa_idx();
+        let codon_shift = nt_insertion_idx.codon_shift();
 
         let (inserted_residues, filtered) = if ins_len < 3 || slice.iter().all(|&b| b == b'N') {
             // Do not include the all N insertion or shorter than 3 insertions
@@ -108,8 +101,8 @@ impl ComputedInsertion {
 
         (
             ComputedInsertion {
-                upstream_aa,
-                upstream_nt: upstream_nt_pos,
+                upstream_aa_pos: aa_insertion_idx.left_pos(),
+                upstream_nt_pos: nt_insertion_idx.left_pos(),
                 inserted_nucleotides,
                 inserted_residues,
                 codon_shift,

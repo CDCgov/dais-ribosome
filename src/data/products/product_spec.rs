@@ -7,18 +7,29 @@ use crate::data::{
     weights::{CodonPositionWeights, DEFAULT_CODON_STATS},
 };
 
-/// Protein product specification.
+/// The specifications for a single protein product (e.g., `HA`, `HA-signal`).
 #[derive(Debug)]
 pub(crate) struct ProductSpec {
-    /// Protein or peptide name
+    /// The protein/peptide product name
     pub(crate) name:          String,
-    /// Exon Coordinates and translation rules
+    /// The exon coordinates, as well as translation rules specific to the exons
     pub(crate) exons:         Exons,
-    /// The protein product specific codon positive weight matrix
+    /// The codon position weight matrix for the protein product
     pub(crate) codon_weights: Option<CodonPositionWeights>,
 }
 
 impl ProductSpec {
+    /// Intersects the ranges for an alignment ([`StateRange`]) with the ranges
+    /// for the exons ([`Exons`]) to form the ranges in the product.
+    ///
+    /// The `stop_extension_query_range` field is initialized to `None`, and
+    /// must be updated later.
+    ///
+    /// ## Validity
+    ///
+    /// The `state_ranges` must contain ordered non-overlapping ranges that
+    /// fully partition the query and reference ranges included in the
+    /// alignment. It also must begin and end with [`StateRange::M`].
     pub(crate) fn make_product_ranges<'a>(&'a self, state_ranges: &[StateRange]) -> Product<'a> {
         // TODO: Is this a good enough capacity? We could end up exceeding it.
         let mut product_ranges = Vec::with_capacity(state_ranges.len());
@@ -32,6 +43,17 @@ impl ProductSpec {
                 }
             }
         }
+
+        // Validity: the states and the exons are both ordered and
+        // non-overlapping, so the above loop will maintain this property for
+        // product_ranges. The first product range is not an insertion, since
+        // this would imply that the range immediately before the insertion
+        // (which exists since state_ranges starts with a match) should also
+        // intersect the exon. Similarly for the end of the product_ranges.
+        // Since state_ranges fully partition the reference sequence,
+        // product_ranges will fully partition the exons, excluding exons at the
+        // beginning/end which are not aligned against (or partially aligned
+        // against)
 
         Product {
             product_ranges,

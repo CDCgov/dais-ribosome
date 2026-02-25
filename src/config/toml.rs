@@ -31,13 +31,15 @@ impl TomlConfig {
             .with_path_context("Failed to parse TOML file", path)?)
     }
 
-    /// Find a module by name, returning it along with the other modules'
-    /// metadata.
+    /// Find a module by name, returning it along with the paths to other
+    /// modules' references.
     ///
     /// This is used when forming [`ModuleData`]. The second return value is a
     /// vector containing tuples with the module names and the paths to the
     /// reference sequences. These are used to populate `other_modules`, which
     /// is used in warning messages in [`print_unimplemented_ctypes`].
+    ///
+    /// [`ModuleData`]: crate::data::module::ModuleData
     pub fn find_module(self, name: &str, modules_dir: &Path) -> Option<(ConfiguredModule, Vec<(String, PathBuf)>)> {
         let mut selected = None;
         let mut others = Vec::new();
@@ -105,12 +107,20 @@ impl AlignmentWeights {
 // TODO: What are these fields?
 
 /// Output formatting options for a module.
+///
+/// Currently, all of these are related to padding on the right, which is not
+/// required for ensuring the proper reading frame, but may be useful to
+/// downstream applications which expect sequences of a given length (or the
+/// same length, such as multiple sequence alignment programs).
 #[derive(Debug, Clone, Deserialize)]
 pub struct Formatting {
+    /// Whether to add right padding to the amino acid sequence.
     #[serde(default = "pad_default")]
     pub right_pad_aa:  bool,
+    /// Whether to add right padding to the coding sequence.
     #[serde(default = "pad_default")]
     pub right_pad_cds: bool,
+    /// Whether to add right padding to the TODO.
     #[serde(default = "pad_default")]
     pub right_pad_gen: bool,
 }
@@ -136,11 +146,15 @@ pub struct Rules {
 /// conditions or checking on the integers.
 #[derive(Deserialize)]
 struct AlignmentParamsRaw {
+    /// The score for a match
     #[serde(rename = "match")]
     match_score: i8,
+    /// The score for a mismatch (not negated during parsing)
     mismatch:    i8,
+    /// The penalty for opening a gap, guaranteed to be negative or 0
     #[serde(deserialize_with = "deserialize_gap_penalty")]
     gap_open:    i8,
+    /// The penalty for extending a gap, guaranteed to be negative or 0
     #[serde(deserialize_with = "deserialize_gap_penalty")]
     gap_extend:  i8,
 }
@@ -173,8 +187,8 @@ impl<'de> Deserialize<'de> for AlignmentParams {
     }
 }
 
-/// Deserializes a gap penalty, validating the range and normalizing to
-/// negative.
+/// Deserializes a gap penalty, validating the range and normalizing to be
+/// non-positive.
 ///
 /// ## Errors
 ///

@@ -1,6 +1,7 @@
 //! Protein annotation engine.
+
 pub mod error;
-pub mod hashing;
+pub(crate) mod hashing;
 mod process;
 
 use crate::data::{ctype::CompoundTypeMap, keys::RefKey, module::ModuleData};
@@ -17,9 +18,14 @@ pub struct AnnotationModule<'a> {
 }
 
 impl<'a> AnnotationModule<'a> {
-    /// Suggest modules that might contain given compound types.
+    /// Suggests modules that might contain given compound types.
+    ///
+    /// The return type is a [`HashMap`] from module names to a list of
+    /// unidentified compound types. This method ignores any errors, since it is
+    /// used for warning message generation.
     pub fn suggest_modules_for_compound_types(&self, mut compound_types: HashSet<String>) -> HashMap<&str, Vec<String>> {
         let mut found: HashMap<&str, Vec<String>> = HashMap::new();
+
         for (module_name, ref_path) in &self.data.other_modules {
             if let Ok(reader) = FastaReader::from_path(ref_path) {
                 for fasta_result in reader.flatten() {
@@ -31,6 +37,7 @@ impl<'a> AnnotationModule<'a> {
                 }
             }
         }
+
         found
     }
 }

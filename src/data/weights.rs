@@ -180,7 +180,7 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
             .parse::<TsvRow>()
             .with_context(format!("Failed to parse line {line_num}: {line}", line_num = line_idx + 1))?;
 
-        // Insert into the current weight map
+        // Validity: the codon is uppercase per TsvRow guarantees
         current_weights.insert(row.position, row.codon, row.count);
     }
 
@@ -194,9 +194,14 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
     Ok(all_matrices)
 }
 
+/// A parsed data from a single row of the `codon-position-weights.tsv` file for
+/// the module.
 struct TsvRow {
+    /// The 1-based position of the codon.
     position: u32,
+    /// The codon, in uppercase.
     codon:    [u8; 3],
+    /// The count of the codon at the specified position.
     count:    u32,
 }
 

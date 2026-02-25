@@ -6,6 +6,8 @@ pub(crate) struct Exons {
     pub(crate) required_start:   Option<[u8; 3]>,
     /// The coordinates and offsets of the exons (coding sequences) within the
     /// reference.
+    ///
+    /// These are guaranteed to be in order and non-overlapping.
     pub(crate) coords:           Vec<ExonCoords>,
     /// The total length of all the exons for this entry in
     /// the `cds-spec.tsv` file.
@@ -26,7 +28,8 @@ pub struct ExonCoords {
     pub(crate) ref_range: Range<usize>,
 
     /// The offset of the reference coordinates to the coding sequence
-    /// coordinates (i.e., the sum of the intron lengths up until this exon).
+    /// coordinates (i.e., the number of non-coding residues up until this
+    /// exon).
     ///
     /// This is subtracted from reference coordinates to get coding sequence
     /// coordinates.

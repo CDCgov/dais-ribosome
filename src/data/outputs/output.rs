@@ -1,6 +1,6 @@
 use crate::{
     annotation::hashing::nt_id,
-    config::toml::Formatting,
+    config::Formatting,
     data::{
         ComputedGenomeInsertion, DelRow, GenDelRow, GenInsRow, GenRow, InsRow, PrecomputedGenomeData, QueryRecord, SeqRow,
         products::{ComputedProduct, Product},
@@ -16,7 +16,7 @@ pub struct RibosomeOutput<'a> {
     pub query:             QueryRecord,
     /// Both genome and protein product alignment states
     pub(crate) states:     Vec<GenomeAndProductStates<'a>>,
-    /// Output formatting rules
+    /// Output formatting rules, parsed from the TOML configuration.
     pub(crate) formatting: &'a Formatting,
 }
 
@@ -91,7 +91,7 @@ pub(crate) struct ComputedGenomeAndProductStates<'a> {
 }
 
 impl<'a> ComputedRibosomeOutput<'a> {
-    /// Generate `.seq` output rows for this query.
+    /// Generates `.seq` output rows for this query.
     pub fn seq_rows(&self) -> impl Iterator<Item = SeqRow<'_>> + '_ {
         self.states.iter().flat_map(move |state| {
             state.products.iter().map(move |computed_product| SeqRow {
@@ -104,7 +104,7 @@ impl<'a> ComputedRibosomeOutput<'a> {
         })
     }
 
-    /// Generate `.ins` output rows for this query.
+    /// Generates `.ins` output rows for this query.
     pub fn ins_rows(&self) -> impl Iterator<Item = InsRow<'_>> + '_ {
         self.states.iter().flat_map(move |state| {
             state.products.iter().flat_map(move |computed_product| {
@@ -119,7 +119,7 @@ impl<'a> ComputedRibosomeOutput<'a> {
         })
     }
 
-    /// Generate displayable deletion rows
+    /// Generates displayable deletion rows
     pub fn del_rows<'b>(&'b self) -> impl Iterator<Item = DelRow<'b>> + 'b {
         self.states.iter().flat_map(move |state| {
             state.products.iter().flat_map(move |computed_product| {
@@ -217,7 +217,7 @@ impl<'a> ComputedGenomeAndProductStates<'a> {
                         insertions.push(ComputedGenomeInsertion {
                             // 1-based index before is equivalent to 0-based
                             // index after
-                            upstream_nt: ins.ref_index.index_after_ins(),
+                            upstream_nt_pos: ins.ref_index.right(),
                             inserted_nucleotides,
                         });
                     }

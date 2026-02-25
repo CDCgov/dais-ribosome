@@ -2,7 +2,7 @@
 
 use crate::{
     annotation::AnnotationModule,
-    config::toml::{AlignmentWeights, Formatting, Rules, TomlConfig},
+    config::{AlignmentWeights, Formatting, Rules, TomlConfig},
     data::{
         ctype::build_ctype_map,
         refs::{ReferenceMap, load_references},
@@ -16,16 +16,32 @@ use zoe::data::err::ResultWithErrorContext;
 /// Owned data backing an annotation module.
 #[derive(Debug)]
 pub struct ModuleData {
+    /// The name of the module (e.g., `flu`, `cov`, or `rsv`). This must
+    /// correspond to a folder in `ribosome_res`.
     pub name:              String,
+    /// An optional version for the module (e.g., `2.0-alpha`).
     pub version:           String,
     pub formatting:        Formatting,
     pub rules:             Rules,
+    /// Alignments weights for the module.
     pub alignment_weights: AlignmentWeights,
+    /// A vector of the other module names and the paths to their reference
+    /// files, used in for providing warning messages when unrecognized compound
+    /// types are encountered.
     pub other_modules:     Vec<(String, PathBuf)>,
+    /// A hash map from [`RefKey`] values to a vector of reference sequences.
+    ///
+    /// [`RefKey`]: crate::data::keys::RefKey
     pub references:        ReferenceMap,
+
     // Consumed during build_annotation_module:
-    cds_spec:              Option<CdsSpecMap>,
-    codon_weights:         Option<CodonWeightMatrix>,
+    /// A hash map from [`RefKey`] values to a vector of the protein product
+    /// names (e.g., `HA`, `HA-signal`) and their [`Exons`].
+    ///
+    /// [`RefKey`]: crate::data::keys::RefKey
+    /// [`Exons`]: crate::data::exons::Exons
+    cds_spec:      Option<CdsSpecMap>,
+    codon_weights: Option<CodonWeightMatrix>,
 }
 
 impl ModuleData {

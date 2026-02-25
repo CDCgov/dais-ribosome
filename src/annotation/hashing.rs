@@ -25,7 +25,8 @@ pub fn nt_id(seq: &Nucleotides) -> Option<String> {
     (!cleaned.is_empty()).then(|| sha1_hex(&cleaned))
 }
 
-/// Returns MD5 hex of uppercased sequence with `\n\r\t :.-` removed (keeps `~`).
+/// Returns MD5 hex of uppercased sequence with `\n\r\t :.-` removed (keeps
+/// `~`).
 #[inline]
 pub fn variant_hash(seq: &AminoAcids) -> Option<String> {
     let cleaned = filter_amino_acids(seq);
@@ -56,12 +57,13 @@ fn sha1_hex(data: &[u8]) -> String {
     sha1_smol::Sha1::from(data).digest().to_string()
 }
 
-// TODO: Currently this can produce a variable-length string since leading zeros
-// are not included. This could cause the variant hash to be the wrong length.
-
 /// Compute MD5 hex digest of byte slice.
+///
+/// The string will always be a 32 character hexadecimal number.
 #[inline]
 fn md5_hex(data: &[u8]) -> String {
+    // By default, [`md5`] automatically pads with zeros when using LowerHex
+    // formatting.
     format!("{:x}", md5::compute(data))
 }
 

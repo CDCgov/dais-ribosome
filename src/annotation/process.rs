@@ -2,9 +2,8 @@ use crate::{
     AlignmentStatesExt,
     annotation::{AnnotationModule, error::RibosomeError},
     data::{
-        GenomeAndProductStates, RibosomeOutput,
+        GenomeAndProductStates, QueryRecord, RibosomeOutput,
         ctype::ReferenceGroup,
-        query::QueryRecord,
         ranges::{InsertionIdx, InsertionRange, StateRange},
     },
 };
@@ -41,7 +40,12 @@ impl<'a> AnnotationModule<'a> {
             let mut products = Vec::with_capacity(ref_id_data.proteins.len());
 
             for product in &ref_id_data.proteins {
+                // Validity: requirements met based on
+                // state_ranges_from_aligment guarantees
                 let mut product_ranges = product.make_product_ranges(&genome_aln_states);
+
+                // Validity: the same `query_seq` is passed as was used to form
+                // `genome_aln_states`
                 if product_ranges.missing_required_start(query_seq) {
                     continue;
                 }
@@ -56,21 +60,17 @@ impl<'a> AnnotationModule<'a> {
             }
 
             // Push stop extension into every product whose last exon ends at
-            // the extension's reference position (matching Perl $pMax == $max).
+            // the extension's reference position
             if let Some(mut ext) = stop_extension {
                 if query_ori_offset > 0 {
                     ext.shift_query_right(query_ori_offset);
                 }
 
                 for product in &mut products {
-                    // Check whether the last exon ends at the index before
-                    // which the insertion occurs, in which case the insertion
-                    // can be added to the product.
-                    //
-                    // Validity: subtracting 1 from the end will not underflow
-                    // since ref_range is non-empty
+                    // Check whether the last exon ends at the same place the
+                    // stop extension "ends" (the index before which it occurs).
                     if let Some(last_exon) = product.product_spec.exons.coords.last()
-                        && last_exon.ref_range.end - 1 == ext.ref_index.index_before_ins()
+                        && last_exon.ref_range.end == ext.ref_index.right()
                     {
                         product.stop_extension_query_range = Some(ext.query_range.clone());
                     }
@@ -122,10 +122,8 @@ impl<'a> AnnotationModule<'a> {
             let end_index = stop_codon_index + 3;
 
             Some(InsertionRange {
-                // The insertion occurs at the end, so the reference index after
-                // the insertion is ref_range.end (not an actual base in the
-                // reference)
-                ref_index:   InsertionIdx::new(genome_aln.ref_range.end),
+                // The insertion is before the end (ref_range.end)
+                ref_index:   InsertionIdx::from_right_idx(genome_aln.ref_range.end),
                 query_range: start_index..end_index,
             })
         } else {
@@ -149,11 +147,12 @@ impl<'a> AnnotationModule<'a> {
     ///
     /// If any of these conditions fail to hold, no shrinking occurs, and the
     /// starting position of the returned slice is 0.
+    ///
     fn rule_chew_to_start<'b>(
         &self, query: &'b QueryRecord, ref_id_data: &ReferenceGroup<'_>,
     ) -> (usize, NucleotidesView<'b>) {
-        // Validity: QueryRecord guarantees U has been replaced with T, so ATG
-        // is the only possible start codon
+        // Validity: QueryRecord guarantees U has been replaced with T (and
+        // guarantees uppercase), so ATG is the only possible start codon
 
         if self.data.rules.chew_to_start
             && query.nucleotides.len() > ref_id_data.length

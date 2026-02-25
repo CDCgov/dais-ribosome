@@ -2,40 +2,101 @@ use crate::data::exons::ExonCoords;
 use std::ops::Range;
 use zoe::{alignment::Alignment, data::cigar::Ciglet};
 
-/// A helper struct to avoid confusion when storing the index of an insertion
-/// within a reference or coding sequence.
+/// A helper struct to avoid confusion when storing the 0-based index of an
+/// insertion within a reference or coding sequence.
 ///
 /// Confusion can occur because we might be using the index before the insertion
 /// or the index after the insertion (since insertions happen _between_
 /// indices). This struct abstracts this logic, offering better correctness.
-///
-/// This struct can be used to hold a 0-based or 1-based index.
 #[repr(transparent)]
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct InsertionIdx {
     /// The index that occurs after the insertion. Equivalently, the insertion
     /// happens before this index.
-    index_after_ins: usize,
+    right: usize,
 }
 
 impl InsertionIdx {
-    pub fn new(index_after_ins: usize) -> Self {
-        Self { index_after_ins }
+    /// Creates a new [`InsertionIdx`] representing an insertion between index
+    /// `left` and `right=left+1`.
+    #[allow(dead_code)]
+    pub fn from_left_idx(left: usize) -> Self {
+        Self { right: left + 1 }
     }
 
-    /// The index in the reference sequence before the insertion.
+    /// Creates a new [`InsertionIdx`] representing an insertion between index
+    /// `left=right-1` and `right`.
+    pub fn from_right_idx(right: usize) -> Self {
+        Self { right }
+    }
+
+    /// The 0-based index in the reference sequence before the insertion.
     ///
     /// ## Panics
     ///
-    /// This will panic if the insertion occurs at the beginning of the coding
-    /// sequence.
-    pub(crate) fn index_before_ins(&self) -> usize {
-        self.index_after_ins - 1
+    /// This will panic if the insertion occurs at the beginning of the sequence
+    /// (right index 0).
+    #[allow(dead_code)]
+    pub(crate) fn left(self) -> usize {
+        self.right - 1
     }
 
-    /// The index in the reference sequence after the insertion.
-    pub(crate) fn index_after_ins(&self) -> usize {
-        self.index_after_ins
+    /// The 0-based index in the reference sequence after the insertion.
+    pub(crate) fn right(self) -> usize {
+        self.right
+    }
+
+    /// Converts a [`InsertionIdx`] in a nucleotides sequences to the
+    /// corresponding [`InsertionIdx`] in the amino acid sequence.
+    ///
+    /// This should be called only on [`InsertionIdx`] within a nucleotides
+    /// sequence (not an amino acids sequence).
+    ///
+    /// If the insertion appears within a codon rather than between codons, then
+    /// it is said that the insertion occurs before that codon's index. In other
+    /// words, the right amino acid index of the insertion is the codon's index.
+    pub(crate) fn to_aa_idx(self) -> Self {
+        // nt_right = 0  ->  insertion before first codon  ->  aa_right = 0
+        // nt_right = 1  ->  insertion in first codon      ->  aa_right = 0
+        // nt_right = 2  ->  insertion in first codon      ->  aa_right = 0
+        // nt_right = 3  ->  insertion before second codon ->  aa_right = 1
+        Self { right: self.right / 3 }
+    }
+
+    /// The number of amino acids within the insertion's codon that are left of
+    /// the insertion.
+    ///
+    /// This should be called only on [`InsertionIdx`] within a nucleotides
+    /// sequence (not an amino acids sequence).
+    ///
+    /// 0 means that the insertion occurs in-frame. 1 means that the insertion
+    /// appears after the first base of a codon. 2 means that the insertion
+    /// appears after the second base of a codon.
+    pub(crate) fn codon_shift(self) -> usize {
+        // right = 0  ->  in frame
+        // right = 1  ->  after first base
+        // right = 2  ->  after second base
+        // right = 3  ->  in frame
+        self.right % 3
+    }
+
+    /// The 1-based position in the reference sequence before the insertion.
+    pub(crate) fn left_pos(self) -> usize {
+        // left_pos = left_idx + 1 = right_idx
+        self.right
+    }
+
+    /// The 1-based position in the reference sequence after the insertion.
+    pub(crate) fn right_pos(self) -> usize {
+        // right_pos = right_idx + 1
+        self.right + 1
+    }
+
+    /// Returns whether the insertion occurs at the very start of the sequence.
+    pub(crate) fn at_start(self) -> bool {
+        // right = 0  ->  insertion before first base
+        // right = 1  ->  insertion after first base
+        self.right == 0
     }
 }
 
@@ -84,10 +145,10 @@ pub(crate) struct DeletionRange {
 }
 
 /// The range within the query where an insertion occurs, as well as the
-/// corresponding index in the reference after which it occurs.
+/// corresponding index in the reference where it occurs.
 #[derive(Clone, Debug)]
 pub(crate) struct InsertionRange {
-    /// The 0-based index in the reference of the insertion.
+    /// The 0-based index of the insertion in the reference.
     pub(crate) ref_index:   InsertionIdx,
     /// The 0-based end-exclusive range of the insertion within the query.
     pub(crate) query_range: Range<usize>,
@@ -97,6 +158,7 @@ impl MatchRange {
     /// Shifts the `query_range` to the right (addition) without altering the
     /// range in the reference.
     pub(crate) fn shift_query_right(&mut self, amount: usize) {
+        // Validity: this does not alter the length of query_range
         self.query_range = self.query_range.add(amount);
     }
 }
@@ -109,7 +171,8 @@ impl InsertionRange {
     }
 }
 
-/// Alignment state ranges converted to CDS coordinates after exon intersection.
+/// Alignment state ranges converted to coding sequence coordinates by
+/// intersecting them with the exon ranges.
 #[derive(Clone, Debug)]
 pub(crate) enum CdsStateRange {
     M(CdsMatchRange),
@@ -118,7 +181,7 @@ pub(crate) enum CdsStateRange {
 }
 
 impl CdsStateRange {
-    /// Extracts a mutable reference to a [`CdsMatchRanges`], or `None` is a
+    /// Extracts a mutable reference to a [`CdsMatchRange`], or `None` is a
     /// different variant is present.
     pub fn match_range_mut(&mut self) -> Option<&mut CdsMatchRange> {
         match self {
@@ -130,10 +193,15 @@ impl CdsStateRange {
 
 /// The range within the query and coding sequence where a contiguous block of
 /// matches occurs.
+///
+/// ## Validity
+///
+/// The two ranges should be the same length.
 #[derive(Clone, Debug)]
 pub(crate) struct CdsMatchRange {
     /// The 0-based end-exclusive range of the match within the query.
     pub(crate) query_range: Range<usize>,
+    /// The 0-based end-exclusive range of the match within the coding sequence.
     pub(crate) cds_range:   Range<usize>,
 }
 
@@ -142,6 +210,8 @@ impl CdsMatchRange {
     ///
     /// This _decreases_ the start of the ranges.
     pub(crate) fn extend_start(&mut self, amount: usize) {
+        // Validity: The ranges are extended by the same amount, so they remain
+        // the same length
         self.cds_range.start -= amount;
         self.query_range.start -= amount;
     }
@@ -150,6 +220,8 @@ impl CdsMatchRange {
     ///
     /// This _increases_ the end of the ranges.
     pub(crate) fn extend_end(&mut self, amount: usize) {
+        // Validity: The ranges are extended by the same amount, so they remain
+        // the same length
         self.cds_range.end += amount;
         self.query_range.end += amount;
     }
@@ -158,6 +230,8 @@ impl CdsMatchRange {
     ///
     /// This _increases_ the start of the ranges.
     pub(crate) fn cut_start(&mut self, amount: usize) {
+        // Validity: The ranges are cut by the same amount, so they remain the
+        // same length
         self.cds_range.start += amount;
         self.query_range.start += amount;
 
@@ -169,6 +243,8 @@ impl CdsMatchRange {
     ///
     /// This _decreases_ the end of the ranges.
     pub(crate) fn cut_end(&mut self, amount: usize) {
+        // Validity: The ranges are cut by the same amount, so they remain the
+        // same length
         self.cds_range.end -= amount;
         self.query_range.end -= amount;
 
@@ -177,6 +253,7 @@ impl CdsMatchRange {
     }
 }
 
+/// The range within the coding sequence where a deletion occurs.
 #[derive(Clone, Debug)]
 pub(crate) struct CdsDeletionRange {
     /// The range of the deletion within the coding sequence (non-empty,
@@ -205,41 +282,28 @@ impl CdsDeletionRange {
     }
 }
 
+/// The range within the query where an insertion occurs, as well as the
+/// corresponding index in the coding sequence where it occurs.
 #[derive(Clone, Debug)]
 pub(crate) struct CdsInsertionRange {
-    /// The index in the coding sequence *before* which the insertion occurs.
+    /// The 0-based index of the insertion in the coding sequence.
     pub(crate) cds_index:   InsertionIdx,
+    /// The 0-based end-exclusive range of the insertion within the query.
     pub(crate) query_range: Range<usize>,
 }
 
 impl CdsInsertionRange {
-    /// Returns the frame of the [`CdsInsertionRange`].
-    ///
-    /// 0 denotes an in-frame insertion, 1 represents an insertion after the
-    /// first base of a codon, and 2 represents an insertion after the second
-    /// base of a codon.
-    pub(crate) fn frame(&self) -> usize {
-        self.cds_index.index_after_ins % 3
-    }
-
-    /// Returns the index of the codon within which the insertion occurs. If the
-    /// insertion is in-frame, then this is the index before which the insertion
-    /// occurs.
-    pub(crate) fn codon_index(&self) -> usize {
-        self.cds_index.index_after_ins / 3
-    }
-
     // TODO: What is this used for? Why are both fields modified?
     /// Shift state left (subtract) by offset
     pub(crate) fn shift_left(&mut self, amount: usize) {
-        self.cds_index.index_after_ins -= amount;
+        self.cds_index.right -= amount;
         self.query_range = self.query_range.start - amount..self.query_range.end - amount;
     }
 
     // TODO: What is this used for? Why are both fields modified?
     /// Shift state right (add) by offset
     pub(crate) fn shift_right(&mut self, amount: usize) {
-        self.cds_index.index_after_ins += amount;
+        self.cds_index.right += amount;
         self.query_range = self.query_range.start + amount..self.query_range.end + amount;
     }
 
@@ -266,9 +330,11 @@ impl MatchRange {
             // Cut the query range by the same amounts
             let query_range = self.query_range.cut(cut_start, cut_end);
 
-            // Shift the reference range to the left to for the CDS range
+            // Convert reference coordinates to coding sequence coordinates
             let cds_range = ref_range.sub(exon.ref_to_cds_offset);
 
+            // Validity: both ranges were cut by the same amount, so they remain
+            // the same length
             CdsMatchRange { query_range, cds_range }
         })
     }
@@ -302,12 +368,19 @@ impl InsertionRange {
     /// appears in the middle of the exon), then compute the
     /// [`CdsInsertionRange`] of the intersection.
     fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsInsertionRange> {
-        (self.ref_index.index_after_ins > exon.ref_range.start && self.ref_index.index_after_ins < exon.ref_range.end).then(
-            || CdsInsertionRange {
-                cds_index:   InsertionIdx::new(self.ref_index.index_after_ins - exon.ref_to_cds_offset),
+        // Intuitively, the range occurs in [start, end) or [start, end-1]. The
+        // insertion occurs between indices at left+0.5 or right-0.5. Overlap
+        // requires start < right-0.5 < end-1 (without concern for equality,
+        // since right-0.5 is not an integer). start < right-0.5 if and only if
+        // start < right. right-0.5 < end-1 if and only if right < end-0.5, or
+        // right < end.
+
+        (exon.ref_range.start < self.ref_index.right && self.ref_index.right < exon.ref_range.end).then(|| {
+            CdsInsertionRange {
+                cds_index:   InsertionIdx::from_right_idx(self.ref_index.right - exon.ref_to_cds_offset),
                 query_range: self.query_range.clone(),
-            },
-        )
+            }
+        })
     }
 }
 
@@ -323,6 +396,18 @@ impl StateRange {
 
     /// Converts an [`Alignment`] to a sequence of [`StateRange`] for coordinate
     /// manipulation.
+    ///
+    /// ## Validity
+    ///
+    /// A valid `alignment` must be passed to ensure the output sequence of
+    /// ranges will form an ordered partition of `query_range` and `ref_range`
+    /// without overlap or gap. In particular, this also requires the `N`
+    /// operation to not be present in the `states`, which would otherwise cause
+    /// a gap not covered in the reference.
+    ///
+    /// Furthermore, excluding soft clipping, the first/last `states` must be
+    /// `M`, so that the output also has the first and last states as
+    /// [`StateRange::M`]. [`StateRange::M`].
     pub(crate) fn state_ranges_from_aligment<T>(alignment: &Alignment<T>) -> Vec<Self> {
         // This will be a slight overestimate due to the possible presence of
         // clipping.
@@ -346,7 +431,8 @@ impl StateRange {
                 }
                 b'I' => {
                     states.push(Self::I(InsertionRange {
-                        ref_index:   InsertionIdx::new(ref_start),
+                        // The insertion comes before ref_start
+                        ref_index:   InsertionIdx::from_right_idx(ref_start),
                         query_range: query_start..query_start + inc,
                     }));
                     query_start += inc

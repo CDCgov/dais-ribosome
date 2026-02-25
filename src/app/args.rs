@@ -1,6 +1,6 @@
 use crate::app::io::{Writers, open_partition_writer, open_writer, optional_writers};
 use clap::Parser;
-use dais_ribosome::data::RibosomeError;
+use dais_ribosome::annotation::error::RibosomeError;
 use std::{num::NonZero, path::PathBuf};
 
 #[derive(Debug, Parser)]
@@ -15,15 +15,15 @@ pub struct Args {
 
     /// CDS and AA output, including coordinate mapping information, as a
     /// filename or path.
-    #[arg(group = "output", requires_all = ["insertion_output","deletion_output"])]
+    #[arg(group = "output", requires_all = ["insertion_output", "deletion_output"])]
     sequence_output: Option<PathBuf>,
 
     /// Insertion output filename or path.
-    #[arg(requires_all = ["sequence_output","deletion_output"])]
+    #[arg(requires_all = ["sequence_output", "deletion_output"])]
     insertion_output: Option<PathBuf>,
 
     /// Deletion output filename or path.
-    #[arg(requires_all = ["sequence_output","insertion_output"])]
+    #[arg(requires_all = ["sequence_output", "insertion_output"])]
     deletion_output: Option<PathBuf>,
 
     /// Genomic file output prefix for sequences, insertion, and deletion.
@@ -37,6 +37,7 @@ pub struct Args {
     #[arg(short = 'T', long)]
     pub threads: Option<NonZero<usize>>,
 
+    // TODO: This does nothing
     /// Write data as parquet files.
     #[arg(short = 'q', long)]
     output_parquet: bool,

@@ -1,6 +1,6 @@
 //! Compound type hierarchy: ctype → reference_id → protein_product.
 use crate::{
-    config::toml::{AlignmentParams, AlignmentWeights},
+    config::{AlignmentParams, AlignmentWeights},
     data::{
         exons::Exons,
         keys::{RefKey, SpecKey},
@@ -109,7 +109,9 @@ impl<'a> ReferenceGroup<'a> {
     /// against all profiles in this group.
     ///
     /// The alignment with the highest score is considered best, or `None` is
-    /// returned if no alignment was found.
+    /// returned if no alignment was found. The `states` in the alignment will
+    /// only include `M`, `I`, `D`, and `S`. Furthermore, any alignments are
+    /// guaranteed to start and end with `M` states, excluding soft clipping.
     pub fn best_alignment<T: AsRef<[u8]> + ?Sized>(&self, query: &T) -> Option<Alignment<u32>> {
         // TODO: The use of get feels questionable. Even if it is
         // unlikely to ever happen, it feels like it should be an error/warning.
@@ -132,7 +134,7 @@ impl<'a> ReferenceGroup<'a> {
     }
 }
 
-/// Build the ctype map from raw loaded data.
+/// Builds the compound type map from raw loaded data.
 pub(crate) fn build_ctype_map<'a>(
     references: &'a ReferenceMap, mut cds_spec: CdsSpecMap, mut codon_weights: CodonWeightMatrix,
     alignment_weights: &'a AlignmentWeights,

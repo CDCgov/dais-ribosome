@@ -3,16 +3,12 @@
 use std::ops::ControlFlow;
 use zoe::{alignment::AlignmentStates, data::cigar::Ciglet};
 
-/// Configuration loading and path resolution.
+pub mod annotation;
 pub mod config;
-
 /// Data loading and structures for module resources.
 pub mod data;
 
-/// Protein annotation engine.
-pub mod annotation;
-
-pub trait IteratorExt: Iterator {
+trait IteratorExt: Iterator {
     fn take_until_inclusive<F>(self, f: F) -> TakeUntilInclusive<Self, F>
     where
         Self: Sized,
@@ -29,7 +25,7 @@ impl<I> IteratorExt for I where I: Iterator {}
 /// This is based on `TakeWhileInclusive` from Itertools, but with the predicate
 /// negated.
 #[derive(Clone)]
-pub struct TakeUntilInclusive<I, F> {
+struct TakeUntilInclusive<I, F> {
     iter:      I,
     predicate: F,
     done:      bool,
@@ -102,7 +98,7 @@ where
 
 /// An extension trait for [`AlignmentStates`], providing functionality custom
 /// to DAIS-ribosome.
-pub trait AlignmentStatesExt {
+trait AlignmentStatesExt {
     /// Extends an [`AlignmentStates`] to the left by prepending `inc` match
     /// states, replacing corresponding increments of soft clipping if present.
     fn extend_left(&mut self, inc: usize);

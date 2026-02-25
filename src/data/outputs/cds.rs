@@ -1,13 +1,12 @@
-use zoe::prelude::Len;
-
 use crate::{
-    config::toml::Formatting,
+    config::Formatting,
     data::{
         Nullable,
         products::{ComputedDeletion, ComputedInsertion, ComputedProduct},
     },
 };
 use std::fmt::{self, Display};
+use zoe::prelude::Len;
 
 // Can remove later with the regression testing feature later
 #[allow(dead_code)]
@@ -22,7 +21,7 @@ pub struct SeqRow<'a> {
 
 impl Display for SeqRow<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let d = self.computed_product;
+        let computed_product = self.computed_product;
 
         let trailing = self.computed_product.trailing_cds_unaligned;
 
@@ -34,15 +33,15 @@ impl Display for SeqRow<'_> {
         #[cfg(feature = "regression-testing")]
         let aa_rpad = "";
         #[cfg(feature = "regression-testing")]
-        let aa_aln = if d.aa_aln.is_empty() {
-            vec![b'.'; (d.cds_aln.len() + trailing) / 3].into()
+        let aa_aln = if computed_product.aa_aln.is_empty() {
+            vec![b'.'; (computed_product.cds_aln.len() + trailing) / 3].into()
         } else {
-            d.aa_aln.clone()
+            computed_product.aa_aln.clone()
         };
 
         // Normal: empty data is strictly nullable; skip padding when there is no data.
         #[cfg(not(feature = "regression-testing"))]
-        let pad = if d.cds_aln.is_empty() {
+        let pad = if computed_product.cds_aln.is_empty() {
             String::new()
         } else {
             ".".repeat(trailing)
@@ -54,13 +53,13 @@ impl Display for SeqRow<'_> {
             ""
         };
         #[cfg(not(feature = "regression-testing"))]
-        let aa_rpad = if self.formatting.right_pad_aa && !d.aa_aln.is_empty() {
+        let aa_rpad = if self.formatting.right_pad_aa && !computed_product.aa_aln.is_empty() {
             &pad[..trailing / 3]
         } else {
             ""
         };
         #[cfg(not(feature = "regression-testing"))]
-        let aa_aln = Nullable(&d.aa_aln);
+        let aa_aln = Nullable(&computed_product.aa_aln);
 
         write!(
             f,
@@ -75,18 +74,18 @@ impl Display for SeqRow<'_> {
             ctype = self.ctype,
             ref_id = self.ref_id,
             prot = self.computed_product.product_name,
-            vh = Nullable(&d.variant_hash),
-            aa_seq = Nullable(&d.aa_seq),
+            vh = Nullable(&computed_product.variant_hash),
+            aa_seq = Nullable(&computed_product.aa_seq),
             aa_aln = aa_aln,
             aa_rpad = aa_rpad,
-            cds_id = Nullable(&d.cds_id),
-            ins = d.has_insertion,
-            shift = d.has_shift_indel,
-            cds_seq = Nullable(&d.cds_seq),
-            cds_aln = d.cds_aln,
+            cds_id = Nullable(&computed_product.cds_id),
+            ins = computed_product.has_insertion,
+            shift = computed_product.has_shift_indel,
+            cds_seq = Nullable(&computed_product.cds_seq),
+            cds_aln = computed_product.cds_aln,
             c_rpad = cds_rpad,
-            q_coords = Nullable(&d.query_coords),
-            c_coords = Nullable(&d.cds_coords),
+            q_coords = Nullable(&computed_product.query_coords),
+            c_coords = Nullable(&computed_product.cds_coords),
         )
     }
 }
@@ -117,10 +116,10 @@ impl Display for InsRow<'_> {
             self.ctype,
             self.ref_id,
             self.protein,
-            ins.upstream_aa,
+            ins.upstream_aa_pos,
             nts,
             ins.inserted_residues,
-            ins.upstream_nt,
+            ins.upstream_nt_pos,
             ins.codon_shift,
         )
     }

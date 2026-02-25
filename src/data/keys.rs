@@ -1,20 +1,24 @@
 //! Key types used throughout the crate for indexing maps.
 
 use std::fmt;
+use zoe::prelude::AminoAcidsView;
 
 /// A key for reference sequences, combining a reference ID and a compound type.
 ///
 /// Used to index into [`ReferenceMap`] to retrieve reference sequences.
+///
+/// [`ReferenceMap`]: crate::data::refs::ReferenceMap
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct RefKey {
-    /// The reference ID of the reference sequence (e.g., `ANHUI01`).
+    /// The reference ID of the reference sequence (e.g., `ANHUI01`,
+    /// `PHUKET3073`).
     pub reference_id:  String,
-    /// The compound type of the reference sequence (e.g., `A_HA_H7`).
+    /// The compound type of the reference sequence (e.g., `A_HA_H7`, `B_HA`).
     pub compound_type: String,
 }
 
 impl RefKey {
-    /// Create a new [`RefKey`] by combining a `reference_id` (e.g., `ANHUI01`)
+    /// Creates a new [`RefKey`] by combining a `reference_id` (e.g., `ANHUI01`)
     /// and `compound_type` (e.g., `A_HA_H7`).
     pub fn new(reference_id: impl Into<String>, compound_type: impl Into<String>) -> Self {
         Self {
@@ -45,17 +49,19 @@ impl fmt::Display for RefKey {
 /// protein product name.
 ///
 /// Used to index into [`CdsSpecMap`] to retrieve exon coordinates.
-#[derive(Hash, PartialEq, Eq, Debug, Clone)]
+///
+/// [`CdsSpecMap`]: crate::data::spec::CdsSpecMap
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct SpecKey {
-    /// The reference ID of the reference sequence (e.g., `ANHUI01`).
+    /// The reference ID of the reference sequence (e.g., `A_HA_H7`, `B_HA`).
     pub reference_id:    String,
-    /// The protein product (e.g., `HA`).
+    /// The protein product names (e.g., `HA`, `HA-signal`).
     pub protein_product: String,
 }
 
 impl SpecKey {
-    /// Create a new [`SpecKey`] by combining a `reference_id` (e.g., `ANHUI01`)
-    /// and `protein_product` (e.g., `HA`).
+    /// Creates a new [`SpecKey`] by combining a `reference_id` (e.g.,
+    /// `ANHUI01`) and `protein_product` (e.g., `HA`).
     pub fn new(reference_id: impl Into<String>, protein_product: impl Into<String>) -> Self {
         Self {
             reference_id:    reference_id.into(),
@@ -70,30 +76,18 @@ impl fmt::Display for SpecKey {
     }
 }
 
-/// Key for codon position weights: combines position and codon triplet.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+/// A key for codon position weights, combining position and the codon.
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct CodonKey {
+    /// The 1-based position of the codon within the coding sequence.
     pub position: u32,
+    /// The uppercase codon.
     pub codon:    [u8; 3],
-}
-
-impl fmt::Debug for CodonKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}\t{}{}{}",
-            self.position, self.codon[0] as char, self.codon[1] as char, self.codon[2] as char,
-        )
-    }
 }
 
 impl fmt::Display for CodonKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}:{}{}{}",
-            self.position, self.codon[0] as char, self.codon[1] as char, self.codon[2] as char,
-        )
+        write!(f, "{}:{}", self.position, AminoAcidsView::from(&self.codon))
     }
 }
 
