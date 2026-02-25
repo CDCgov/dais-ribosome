@@ -1,4 +1,3 @@
-mod error;
 mod outputs;
 mod refs;
 mod spec;

@@ -55,11 +55,22 @@ impl TsvQueryIter {
     ///
     /// The line should already have the `\n` or `\r\n` removed from the end,
     /// and should be non-empty and not solely contain whitespace.
+    ///
+    /// ## Errors
+    ///
+    /// - [`RibosomeError::InvalidTsvFormat`] if the line contains only one
+    ///   field
+    /// - [`RibosomeError::NoCtype`] if the
     fn parse_line(line: &str) -> Result<QueryRecord, RibosomeError> {
         let mut columns = line.split('\t');
 
-        let id = columns.next().unwrap_or_default(); // always exists after split
-        let second = columns.next().ok_or(RibosomeError::InvalidTsvFormat)?;
+        // Validity: this will always exist since split is never empty
+        let id = columns.next().unwrap_or_default();
+        let Some(second) = columns.next() else {
+            return Err(RibosomeError::from(
+                "Invalid TSV format: expected 2 or 3 tab-separated columns, but found 1",
+            ));
+        };
         let third = columns.next();
 
         match third {
@@ -67,12 +78,13 @@ impl TsvQueryIter {
             Some(seq_field) => {
                 let ctype = second.trim_ascii().to_string();
                 if ctype.is_empty() {
-                    return Err(RibosomeError::NoCtype(id.to_string()));
+                    return Err(RibosomeError::from("Invalid TSV format: the second field was empty"));
                 }
 
                 let nucleotides = seq_field.as_bytes().to_vec().filter_to_dna_unaligned();
+
                 if nucleotides.is_empty() {
-                    return Err(RibosomeError::InvalidSequence(id.to_string()));
+                    return Err(format!("A sequence contained no unaligned DNA data. See ID: {id}").into());
                 }
 
                 Ok(QueryRecord {
@@ -84,8 +96,9 @@ impl TsvQueryIter {
             // Two columns: ID  sequence  (unannotated — stub)
             None => {
                 let nucleotides = second.as_bytes().to_vec().filter_to_dna_unaligned();
+
                 if nucleotides.is_empty() {
-                    return Err(RibosomeError::InvalidSequence(id.to_string()));
+                    return Err(format!("A sequence contained no unaligned DNA data. See ID: {id}").into());
                 }
 
                 // TODO: handle unclassified TSV queries (feature-gated)
@@ -112,7 +125,7 @@ impl Iterator for TsvQueryIter {
                         return Some(Self::parse_line(&line));
                     }
                 }
-                Err(e) => return Some(Err(RibosomeError::IO(e))),
+                Err(e) => return Some(Err(RibosomeError::Io(e))),
             }
         }
     }
@@ -140,15 +153,9 @@ impl QueryInput {
 
         let mut buffer = BufReader::new(file);
 
-        let first = buffer.peek(1)?;
-        // TODO: this isn't accurate (it would mean blank file, not blank first
-        // line)
-        if first.is_empty() {
-            return Err(RibosomeError::BlankFirstLine(path.to_path_buf()));
-        }
-
-        match first[0] {
-            b'>' => Ok(QueryInput::Fasta(FastaQueryIter::from_bufreader(buffer)?)),
+        match *buffer.peek(1)? {
+            [] => Err(RibosomeError::EmptyFile(path.to_path_buf())),
+            [b'>', ..] => Ok(QueryInput::Fasta(FastaQueryIter::from_bufreader(buffer)?)),
             _ => Ok(QueryInput::Tsv(TsvQueryIter::from_bufreader(buffer))),
         }
     }

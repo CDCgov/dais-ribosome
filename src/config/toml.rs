@@ -18,18 +18,27 @@ pub struct TomlConfig {
 
 impl TomlConfig {
     /// Load configuration from a TOML file.
-    pub fn from_file(path: &Path) -> std::io::Result<Self> {
-        let raw_toml = std::fs::read_to_string(path)?;
-        Ok(toml::from_str::<TomlConfig>(&raw_toml).with_type_context::<TomlConfig>()?)
+    ///
+    /// ## Errors
+    ///
+    /// If any IO errors or parsing errors occur, an error with path context
+    /// (and type context for parsing errors) is returned.
+    pub fn from_file(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        let path = path.as_ref();
+
+        Ok(std::fs::read_to_string(path)
+            .and_then(|raw_toml| Ok(toml::from_str::<TomlConfig>(&raw_toml).with_type_context::<TomlConfig>()?))
+            .with_path_context("Failed to parse TOML file", path)?)
     }
 
     /// Find a module by name, returning it along with the other modules'
     /// metadata.
     ///
-    /// This is used when forming [`ModuleData`]. The other modules' metadata
-    /// are used to populate `other_modules`, which is used in warning messages
-    /// in [`print_unimplemented_ctypes`].
-    pub fn find_module(self, name: &str, module_path: &Path) -> Option<(ConfiguredModule, Vec<(String, PathBuf)>)> {
+    /// This is used when forming [`ModuleData`]. The second return value is a
+    /// vector containing tuples with the module names and the paths to the
+    /// reference sequences. These are used to populate `other_modules`, which
+    /// is used in warning messages in [`print_unimplemented_ctypes`].
+    pub fn find_module(self, name: &str, modules_dir: &Path) -> Option<(ConfiguredModule, Vec<(String, PathBuf)>)> {
         let mut selected = None;
         let mut others = Vec::new();
 
@@ -37,7 +46,7 @@ impl TomlConfig {
             if m.name == name {
                 selected = Some(m);
             } else {
-                let ref_path = module_path.join(&m.name).join(&m.references);
+                let ref_path = modules_dir.join(&m.name).join(&m.references);
                 others.push((m.name, ref_path));
             }
         }

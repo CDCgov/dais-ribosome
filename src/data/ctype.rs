@@ -1,19 +1,22 @@
 //! Compound type hierarchy: ctype → reference_id → protein_product.
-use super::{
-    error::ModuleLoadError,
-    keys::{RefKey, SpecKey},
-    products::ProductSpec,
-    refs::ReferenceMap,
-    weights::CodonWeightMatrix,
-};
 use crate::{
     config::toml::{AlignmentParams, AlignmentWeights},
-    data::{exons::Exons, spec::CdsSpecMap},
+    data::{
+        exons::Exons,
+        keys::{RefKey, SpecKey},
+        products::ProductSpec,
+        refs::ReferenceMap,
+        spec::CdsSpecMap,
+        weights::CodonWeightMatrix,
+    },
 };
 use std::collections::HashMap;
-use zoe::alignment::{Alignment, SharedProfiles};
-use zoe::prelude::*;
-use zoe::{data::nucleotides::Nucleotides, iter_utils::ProcessResultsExt};
+use zoe::{
+    alignment::{Alignment, SharedProfiles},
+    data::{err::ResultWithErrorContext, nucleotides::Nucleotides},
+    iter_utils::ProcessResultsExt,
+    prelude::*,
+};
 
 /// Top-level index: ctype string → compound type data.
 pub type CompoundTypeMap<'a> = HashMap<String, Vec<ReferenceGroup<'a>>>;
@@ -40,12 +43,12 @@ impl<'a> ReferenceGroup<'a> {
     pub fn new(
         ref_key: &RefKey, seqs: &'a [Nucleotides], params: &'a AlignmentParams,
         cds_spec: &mut HashMap<RefKey, Vec<(String, Exons)>>, codon_weights: &mut CodonWeightMatrix,
-    ) -> Result<Self, ModuleLoadError> {
+    ) -> std::io::Result<Self> {
         let length = seqs.first().map_or(0, Nucleotides::len);
         for seq in seqs {
             if seq.len() != length {
-                return Err(ModuleLoadError::validation(format!(
-                    "Inconsistent lengths for '{reference_id}|{compound_type}'",
+                return Err(std::io::Error::other(format!(
+                    "Inconsistent reference lengths for '{reference_id}|{compound_type}'",
                     reference_id = ref_key.reference_id,
                     compound_type = ref_key.compound_type
                 )));
@@ -54,7 +57,10 @@ impl<'a> ReferenceGroup<'a> {
 
         let profiles = seqs
             .iter()
-            .map(|seq| AlignmentProfiles::new(seq, &params.matrix, params.gap_open, params.gap_extend))
+            .map(|seq| {
+                AlignmentProfiles::new(seq, &params.matrix, params.gap_open, params.gap_extend)
+                    .with_context("Failed to build alignment profiles")
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let proteins = cds_spec
@@ -79,22 +85,21 @@ impl<'a> ReferenceGroup<'a> {
         })
     }
 
-    pub fn extend(
-        &mut self, seqs: &'a [Nucleotides], ref_key: &RefKey, params: &'a AlignmentParams,
-    ) -> Result<(), ModuleLoadError> {
+    pub fn extend(&mut self, seqs: &'a [Nucleotides], ref_key: &RefKey, params: &'a AlignmentParams) -> std::io::Result<()> {
         for seq in seqs {
             if seq.len() != self.length {
-                return Err(ModuleLoadError::validation(format!(
-                    "Inconsistent lengths for '{reference_id}|{compound_type}'",
+                return Err(std::io::Error::other(format!(
+                    "Inconsistent reference lengths for '{reference_id}|{compound_type}'",
                     reference_id = ref_key.reference_id,
                     compound_type = ref_key.compound_type
                 )));
             }
         }
 
-        let profiles = seqs
-            .iter()
-            .map(|seq| AlignmentProfiles::new(seq, &params.matrix, params.gap_open, params.gap_extend));
+        let profiles = seqs.iter().map(|seq| {
+            AlignmentProfiles::new(seq, &params.matrix, params.gap_open, params.gap_extend)
+                .with_context("Failed to build alignment profiles")
+        });
         profiles.process_results(|iter| self.profiles.extend(iter))?;
 
         Ok(())
@@ -120,7 +125,7 @@ impl<'a> ReferenceGroup<'a> {
 pub(crate) fn build_ctype_map<'a>(
     references: &'a ReferenceMap, mut cds_spec: CdsSpecMap, mut codon_weights: CodonWeightMatrix,
     alignment_weights: &'a AlignmentWeights,
-) -> Result<CompoundTypeMap<'a>, ModuleLoadError> {
+) -> std::io::Result<CompoundTypeMap<'a>> {
     let mut ctype_map: HashMap<String, Vec<ReferenceGroup<'a>>> = HashMap::new();
 
     for (ref_key, seqs) in references {

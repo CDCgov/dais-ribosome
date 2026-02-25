@@ -159,10 +159,13 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
             }
 
             // Parse new section header
-            let mut parts = line.trim_start_matches('#').trim_ascii().split('|');
+            let line = line.trim_start_matches('#').trim_ascii();
+            let mut parts = line.split('|');
 
             let (Some(reference_id), Some(protein_product)) = (parts.next(), parts.next()) else {
-                return Err(std::io::Error::other("Issue parsing weight matrix header"));
+                return Err(std::io::Error::other(format!(
+                    "Invalid weight matrix header. Expected reference_id|protein, found {line}"
+                )));
             };
 
             current_key = Some(SpecKey::new(reference_id, protein_product));

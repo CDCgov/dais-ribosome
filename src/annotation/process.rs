@@ -29,7 +29,7 @@ impl<'a> AnnotationModule<'a> {
 
             // Get the alignment to the best reference
             let Some(mut genome_aln) = ref_id_data.best_alignment(&query_seq) else {
-                return Err(RibosomeError::Unmappable(query.id.to_string()));
+                return Err(format!("Query '{}' could not be aligned to any reference", query.id).into());
             };
 
             // Extend the left and right side of the alignments

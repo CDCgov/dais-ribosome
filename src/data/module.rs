@@ -5,13 +5,13 @@ use crate::{
     config::toml::{AlignmentWeights, Formatting, Rules, TomlConfig},
     data::{
         ctype::build_ctype_map,
-        error::ModuleLoadError,
         refs::{ReferenceMap, load_references},
         spec::{CdsSpecMap, load_cds_spec},
         weights::{CodonWeightMatrix, load_codon_weights},
     },
 };
 use std::path::{Path, PathBuf};
+use zoe::data::err::ResultWithErrorContext;
 
 /// Owned data backing an annotation module.
 #[derive(Debug)]
@@ -29,23 +29,26 @@ pub struct ModuleData {
 }
 
 impl ModuleData {
-    /// Load module data from a `modules.toml` configuration file.
-    pub fn load_from_file(toml_path: &Path, module_name: &str) -> Result<Self, ModuleLoadError> {
-        let config = TomlConfig::from_file(toml_path).map_err(|err| ModuleLoadError::io(toml_path, err))?;
-        Self::from_config(toml_path, config, module_name)
-    }
-
     /// Build module data from a parsed configuration.
-    pub fn from_config(toml_path: &Path, config: TomlConfig, module_name: &str) -> Result<Self, ModuleLoadError> {
+    ///
+    /// ## Errors
+    ///
+    /// Any errors are returned without including the `module_name` as context,
+    /// since the caller will add that. The `toml_path` is included as context
+    /// when relevant.
+    pub fn new(config: TomlConfig, toml_path: &Path, module_name: &str) -> std::io::Result<Self> {
         // Get path to ribosome_res directory
         let modules_dir = toml_path
             .parent()
             .expect("The modules.toml path must have parent ribosome_res");
 
         // Select the module of interest given module_name
-        let (module, other_modules) = config
-            .find_module(module_name, modules_dir)
-            .ok_or_else(|| ModuleLoadError::module_not_found(module_name))?;
+        let Some((module, other_modules)) = config.find_module(module_name, modules_dir) else {
+            return Err(std::io::Error::other(format!(
+                "Module name not found in configuration file: {toml_path}",
+                toml_path = toml_path.display()
+            )));
+        };
 
         // Get path to module folder
         let module_root = modules_dir.join(&module.name);
@@ -55,9 +58,12 @@ impl ModuleData {
         let weights_path = module_root.join(&module.weights);
         let cds_spec_path = module_root.join(&module.cds_spec);
 
-        let references = load_references(&references_path).map_err(|err| ModuleLoadError::io(&references_path, err))?;
-        let codon_weights = load_codon_weights(&weights_path).map_err(|err| ModuleLoadError::io(&weights_path, err))?;
-        let cds_spec = load_cds_spec(&cds_spec_path).map_err(|err| ModuleLoadError::io(&cds_spec_path, err))?;
+        let references = load_references(&references_path)
+            .with_path_context("Failed to load the references from file", &references_path)?;
+        let codon_weights = load_codon_weights(&weights_path)
+            .with_path_context("Failed to load the codon position weights from file", weights_path)?;
+        let cds_spec =
+            load_cds_spec(&cds_spec_path).with_path_context("Failed to load the CDS specs from file", cds_spec_path)?;
         let alignment_weights = module.alignment;
 
         Ok(Self {
@@ -78,16 +84,13 @@ impl ModuleData {
     /// Builds an [`AnnotationModule`] that borrows from this [`ModuleData`].
     /// This consumes `cds_spec` and `codon_weights`, so it can only be called
     /// once.
-    pub fn build_annotation_module(&mut self) -> Result<AnnotationModule<'_>, ModuleLoadError> {
-        let cds_spec = self
-            .cds_spec
-            .take()
-            .ok_or_else(|| ModuleLoadError::validation("build_annotation_module can only be called once"))?;
+    pub fn build_annotation_module(&mut self) -> std::io::Result<AnnotationModule<'_>> {
+        let cds_spec = self.cds_spec.take().expect("build_annotation_module can only be called once");
 
         let codon_weights = self
             .codon_weights
             .take()
-            .ok_or_else(|| ModuleLoadError::validation("build_annotation_module can only be called once"))?;
+            .expect("build_annotation_module can only be called once");
 
         let ctype_map = build_ctype_map(&self.references, cds_spec, codon_weights, &self.alignment_weights)?;
         Ok(AnnotationModule { data: self, ctype_map })

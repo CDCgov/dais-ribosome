@@ -9,7 +9,7 @@ use app::{
 use clap::Parser;
 use dais_ribosome::{
     annotation::AnnotationModule,
-    config::find_modules_toml,
+    config::{find_modules_toml, toml::TomlConfig},
     data::{ModuleData, RibosomeError},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
@@ -26,7 +26,11 @@ fn main() {
     // Find the full file-system path to ribosome_res/modules.toml
     let toml_path = find_modules_toml().unwrap_or_fail();
 
-    let mut module_data = ModuleData::load_from_file(&toml_path, &args.module)
+    // Parse the TOML file
+    let parsed_toml = TomlConfig::from_file(&toml_path).unwrap_or_fail();
+
+    // Convert the TOML data into ModuleData
+    let mut module_data = ModuleData::new(parsed_toml, &toml_path, &args.module)
         .unwrap_or_die(&format!("Failed to prepare module '{}'", args.module));
 
     let annotation_module = module_data

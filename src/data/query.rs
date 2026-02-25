@@ -26,21 +26,19 @@ impl TryFrom<FastaSeq> for QueryRecord {
         let nucleotides = sequence.filter_to_dna_unaligned();
 
         if nucleotides.is_empty() {
-            return Err(RibosomeError::InvalidSequence(name.to_string()));
+            return Err(format!("A sequence contained no unaligned DNA data. See header: {name}").into());
         }
 
         if name.contains('|') {
             let mut parts = name.split('|').map(|part| part.trim_ascii().to_string());
 
-            let (Some(id), Some(ctype)) = (parts.next(), parts.next()) else {
-                return Err(RibosomeError::InvalidFastaFormat);
-            };
-
-            if ctype.is_empty() {
-                return Err(RibosomeError::NoCtype(name));
+            if let (Some(id), Some(ctype)) = (parts.next(), parts.next())
+                && !ctype.is_empty()
+            {
+                Ok(QueryRecord { id, nucleotides, ctype })
+            } else {
+                Err(format!("Invalid FASTA header found. Expected ID or ID|ctype, found {name}",).into())
             }
-
-            Ok(QueryRecord { id, nucleotides, ctype })
         } else {
             // TODO : handle unclassified queries
             Ok(QueryRecord {
