@@ -65,7 +65,9 @@ impl StateRange {
 /// The range within the query and reference where a continguous block of
 /// matches occurs.
 ///
-/// The two ranges will be the same length.
+/// ## Validity
+///
+/// The two ranges should be the same length.
 #[derive(Clone, Debug)]
 pub(crate) struct MatchRange {
     /// The 0-based end-exclusive range of the match within the query.
@@ -95,7 +97,7 @@ impl MatchRange {
     /// Shifts the `query_range` to the right (addition) without altering the
     /// range in the reference.
     pub(crate) fn shift_query_right(&mut self, amount: usize) {
-        self.query_range = self.query_range.start + amount..self.query_range.end + amount;
+        self.query_range = self.query_range.add(amount);
     }
 }
 
@@ -103,14 +105,14 @@ impl InsertionRange {
     /// Shifts the `query_range` to the right (addition) without altering the
     /// index in the reference.
     pub(crate) fn shift_query_right(&mut self, amount: usize) {
-        self.query_range = self.query_range.start + amount..self.query_range.end + amount;
+        self.query_range = self.query_range.add(amount);
     }
 }
 
 /// Alignment state ranges converted to CDS coordinates after exon intersection.
 #[derive(Clone, Debug)]
 pub(crate) enum CdsStateRange {
-    M(CdsMatchRanges),
+    M(CdsMatchRange),
     D(CdsDeletionRange),
     I(CdsInsertionRange),
 }
@@ -118,7 +120,7 @@ pub(crate) enum CdsStateRange {
 impl CdsStateRange {
     /// Extracts a mutable reference to a [`CdsMatchRanges`], or `None` is a
     /// different variant is present.
-    pub fn match_range_mut(&mut self) -> Option<&mut CdsMatchRanges> {
+    pub fn match_range_mut(&mut self) -> Option<&mut CdsMatchRange> {
         match self {
             CdsStateRange::M(cds_match_ranges) => Some(cds_match_ranges),
             _ => None,
@@ -126,43 +128,52 @@ impl CdsStateRange {
     }
 }
 
+/// The range within the query and coding sequence where a contiguous block of
+/// matches occurs.
 #[derive(Clone, Debug)]
-pub(crate) struct CdsMatchRanges {
+pub(crate) struct CdsMatchRange {
+    /// The 0-based end-exclusive range of the match within the query.
     pub(crate) query_range: Range<usize>,
     pub(crate) cds_range:   Range<usize>,
 }
 
-impl CdsMatchRanges {
-    /// Extend the end of both ranges by `amount`.
-    pub(crate) fn extend_end(&mut self, amount: usize) {
-        self.cds_range.end += amount;
-        self.query_range.end += amount;
-    }
-
-    /// Shrink from the end of both ranges by `amount`.
-    pub(crate) fn shrink_end(&mut self, amount: usize) {
-        self.cds_range.end -= amount;
-        self.query_range.end -= amount;
-    }
-
-    /// Extend the start of both ranges earlier by `amount`.
+impl CdsMatchRange {
+    /// Extends the start of both ranges by `amount`.
+    ///
+    /// This _decreases_ the start of the ranges.
     pub(crate) fn extend_start(&mut self, amount: usize) {
         self.cds_range.start -= amount;
         self.query_range.start -= amount;
     }
 
-    /// Shrink from the start of both ranges by `amount` (move start later).
-    pub(crate) fn shrink_start(&mut self, amount: usize) {
-        debug_assert!(amount <= self.cds_range.len());
-        debug_assert!(amount <= self.query_range.len());
-
-        self.cds_range.start += amount;
-        self.query_range.start += amount;
+    /// Extends the end of both ranges by `amount`.
+    ///
+    /// This _increases_ the end of the ranges.
+    pub(crate) fn extend_end(&mut self, amount: usize) {
+        self.cds_range.end += amount;
+        self.query_range.end += amount;
     }
 
-    /// Shift ONLY the `query_range` (add) right by the `offset`
-    pub(crate) fn shift_query_right(&mut self, offset: usize) {
-        self.query_range = self.query_range.start + offset..self.query_range.end + offset;
+    /// Cuts indices from the start of both ranges by `amount`.
+    ///
+    /// This _increases_ the start of the ranges.
+    pub(crate) fn cut_start(&mut self, amount: usize) {
+        self.cds_range.start += amount;
+        self.query_range.start += amount;
+
+        debug_assert!(self.cds_range.start <= self.cds_range.end);
+        debug_assert!(self.query_range.start <= self.query_range.end);
+    }
+
+    /// Cuts indices from the end of both ranges by `amount`.
+    ///
+    /// This _decreases_ the end of the ranges.
+    pub(crate) fn cut_end(&mut self, amount: usize) {
+        self.cds_range.end -= amount;
+        self.query_range.end -= amount;
+
+        debug_assert!(self.cds_range.start <= self.cds_range.end);
+        debug_assert!(self.query_range.start <= self.query_range.end);
     }
 }
 
@@ -172,16 +183,21 @@ pub(crate) struct CdsDeletionRange {
 }
 
 impl CdsDeletionRange {
-    /// Shift deletion CDS left (subtract) by amount
+    /// Shifts the deletion in the coding sequence to the left by `amount`.
+    ///
+    /// This subtracts `amount` from the start and end of the range.
     pub(crate) fn shift_left(&mut self, amount: usize) {
-        self.cds_range = self.cds_range.start - amount..self.cds_range.end - amount;
+        self.cds_range = self.cds_range.sub(amount);
     }
 
-    /// Shift deletion CDS right (add) by amount
+    /// Shifts the deletion in the coding sequence to the right by `amount`.
+    ///
+    /// This adds `amount` to the start and end of the range.
     pub(crate) fn shift_right(&mut self, amount: usize) {
-        self.cds_range = self.cds_range.start + amount..self.cds_range.end + amount;
+        self.cds_range = self.cds_range.add(amount);
     }
 
+    /// Returns the length of the deletion.
     pub(crate) fn len(&self) -> usize {
         self.cds_range.len()
     }
@@ -211,69 +227,70 @@ impl CdsInsertionRange {
         self.cds_index.index_after_ins / 3
     }
 
+    // TODO: What is this used for? Why are both fields modified?
     /// Shift state left (subtract) by offset
     pub(crate) fn shift_left(&mut self, amount: usize) {
         self.cds_index.index_after_ins -= amount;
         self.query_range = self.query_range.start - amount..self.query_range.end - amount;
     }
 
-    /// Only shift the `query_range` right (add) and not the CDS.
-    pub(crate) fn shift_query_right(&mut self, amount: usize) {
-        self.query_range = self.query_range.start + amount..self.query_range.end + amount;
-    }
-
+    // TODO: What is this used for? Why are both fields modified?
     /// Shift state right (add) by offset
     pub(crate) fn shift_right(&mut self, amount: usize) {
         self.cds_index.index_after_ins += amount;
         self.query_range = self.query_range.start + amount..self.query_range.end + amount;
     }
 
+    /// Returns the length of the insertion.
     pub(crate) fn len(&self) -> usize {
         self.query_range.len()
     }
 }
 
 impl MatchRange {
-    fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsMatchRanges> {
-        if self.ref_range.end <= exon.ref_range.start || exon.ref_range.end <= self.ref_range.start {
-            None
-        } else {
-            // TODO: The saturating sub followed by addition/subtraction is a
-            // convoluted way of taking the minimum/maximum
+    fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsMatchRange> {
+        self.ref_range.overlaps(&exon.ref_range).then(|| {
+            // The number bases that the match range extends past the end of the
+            // exon on the left
+            let cut_start = exon.ref_range.start.saturating_sub(self.ref_range.start);
 
             // The number of bases that the match range extends past the end of
             // the exon on the right
-            let end_diff = self.ref_range.end.saturating_sub(exon.ref_range.end);
-            // The number bases that the match range extends past the end of the
-            // exon on the left
-            let start_diff = exon.ref_range.start.saturating_sub(self.ref_range.start);
-            // The start of the intersected range, in the reference coordinates
-            let clipped_ref_start = self.ref_range.start + start_diff;
-            // The end of the intersected range, in the reference coordinates
-            let clipped_ref_end = self.ref_range.end - end_diff;
+            let cut_end = self.ref_range.end.saturating_sub(exon.ref_range.end);
 
-            Some(CdsMatchRanges {
-                query_range: self.query_range.start + start_diff..self.query_range.end - end_diff,
-                cds_range:   clipped_ref_start - exon.ref_to_cds_offset..clipped_ref_end - exon.ref_to_cds_offset,
-            })
-        }
+            // Cut the reference range to not include this overhang
+            let ref_range = self.ref_range.cut(cut_start, cut_end);
+
+            // Cut the query range by the same amounts
+            let query_range = self.query_range.cut(cut_start, cut_end);
+
+            // Shift the reference range to the left to for the CDS range
+            let cds_range = ref_range.sub(exon.ref_to_cds_offset);
+
+            CdsMatchRange { query_range, cds_range }
+        })
     }
 }
 
 impl DeletionRange {
-    // TODO: This is identical to above
     fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsDeletionRange> {
-        if self.ref_range.end <= exon.ref_range.start || exon.ref_range.end <= self.ref_range.start {
-            None
-        } else {
-            let end_diff = self.ref_range.end.saturating_sub(exon.ref_range.end);
-            let start_diff = exon.ref_range.start.saturating_sub(self.ref_range.start);
-            let clipped_ref_start = self.ref_range.start + start_diff;
-            let clipped_ref_end = self.ref_range.end - end_diff;
-            Some(CdsDeletionRange {
-                cds_range: clipped_ref_start - exon.ref_to_cds_offset..clipped_ref_end - exon.ref_to_cds_offset,
-            })
-        }
+        self.ref_range.overlaps(&exon.ref_range).then(|| {
+            // The number bases that the match range extends past the end of the
+            // exon on the left
+            let cut_start = exon.ref_range.start.saturating_sub(self.ref_range.start);
+
+            // The number of bases that the match range extends past the end of
+            // the exon on the right
+            let cut_end = self.ref_range.end.saturating_sub(exon.ref_range.end);
+
+            // Cut the reference range to not include this overhang
+            let ref_range = self.ref_range.cut(cut_start, cut_end);
+
+            // Shift the reference range to the left to for the CDS range
+            let cds_range = ref_range.sub(exon.ref_to_cds_offset);
+
+            CdsDeletionRange { cds_range }
+        })
     }
 }
 
@@ -316,6 +333,7 @@ impl StateRange {
         for Ciglet { inc, op } in &alignment.states {
             match op {
                 b'M' | b'=' | b'X' => {
+                    // Validity: both ranges are length inc
                     states.push(Self::M(MatchRange {
                         query_range: query_start..query_start + inc,
                         ref_range:   ref_start..ref_start + inc,
@@ -346,5 +364,46 @@ impl StateRange {
         }
 
         states
+    }
+}
+
+pub(crate) trait RangeExt {
+    /// Adds a constant value to the range, shifting it right.
+    #[must_use]
+    fn add(&self, n: usize) -> Self;
+
+    /// Subtracts a constant value from the range, shifting it left.
+    #[must_use]
+    fn sub(&self, n: usize) -> Self;
+
+    /// Shrinks a range by cutting `start` from the beginning and `end` from the
+    /// end.
+    ///
+    /// This increases the beginning of the range and decreases the end.
+    #[must_use]
+    fn cut(&self, start: usize, end: usize) -> Self;
+
+    /// Checks whether the range overlaps with another.
+    #[must_use]
+    fn overlaps(&self, other: &Self) -> bool;
+}
+
+impl RangeExt for Range<usize> {
+    fn add(&self, n: usize) -> Self {
+        self.start + n..self.end + n
+    }
+
+    fn sub(&self, n: usize) -> Self {
+        self.start - n..self.end - n
+    }
+
+    fn cut(&self, start: usize, end: usize) -> Self {
+        self.start + start..self.end - end
+    }
+
+    fn overlaps(&self, other: &Self) -> bool {
+        // Both ranges must end strictly after the other one starts in order for
+        // overlap to occur
+        self.end > other.start && other.end > self.start
     }
 }

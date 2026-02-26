@@ -105,11 +105,11 @@ impl<'a> ReferenceGroup<'a> {
         Ok(())
     }
 
-    /// Finds the best alignment for a query sequence against all profiles in
-    /// this group.
+    /// Finds the best local Smith-Waterman alignment for a query sequence
+    /// against all profiles in this group.
     ///
-    /// Returns the alignment with the highest score, or `None` if no alignment
-    /// was found.
+    /// The alignment with the highest score is considered best, or `None` is
+    /// returned if no alignment was found.
     pub fn best_alignment<T: AsRef<[u8]> + ?Sized>(&self, query: &T) -> Option<Alignment<u32>> {
         // TODO: Why did we hard code from i16? Will this potentially disagree
         // with aligner? Also, the use of get feels questionable. Even if it is

@@ -2,7 +2,7 @@ use crate::{
     annotation::hashing::{nt_id, variant_hash},
     data::{
         products::{ComputedDeletion, ComputedInsertion, ComputedProduct, ProductSpec},
-        ranges::{CdsMatchRanges, CdsStateRange},
+        ranges::{CdsMatchRange, CdsStateRange, RangeExt},
     },
 };
 use std::{cmp::Ordering, iter::Extend, ops::Range};
@@ -187,10 +187,10 @@ impl<'a> Product<'a> {
                 // Insertion shifts right 1 for frame 2 split codon
                 left_match.extend_end(1);
                 ins.shift_right(1);
-                right_match.shrink_start(1);
+                right_match.cut_start(1);
             } else {
                 // Insertion shifts left 2 for frame 2 split codon
-                left_match.shrink_end(2);
+                left_match.cut_end(2);
                 ins.shift_left(2);
                 right_match.extend_start(2);
             }
@@ -214,14 +214,14 @@ impl<'a> Product<'a> {
             // bases in query_seq
             if product_spec.codon_left_ge_right(a1l1, a1r2, codon_position as u32) {
                 // Insertion shifts left 1 for frame 1 split codon
-                left_match.shrink_end(1);
+                left_match.cut_end(1);
                 ins.shift_left(1);
                 right_match.extend_start(1);
             } else {
                 // Insertion shifts right 2 for frame 1 split codon
                 left_match.extend_end(2);
                 ins.shift_right(2);
-                right_match.shrink_start(2);
+                right_match.cut_start(2);
             }
         }
 
@@ -272,10 +272,10 @@ impl<'a> Product<'a> {
                 // Deletion shift right 2 for frame 1 (2 bases move left)
                 left_match.extend_end(2);
                 del.shift_right(2);
-                right_match.shrink_start(2);
+                right_match.cut_start(2);
             } else {
                 // Deletion shift left 1 for frame 1 (1 base moves right)
-                left_match.shrink_end(1);
+                left_match.cut_end(1);
                 del.shift_left(1);
                 right_match.extend_start(1);
             }
@@ -299,14 +299,14 @@ impl<'a> Product<'a> {
 
             if shift_del_left {
                 // Deletion left shift 2 for frame 2 (2 bases move right)
-                left_match.shrink_end(2);
+                left_match.cut_end(2);
                 del.shift_left(2);
                 right_match.extend_start(2);
             } else {
                 // Deletion right shift 1 for frame 2 (1 base moves left)
                 left_match.extend_end(1);
                 del.shift_right(1);
-                right_match.shrink_start(1);
+                right_match.cut_start(1);
             }
         }
 
@@ -316,7 +316,7 @@ impl<'a> Product<'a> {
     /// Get the match ranges to modify and the indel
     fn partition_states(
         product_ranges: &mut [CdsStateRange], idx: usize,
-    ) -> Option<(&mut CdsMatchRanges, &mut CdsStateRange, &mut CdsMatchRanges)> {
+    ) -> Option<(&mut CdsMatchRange, &mut CdsStateRange, &mut CdsMatchRange)> {
         let (left, mid, right) = product_ranges.split_around_mut(idx)?;
 
         let l = left.iter_mut().rev().filter_map(CdsStateRange::match_range_mut).next()?;
@@ -332,8 +332,8 @@ impl<'a> Product<'a> {
 
         for state in &mut self.product_ranges {
             match state {
-                CdsStateRange::M(m) => m.shift_query_right(offset),
-                CdsStateRange::I(i) => i.shift_query_right(offset),
+                CdsStateRange::M(m) => m.query_range = m.query_range.add(offset),
+                CdsStateRange::I(i) => i.query_range = i.query_range.add(offset),
                 _ => {}
             }
         }

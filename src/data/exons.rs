@@ -16,7 +16,8 @@ pub(crate) struct Exons {
 /// an offset from the previous exon.
 #[derive(Debug, Clone)]
 pub struct ExonCoords {
-    /// The range where the exon occurs within the reference sequence.
+    /// The 0-based end-exclusive range where the exon occurs within the
+    /// reference sequence.
     ///
     /// ## Validity
     ///

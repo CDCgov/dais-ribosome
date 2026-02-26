@@ -20,8 +20,10 @@ pub(crate) struct ProductSpec {
 
 impl ProductSpec {
     pub(crate) fn make_product_ranges<'a>(&'a self, state_ranges: &[StateRange]) -> Product<'a> {
+        // TODO: Is this a good enough capacity? We could end up exceeding it.
         let mut product_ranges = Vec::with_capacity(state_ranges.len());
-        for state in state_ranges.iter() {
+
+        for state in state_ranges {
             for exon in &self.exons.coords {
                 // A state can span multiple exons: e.g., long match for full contig
                 // An exon can span multiple states: e.g., a match with an indel
