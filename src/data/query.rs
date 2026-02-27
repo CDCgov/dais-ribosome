@@ -7,12 +7,11 @@ use zoe::{
 
 /// [`QueryRecord`] contains the id, compound type (ctype), and [`Nucleotides`]
 /// data.
-///
-/// The nucleotides are guaranteed to be unaligned, uppercase IUPAC (with `T`
-/// instead of `U`).
 #[derive(Debug)]
 pub struct QueryRecord {
     pub id:          String,
+    /// The nucleotides sequence, containing unaligned, uppercase IUPAC (with `T`
+    /// instead of `U`).
     pub nucleotides: Nucleotides,
     pub ctype:       String,
 }

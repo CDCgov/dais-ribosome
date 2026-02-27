@@ -192,8 +192,15 @@ impl Iterator for TsvReader {
     }
 }
 
-/// Parses a semicolon-delimited list of 1-based ranges, converting them to
-/// 0-based [`ExonCoords`] ranges. (TODO)
+/// Parses a semicolon-delimited list of 1-based end-inclusive ranges,
+/// converting them to 0-based [`ExonCoords`] ranges.
+///
+/// ## Errors
+///
+/// - Each range must successfully parse
+/// - The ranges must be non-overlapping and in order
+/// - The lengths of all the ranges must sum to a multiple of three (it must be
+///   in-frame). Each individual range can have an arbitrary length however.
 fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
     let mut exon_ranges: Vec<ExonCoords> = Vec::new();
     let mut ref_to_cds_offset = 0;

@@ -19,8 +19,9 @@ pub struct ComputedGenomeInsertion {
 /// This struct holds the expensive-to-compute data for genome output.
 #[derive(Debug)]
 pub struct PrecomputedGenomeData {
-    /// SHA1 hash of genome sequence
-    pub genome_id:     String,
+    /// SHA1 hash of genome sequence, or `None` if no DNA data remained after
+    /// filtering.
+    pub genome_id:     Option<String>,
     /// Genome length (ungapped)
     pub genome_length: usize,
     /// Whether any insertion exists

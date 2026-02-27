@@ -21,9 +21,14 @@ pub struct ExonCoords {
     ///
     /// ## Validity
     ///
-    /// This range is always non-empty.
-    pub(crate) ref_range:         Range<usize>,
-    /// The offset of this exon from the previous exon (i.e., the length of the
-    /// intron between them).
+    /// This range is always non-empty. This range need not be a multiple of 3
+    /// in length.
+    pub(crate) ref_range: Range<usize>,
+
+    /// The offset of the reference coordinates to the coding sequence
+    /// coordinates (i.e., the sum of the intron lengths up until this exon).
+    ///
+    /// This is subtracted from reference coordinates to get coding sequence
+    /// coordinates.
     pub(crate) ref_to_cds_offset: usize,
 }

@@ -22,6 +22,7 @@ pub struct RibosomeOutput<'a> {
 
 impl<'a> RibosomeOutput<'a> {
     pub fn materialize(self) -> ComputedRibosomeOutput<'a> {
+        // Validity: query.nucleotides contains unaligned, uppercase IUPAC bases
         ComputedRibosomeOutput {
             states:     self
                 .states
@@ -59,13 +60,18 @@ pub(crate) struct GenomeAndProductStates<'a> {
 }
 
 impl<'a> GenomeAndProductStates<'a> {
+    /// Computes the output data for all products in TODO
+    ///
+    /// ## Validity
+    ///
+    /// The `query` should contain unaligned, uppercase IUPAC bases.
     fn materialize(self, query: &Nucleotides) -> ComputedGenomeAndProductStates<'a> {
         ComputedGenomeAndProductStates {
             reference_id:      self.reference_id,
             ref_len:           self.ref_len,
             genome_aln_states: self.genome_aln_states,
-            products:          self.products.into_iter().map(|product| product.materialize(query)).collect(),
             computed_genome:   self.computed_genome,
+            products:          self.products.into_iter().map(|product| product.materialize(query)).collect(),
         }
     }
 }
@@ -102,17 +108,13 @@ impl<'a> ComputedRibosomeOutput<'a> {
     pub fn ins_rows(&self) -> impl Iterator<Item = InsRow<'_>> + '_ {
         self.states.iter().flat_map(move |state| {
             state.products.iter().flat_map(move |computed_product| {
-                computed_product
-                    .insertions
-                    .iter()
-                    .filter(|ins| !ins.filtered)
-                    .map(move |insertion| InsRow {
-                        id: &self.query.id,
-                        ctype: &self.query.ctype,
-                        ref_id: state.reference_id,
-                        protein: &computed_product.product_spec.name,
-                        insertion,
-                    })
+                computed_product.insertions.iter().map(move |insertion| InsRow {
+                    id: &self.query.id,
+                    ctype: &self.query.ctype,
+                    ref_id: state.reference_id,
+                    protein: computed_product.product_name,
+                    insertion,
+                })
             })
         })
     }
@@ -125,7 +127,7 @@ impl<'a> ComputedRibosomeOutput<'a> {
                     id: &self.query.id,
                     ctype: &self.query.ctype,
                     ref_id: state.reference_id,
-                    protein: &computed_product.product_spec.name,
+                    protein: computed_product.product_name,
                     computed_product,
                     deletion,
                 })
@@ -226,7 +228,7 @@ impl<'a> ComputedGenomeAndProductStates<'a> {
             }
 
             let genome_seq = Nucleotides::from_vec_unchecked(genome_seq_bytes);
-            let genome_id = nt_id(&genome_seq).unwrap_or_default();
+            let genome_id = nt_id(&genome_seq);
             let genome_length = genome_seq.len();
             let genome_aln = Nucleotides::from_vec_unchecked(genome_aln_bytes);
 

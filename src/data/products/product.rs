@@ -1,11 +1,11 @@
 use crate::{
     annotation::hashing::{nt_id, variant_hash},
     data::{
-        products::{ComputedDeletion, ComputedInsertion, ComputedProduct, ProductSpec},
+        products::{ComputedProduct, ProductSpec, incremental_products::ComputedIncrementalProducts},
         ranges::{CdsMatchRange, CdsStateRange, RangeExt},
     },
 };
-use std::{cmp::Ordering, iter::Extend, ops::Range};
+use std::{cmp::Ordering, ops::Range};
 use zoe::prelude::*;
 
 #[derive(Debug)]
@@ -229,13 +229,12 @@ impl<'a> Product<'a> {
     }
 
     /// Fix a deletion at index `i` by shifting it to an in-frame position.
-    fn fix_deletion_frame(&mut self, idx: usize, query: impl AsRef<[u8]>) -> Option<()> {
+    fn fix_deletion_frame(&mut self, idx: usize, query: &[u8]) -> Option<()> {
         let Product {
             product_ranges,
             product_spec,
             ..
         } = self;
-        let query_seq = query.as_ref();
 
         let Some((left_match, CdsStateRange::D(del), right_match)) = Self::partition_states(product_ranges, idx) else {
             return None;
@@ -252,9 +251,9 @@ impl<'a> Product<'a> {
         if frame == 1 {
             // Frame 1 pivot codon: is last 1 base before gap + first 2 bases
             // after gap
-            let cp1 = query_seq.get(left_match.query_range.end - 1)?.to_ascii_uppercase();
-            let cp2 = query_seq.get(right_match.query_range.start)?.to_ascii_uppercase();
-            let cp3 = query_seq.get(right_match.query_range.start + 1)?.to_ascii_uppercase();
+            let cp1 = query.get(left_match.query_range.end - 1)?.to_ascii_uppercase();
+            let cp2 = query.get(right_match.query_range.start)?.to_ascii_uppercase();
+            let cp3 = query.get(right_match.query_range.start + 1)?.to_ascii_uppercase();
 
             let pivot = [cp1, cp2, cp3];
 
@@ -285,9 +284,9 @@ impl<'a> Product<'a> {
         } else if frame == 2 {
             // Frame2 pivot codon is last 2 bases before gap + first 1 base
             // after gap.
-            let cp1 = query_seq.get(left_match.query_range.end - 2)?.to_ascii_uppercase();
-            let cp2 = query_seq.get(left_match.query_range.end - 1)?.to_ascii_uppercase();
-            let cp3 = query_seq.get(right_match.query_range.start)?.to_ascii_uppercase();
+            let cp1 = query.get(left_match.query_range.end - 2)?.to_ascii_uppercase();
+            let cp2 = query.get(left_match.query_range.end - 1)?.to_ascii_uppercase();
+            let cp3 = query.get(right_match.query_range.start)?.to_ascii_uppercase();
 
             let pivot = [cp1, cp2, cp3];
 
@@ -361,140 +360,62 @@ impl<T> SliceExt<T> for [T] {
 }
 
 impl<'a> Product<'a> {
-    /// Compute output data from this product.
-    pub fn materialize(self, query: &Nucleotides) -> ComputedProduct<'a> {
-        let query_bytes = query.as_bytes();
-        let range_count = self.product_ranges.len();
+    /// Computes the output data for this product, materializing all ranges into
+    /// sequences using `query`.
+    ///
+    /// ## Validity
+    ///
+    /// The `query` should contain unaligned, uppercase IUPAC bases.
+    pub fn materialize(&self, query: &Nucleotides) -> ComputedProduct<'a> {
+        // Compute all the fields that rely on incremental updates until the
+        // first stop codon
+        let incremental = ComputedIncrementalProducts::new(query, self);
 
-        // Pre-pad CDS alignment for proper 5' reading frame
-        let leading = self.leading_cds_gap_len();
-        let mut cds_seq_bytes = Vec::new();
-        let mut cds_aln_bytes = vec![b'.'; leading];
-        let mut query_coords = String::with_capacity((5 + 2 + 5) * range_count);
-        let mut cds_coords = String::with_capacity((5 + 2 + 5) * range_count);
-        let mut insertions = Vec::new();
-        let mut deletions = Vec::new();
-        let mut has_shift_indel = false;
+        let ComputedIncrementalProducts {
+            cds_aln,
+            aa_aln,
+            cds_seq,
+            has_insertion,
+            has_shift_indel,
+            query_coords,
+            cds_coords,
+            insertions,
+            deletions,
+            trailing_cds_unaligned,
+        } = incremental;
 
-        let mut has_coords = false;
-        for state in self.product_ranges.iter() {
-            match state {
-                CdsStateRange::M(m) => {
-                    let slice = &query_bytes[m.query_range.clone()];
-                    cds_seq_bytes.extend_from_slice(slice);
-                    cds_aln_bytes.extend_from_slice(slice);
+        // Form aa_seq by splicing insertions into aa_aln (and removing
+        // deletions)
+        let aa_seq = {
+            let mut out = AminoAcids::new();
 
-                    if has_coords {
-                        query_coords.push(';');
-                        cds_coords.push(';');
-                    }
-                    has_coords = true;
-                    query_coords.push_range(&m.query_range);
-                    cds_coords.push_range(&m.cds_range);
-                }
-                CdsStateRange::I(ins) => {
-                    let slice = &query_bytes[ins.query_range.clone()];
+            let mut aa_aln_without_deletions = aa_aln.iter().filter(|&&b| b != b'-' && b != b'.').copied();
 
-                    cds_seq_bytes.extend_from_slice(slice);
-                    if has_coords {
-                        query_coords.push(';');
-                        cds_coords.push(';');
-                    }
-                    has_coords = true;
-                    query_coords.push_range(&ins.query_range);
+            // The number of amino acids consumed from aa_aln so far
+            let mut num_consumed = 0;
+            for insertion in &insertions {
+                // 1-based index after which insertion occurs is equivalently
+                // the count of the number of amino acids before the insertion.
+                let num_to_consume = insertion.upstream_aa - num_consumed;
 
-                    // If the insertion happens at the beginning of the
-                    // sequence, do not include this coordinate in cds_coords.
-                    if ins.cds_index.index_after_ins() > 0 {
-                        cds_coords.push_upstream(ins.cds_index.index_before_ins());
-                    }
+                out.extend(aa_aln_without_deletions.by_ref().take(num_to_consume));
+                out.extend_from_slice(&insertion.inserted_residues);
 
-                    if !ins.len().is_multiple_of(3) {
-                        has_shift_indel = true;
-                    }
-
-                    // 0-based index after is equivalent to 1-based
-                    // index before
-                    let upstream_nt = ins.cds_index.index_after_ins();
-                    insertions.push(ComputedInsertion::new(upstream_nt, slice));
-                }
-                CdsStateRange::D(del) => {
-                    cds_aln_bytes.extend(std::iter::repeat_n(b'-', del.len()));
-
-                    let del_cds_len = del.len();
-                    if !del_cds_len.is_multiple_of(3) {
-                        has_shift_indel = true;
-                    }
-
-                    let in_frame = del.cds_range.start.is_multiple_of(3) && del_cds_len.is_multiple_of(3);
-
-                    // TODO: this behavior will need regression tested
-                    let del_aa_start = (del.cds_range.start / 3) + 1;
-                    let del_aa_end = (del.cds_range.end - 1) / 3 + 1;
-                    let del_aa_len = if in_frame {
-                        del_cds_len / 3
-                    } else {
-                        del_aa_end - del_aa_start + 1
-                    };
-
-                    deletions.push(ComputedDeletion {
-                        del_aa_start,
-                        del_aa_end,
-                        del_aa_len,
-                        in_frame,
-                        del_cds_start: del.cds_range.start + 1,
-                        del_cds_end: del.cds_range.end,
-                        del_cds_len,
-                    });
-                }
+                num_consumed += num_to_consume;
             }
-        }
 
-        // Compute has_insertion before adding stop extension inserts
-        // so that the .seq output flag matches Perl makeProducts.pl behavior.
-        let has_insertion = !insertions.is_empty();
+            // Consume the rest of the amino acids after the last insertion
+            out.extend(aa_aln_without_deletions);
 
-        // If a stop extension applies to this product, materialize it as
-        // a regular insertion at the end of the CDS.
-        if let Some(ref ext_range) = self.stop_extension_query_range
-            && let Some(slice) = query_bytes.get(ext_range.clone())
-        {
-            let upstream_nt = self.product_spec.exons.total_cds_length;
-            let ins = ComputedInsertion::new(upstream_nt, slice);
-            if !ins.filtered {
-                insertions.push(ins);
-            }
-        }
+            out
+        };
 
-        let cds_seq: Nucleotides = cds_seq_bytes.into();
-        let cds_aln: Nucleotides = cds_aln_bytes.into();
-
-        let aa_aln = cds_aln.translate_to_stop();
-
-        // Derive aa_seq from aa_aln: strip alignment characters (`-` and `.`),
-        // then splice in insertion residues at their correct AA positions.
-        // This mirrors the Perl pipeline's `fa2delim -B -I` behavior and
-        // ensures shift-deletions don't corrupt the reading frame.
-        let mut aa_seq_bytes: Vec<u8> = aa_aln.iter().filter(|&&b| b != b'-' && b != b'.').copied().collect();
-
-        let mut offset = 0;
-        for ins in &insertions {
-            let pos = ins.upstream_aa + offset;
-            let residue_bytes = ins.inserted_residues.as_bytes();
-            let insert_at = pos.min(aa_seq_bytes.len());
-            for (j, &b) in residue_bytes.iter().enumerate() {
-                aa_seq_bytes.insert(insert_at + j, b);
-            }
-            offset += residue_bytes.len();
-        }
-
-        let aa_seq = AminoAcids::from_vec_unchecked(aa_seq_bytes);
-        let cds_id = nt_id(&cds_seq).unwrap_or_default();
-        let variant_hash = variant_hash(&aa_seq).unwrap_or_default();
+        // Get hashes
+        let cds_id = nt_id(&cds_seq);
+        let variant_hash = variant_hash(&aa_seq);
 
         ComputedProduct {
-            product_ranges: self.product_ranges,
-            product_spec: self.product_spec,
+            product_name: &self.product_spec.name,
             cds_seq,
             cds_aln,
             cds_id,
@@ -507,31 +428,7 @@ impl<'a> Product<'a> {
             cds_coords,
             insertions,
             deletions,
+            trailing_cds_unaligned,
         }
-    }
-}
-
-trait PushRange {
-    fn push_range(&mut self, range: &Range<usize>);
-    fn push_upstream(&mut self, index: usize);
-}
-
-impl PushRange for String {
-    #[inline]
-    fn push_range(&mut self, range: &Range<usize>) {
-        let mut buff = core::fmt::NumBuffer::new();
-
-        // 0-based half-open to 1-based inclusive
-        self.push_str((range.start + 1).format_into(&mut buff));
-        self.push_str("..");
-        self.push_str(range.end.format_into(&mut buff));
-    }
-
-    #[inline]
-    fn push_upstream(&mut self, index: usize) {
-        let mut buff = core::fmt::NumBuffer::new();
-
-        // 0-based upstream index to 1-based upstream position
-        self.push_str((index + 1).format_into(&mut buff));
     }
 }

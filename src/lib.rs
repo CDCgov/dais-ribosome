@@ -1,9 +1,6 @@
 #![feature(int_format_into)]
 
-// =============================================================================
-// Module hierarchy
-// =============================================================================
-
+use std::ops::ControlFlow;
 use zoe::{alignment::AlignmentStates, data::cigar::Ciglet};
 
 /// Configuration loading and path resolution.
@@ -14,6 +11,94 @@ pub mod data;
 
 /// Protein annotation engine.
 pub mod annotation;
+
+pub trait IteratorExt: Iterator {
+    fn take_until_inclusive<F>(self, f: F) -> TakeUntilInclusive<Self, F>
+    where
+        Self: Sized,
+        F: FnMut(&Self::Item) -> bool, {
+        TakeUntilInclusive::new(self, f)
+    }
+}
+
+impl<I> IteratorExt for I where I: Iterator {}
+
+/// An iterator adaptor that consumes elements until the given predicate is
+/// `true`, including that element.
+///
+/// This is based on `TakeWhileInclusive` from Itertools, but with the predicate
+/// negated.
+#[derive(Clone)]
+pub struct TakeUntilInclusive<I, F> {
+    iter:      I,
+    predicate: F,
+    done:      bool,
+}
+
+impl<I, F> TakeUntilInclusive<I, F>
+where
+    I: Iterator,
+    F: FnMut(&I::Item) -> bool,
+{
+    /// Create a new [`TakeUntilInclusive`] from an iterator and a predicate.
+    pub(crate) fn new(iter: I, predicate: F) -> Self {
+        Self {
+            iter,
+            predicate,
+            done: false,
+        }
+    }
+}
+
+impl<I, F> Iterator for TakeUntilInclusive<I, F>
+where
+    I: Iterator,
+    F: FnMut(&I::Item) -> bool,
+{
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done {
+            None
+        } else {
+            self.iter.next().inspect(|item| {
+                if (self.predicate)(item) {
+                    self.done = true;
+                }
+            })
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.done {
+            (0, Some(0))
+        } else {
+            (0, self.iter.size_hint().1)
+        }
+    }
+
+    fn fold<B, Fold>(mut self, init: B, mut f: Fold) -> B
+    where
+        Fold: FnMut(B, Self::Item) -> B, {
+        if self.done {
+            init
+        } else {
+            let out = self.iter.try_fold(init, |mut acc, item| {
+                let exit = (self.predicate)(&item);
+                acc = f(acc, item);
+                if exit {
+                    ControlFlow::Break(acc)
+                } else {
+                    ControlFlow::Continue(acc)
+                }
+            });
+
+            match out {
+                ControlFlow::Continue(acc) | ControlFlow::Break(acc) => acc,
+            }
+        }
+    }
+}
 
 /// An extension trait for [`AlignmentStates`], providing functionality custom
 /// to DAIS-ribosome.

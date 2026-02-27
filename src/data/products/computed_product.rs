@@ -1,119 +1,142 @@
-use crate::data::{products::ProductSpec, ranges::CdsStateRange};
+use crate::data::{products::incremental_products::Coords, ranges::InsertionIdx};
 use zoe::prelude::*;
 
 /// Pre-computed product data ready for output.
 #[derive(Debug)]
 pub struct ComputedProduct<'a> {
-    pub(crate) product_ranges: Vec<CdsStateRange>,
-    pub(crate) product_spec:   &'a ProductSpec,
-
+    /// The product name
+    pub product_name:           &'a str,
     /// CDS sequence (without deletions, includes insertions)
-    pub cds_seq:         Nucleotides,
+    pub cds_seq:                Nucleotides,
     /// CDS alignment (with `-` for deletions, no insertions)
-    pub cds_aln:         Nucleotides,
-    /// SHA1 hash of cleaned CDS sequence
-    pub cds_id:          String,
+    pub cds_aln:                Nucleotides,
+    /// SHA1 hash of cleaned coding sequence, or `None` if no DNA data remained
+    /// after filtering.
+    pub cds_id:                 Option<String>,
     /// Amino acid sequence
-    pub aa_seq:          AminoAcids,
+    pub aa_seq:                 AminoAcids,
     /// Amino acid alignment (with `-` for deletions)
-    pub aa_aln:          AminoAcids,
-    /// MD5 hash of cleaned AA sequence (variant hash)
-    pub variant_hash:    String,
+    pub aa_aln:                 AminoAcids,
+    /// MD5 hash of the cleaned amino acid sequence (variant hash), or `None` if
+    /// no amino acid data remained after filtering.
+    pub variant_hash:           Option<String>,
     /// Whether any insertion exists in this product
-    pub has_insertion:   bool,
+    pub has_insertion:          bool,
     /// Whether any insertion or deletion causes a frameshift (length % 3 != 0)
-    pub has_shift_indel: bool,
+    pub has_shift_indel:        bool,
     /// Query nucleotide coordinates (e.g., "1..45;48..90")
-    pub query_coords:    String,
+    pub query_coords:           Coords,
     /// CDS nucleotide coordinates (e.g., "1..45")
-    pub cds_coords:      String,
-    /// Computed insertions for this product
-    pub insertions:      Vec<ComputedInsertion>,
+    pub cds_coords:             Coords,
+    /// Computed non-filtered insertions for this product
+    pub insertions:             Vec<ComputedInsertion>,
     /// Computed deletions for this product
-    pub deletions:       Vec<ComputedDeletion>,
-}
-
-impl ComputedProduct<'_> {
-    pub(crate) fn trailing_cds_gap_len(&self) -> usize {
-        // Use the furthest CDS end from any M or D state to avoid
-        // double-padding when a deletion covers trailing positions.
-        let last_cds_end = self
-            .product_ranges
-            .iter()
-            .rev()
-            .find_map(|s| match s {
-                CdsStateRange::M(m) => Some(m.cds_range.end),
-                CdsStateRange::D(d) => Some(d.cds_range.end),
-                _ => None,
-            })
-            .unwrap_or(0);
-
-        self.product_spec.exons.total_cds_length - last_cds_end
-    }
+    pub deletions:              Vec<ComputedDeletion>,
+    /// The number of unaligned bases at the end of the coding sequence that
+    /// were soft clipped or appeared after the first stop codon.
+    ///
+    /// This does not include trailing deletions, so that this field can be used
+    /// to render right padding without double counting deletions.
+    pub trailing_cds_unaligned: usize,
 }
 
 /// Pre-computed insertion data ready for output.
 #[derive(Debug)]
 pub struct ComputedInsertion {
-    /// Upstream amino acid position (1-based)
+    /// The upstream amino acid position (1-based) after which the insertion
+    /// occurs.
+    ///
+    /// If the insertion induces a frame shift (i.e., `codon_shift` is nonzero),
+    /// then this is rounded down (the insertion is treated as occuring before
+    /// the split codon). This means that this field may be 0, which would
+    /// represent an insertion within the first codon (before the first amino
+    /// acid).
     pub upstream_aa:          usize,
-    /// Upstream nucleotide position (1-based)
+    /// The upstream nucleotide position (1-based) after which the insertion
+    /// occurs.
     pub upstream_nt:          usize,
-    /// Inserted nucleotides
+    /// All the inserted nucleotides, including any after a stop codon in
+    /// `inserted_residues`.
     pub inserted_nucleotides: Nucleotides,
-    /// Inserted residues (translated)
+    /// Inserted residues, translated to [`AminoAcids`].
+    ///
+    /// This will only contain data up until the first stop codon, and may
+    /// contain a partial codon if the insertion is of a length not divisible by
+    /// 3.
     pub inserted_residues:    AminoAcids,
-    /// Codon shift (0, 1, or 2)
+    /// The codon shift (0, 1, or 2).
+    ///
+    /// If nonzero, this indicates that the insertion causes a frameshift
+    /// mutation.
     pub codon_shift:          usize,
-    /// Whether this insertion should be filtered from AA output
-    pub filtered:             bool,
 }
 
 impl ComputedInsertion {
-    /// Create a `ComputedInsertion` from raw insertion data.
+    /// Creates a [`ComputedInsertion`] from raw insertion data, and returns
+    /// whether it should be filtered.
     ///
-    /// `upstream_nt_pos` is the 1-based upstream nucleotide position in CDS space.
-    pub fn new(upstream_nt_pos: usize, slice: &[u8]) -> Self {
-        let ins_len = slice.len();
-        let inserted_nucleotides = Nucleotides::from_vec_unchecked(slice.to_vec());
+    /// The `upstream_nt_pos` argument is the 0-based upstream nucleotide
+    /// position in CDS space after which the insertion occurs. The second
+    /// return argument is true (indicating that it should be filtered) if the
+    /// insertion length is less than 3 or the insertion is all `N`.
+    ///
+    /// ## Validity
+    ///
+    /// The slice of the query range representing the insertion should contain
+    /// unaligned, uppercase IUPAC bases.
+    pub fn new(upstream_nt_pos: InsertionIdx, slice: &[u8]) -> (Self, bool) {
+        // 0-based index after -> 1-based index before
+        let upstream_nt_pos = upstream_nt_pos.index_after_ins();
 
+        let ins_len = slice.len();
+        let inserted_nucleotides = Nucleotides::from(slice.to_vec());
+
+        // Normally 1-based positions would require converting to 0-based before
+        // using division/modulo. However, the 1-based position after which the
+        // insertion occurs is equivalent to the 0-based index before which the
+        // insertion occurs.
         let upstream_aa = upstream_nt_pos / 3;
         let codon_shift = upstream_nt_pos % 3;
 
-        let (inserted_residues, filtered) = if ins_len < 3 {
-            (AminoAcids::from_vec_unchecked(vec![b'?']), true)
-        } else if slice.iter().all(|&b| b == b'n' || b == b'N') {
-            (AminoAcids::from_vec_unchecked(vec![b'X']), true)
+        let (inserted_residues, filtered) = if ins_len < 3 || slice.iter().all(|&b| b == b'N') {
+            // Do not include the all N insertion or shorter than 3 insertions
+            // in the unaligned amino acid sequence output
+            (AminoAcids::from(Vec::new()), true)
         } else {
             (inserted_nucleotides.translate_to_stop(), false)
         };
 
-        ComputedInsertion {
-            upstream_aa,
-            upstream_nt: upstream_nt_pos,
-            inserted_nucleotides,
-            inserted_residues,
-            codon_shift,
+        (
+            ComputedInsertion {
+                upstream_aa,
+                upstream_nt: upstream_nt_pos,
+                inserted_nucleotides,
+                inserted_residues,
+                codon_shift,
+            },
             filtered,
-        }
+        )
     }
 }
 
 /// Pre-computed deletion data ready for output.
 #[derive(Debug)]
 pub struct ComputedDeletion {
-    /// Deletion start in amino acid coordinates (1-based)
+    /// The start position of the deletion in amino acid coordinates (1-based,
+    /// inclusive).
     pub del_aa_start:  usize,
-    /// Deletion end in amino acid coordinates (1-based)
+    /// The end position of the deletion in amino acid coordinates (1-based,
+    /// inclusive).
     pub del_aa_end:    usize,
-    /// Deletion length in amino acids
+    /// The deletion length in amino acids.
     pub del_aa_len:    usize,
-    /// Whether deletion is in-frame
+    /// Whether deletion is in-frame (both the start position and length must be
+    /// multiples of 3).
     pub in_frame:      bool,
-    /// Deletion start in CDS coordinates (1-based)
+    /// Deletion start in CDS coordinates (1-based).
     pub del_cds_start: usize,
-    /// Deletion end in CDS coordinates (1-based)
+    /// Deletion end in CDS coordinates (1-based).
     pub del_cds_end:   usize,
-    /// Deletion length in nucleotides
+    /// Deletion length in nucleotides.
     pub del_cds_len:   usize,
 }

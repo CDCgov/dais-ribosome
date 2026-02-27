@@ -179,6 +179,8 @@ impl CdsMatchRange {
 
 #[derive(Clone, Debug)]
 pub(crate) struct CdsDeletionRange {
+    /// The range of the deletion within the coding sequence (non-empty,
+    /// 0-based, end-exclusive).
     pub(crate) cds_range: Range<usize>,
 }
 
@@ -289,6 +291,7 @@ impl DeletionRange {
             // Shift the reference range to the left to for the CDS range
             let cds_range = ref_range.sub(exon.ref_to_cds_offset);
 
+            // The range is non-empty since overlap was detected
             CdsDeletionRange { cds_range }
         })
     }

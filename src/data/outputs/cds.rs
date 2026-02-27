@@ -24,7 +24,7 @@ impl Display for SeqRow<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let d = self.computed_product;
 
-        let trailing = self.computed_product.trailing_cds_gap_len();
+        let trailing = self.computed_product.trailing_cds_unaligned;
 
         // Regression: always pad CDS, never pad AA, synthesize empty AA alignments.
         #[cfg(feature = "regression-testing")]
@@ -74,7 +74,7 @@ impl Display for SeqRow<'_> {
             id = self.id,
             ctype = self.ctype,
             ref_id = self.ref_id,
-            prot = self.computed_product.product_spec.name,
+            prot = self.computed_product.product_name,
             vh = Nullable(&d.variant_hash),
             aa_seq = Nullable(&d.aa_seq),
             aa_aln = aa_aln,
