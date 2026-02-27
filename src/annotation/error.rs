@@ -2,11 +2,29 @@
 
 use zoe::data::err::{ErrorWithContext, GetCode};
 
+#[derive(Debug)]
+pub struct UnimplementedCtype(pub String);
+
+impl std::error::Error for UnimplementedCtype {}
+impl GetCode for UnimplementedCtype {}
+
+impl std::fmt::Display for UnimplementedCtype {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unimpelmented ctype '{}'", self.0)
+    }
+}
+
+impl From<String> for UnimplementedCtype {
+    fn from(ctype: String) -> Self {
+        Self(ctype)
+    }
+}
+
 /// A minimal enum containing error variants which must be matched on in
 /// DAIS-ribosome. All other errors should use [`RibosomeError::Io`].
 #[derive(Debug)]
 pub enum RibosomeError {
-    UnimplementedCtype(String),
+    UnimplementedCtype(UnimplementedCtype),
     EmptyFile(std::path::PathBuf),
     Io(std::io::Error),
 }
@@ -23,9 +41,9 @@ impl std::error::Error for RibosomeError {
 impl GetCode for RibosomeError {
     fn get_code(&self) -> i32 {
         match self {
+            RibosomeError::UnimplementedCtype(e) => e.get_code(),
             RibosomeError::Io(e) => e.get_code(),
             RibosomeError::EmptyFile(_) => 66, // EX_NOINPUT
-            _ => 1,
         }
     }
 }
@@ -33,7 +51,7 @@ impl GetCode for RibosomeError {
 impl std::fmt::Display for RibosomeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RibosomeError::UnimplementedCtype(c) => write!(f, "Unimpelmented ctype '{c}'"),
+            RibosomeError::UnimplementedCtype(e) => write!(f, "{e}"),
             RibosomeError::EmptyFile(p) => write!(f, "Empty file: {}", p.display()),
             RibosomeError::Io(e) => write!(f, "{e}"),
         }

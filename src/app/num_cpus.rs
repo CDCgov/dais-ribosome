@@ -1,12 +1,12 @@
 use rayon::ThreadPoolBuilder;
 use std::num::NonZero;
 
-/// Initialize the global Rayon thread pool and return the thread count.
+/// Initializes the global Rayon thread pool and return the thread count.
 ///
 /// For single core execution this is a no-op.
 ///
-/// Uses `--threads` CLI arg, then `IFX_LOCAL_PROCS` env var, then
-/// physical core count via [`num_cpus::get_physical`].
+/// Uses `--threads` CLI arg, then `IFX_LOCAL_PROCS` env var, then physical core
+/// count via [`num_cpus::get_physical`].
 pub fn init_thread_pool(threads: Option<NonZero<usize>>) -> usize {
     let t = if let Some(n) = threads {
         n.get()

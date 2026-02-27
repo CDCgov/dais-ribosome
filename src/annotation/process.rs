@@ -17,7 +17,7 @@ impl<'a> AnnotationModule<'a> {
         // Get the corresponding reference information for the compound type of
         // the query
         let Some(reference_data) = self.ctype_map.get(&query.ctype) else {
-            return Err(RibosomeError::UnimplementedCtype(query.ctype.to_string()));
+            return Err(RibosomeError::UnimplementedCtype(query.ctype.into()));
         };
 
         let mut states = Vec::with_capacity(reference_data.len());

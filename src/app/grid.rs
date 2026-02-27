@@ -1,10 +1,9 @@
-use dais_ribosome::config::current_exe;
-
 use crate::app::log;
+use dais_ribosome::config::current_exe;
 use std::{
     env,
     fs::File,
-    io::{Read, Write},
+    io::{BufReader, BufWriter},
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -28,21 +27,19 @@ pub(crate) struct Grid {
 impl Grid {
     /// Parses array-task variables from SGE or Slurm environment.
     ///
-    /// Panics if no scheduler is detected or required variables are invalid.
-    pub fn task_vars_from_env() -> Self {
+    /// Returns an error if no scheduler is detected. Panics if required
+    /// variables are invalid.
+    pub fn task_vars_from_env() -> std::io::Result<Self> {
         match (env::var("SGE_TASK_ID"), env::var("SLURM_ARRAY_TASK_ID")) {
-            (Ok(_), _) => Self::from_sge_env(),
-            (_, Ok(_)) => Self::from_slurm_env(),
-            _ => panic!("No supported grid scheduler detected (SGE or Slurm)."),
+            (Ok(sge_task_id), _) => Ok(Self::from_sge_env(sge_task_id)),
+            (_, Ok(slurm_array_task_id)) => Ok(Self::from_slurm_env(slurm_array_task_id)),
+            _ => Err(std::io::Error::other("No supported grid scheduler detected (SGE or Slurm).")),
         }
     }
 
-    fn from_sge_env() -> Self {
+    fn from_sge_env(sge_task_id: String) -> Self {
         Self {
-            task_id:       env::var("SGE_TASK_ID")
-                .ok()
-                .and_then(|v| v.parse::<usize>().ok())
-                .expect("Invalid SGE_TASK_ID!"),
+            task_id:       sge_task_id.parse::<usize>().expect("Invalid SGE_TASK_ID!"),
             task_first:    env::var("SGE_TASK_FIRST")
                 .ok()
                 .and_then(|v| v.parse::<usize>().ok())
@@ -58,12 +55,9 @@ impl Grid {
         }
     }
 
-    fn from_slurm_env() -> Self {
+    fn from_slurm_env(slurm_array_task_id: String) -> Self {
         Self {
-            task_id:       env::var("SLURM_ARRAY_TASK_ID")
-                .ok()
-                .and_then(|v| v.parse::<usize>().ok())
-                .expect("Invalid SLURM_ARRAY_TASK_ID!"),
+            task_id:       slurm_array_task_id.parse::<usize>().expect("Invalid SLURM_ARRAY_TASK_ID!"),
             task_first:    env::var("SLURM_ARRAY_TASK_MIN")
                 .ok()
                 .and_then(|v| v.parse::<usize>().ok())
@@ -126,14 +120,11 @@ pub fn submit_job_sync(
     // Log path derived from first output
     let log_path = if let Some((first_out, _)) = output_paths.first() {
         let mut lp = first_out.clone();
-        let log_file = lp
-            .file_stem()
-            .map(|s| {
-                let mut out = s.to_owned();
-                out.push("_log.txt");
-                out
-            })
-            .unwrap_or_else(|| "ribosome_log.txt".into());
+        let log_file = lp.file_stem().map_or("ribosome_log.txt".into(), |s| {
+            let mut out = s.to_owned();
+            out.push("_log.txt");
+            out
+        });
         lp.set_file_name(log_file);
         lp
     } else {
@@ -189,28 +180,28 @@ pub fn submit_job_sync(
 
     if !output_cmd.status.success() {
         let stderr = String::from_utf8_lossy(&output_cmd.stderr);
-        panic!("Grid submission failed: {stderr}");
+        return Err(std::io::Error::other(stderr));
     }
 
     log::ts("collating data");
 
     // Collate partition files into final outputs
     for (output_path, extension) in &output_paths {
-        let mut partition_data = Vec::new();
-        let mut output_file = File::create(output_path)?;
+        // A copy of the collated output path, which we will mutate to equal
+        // each partition output path
+        let mut partition_path = output_path.clone();
+
+        let mut writer = BufWriter::new(File::create(output_path)?);
 
         for id in 1..=task_count {
-            let partition_name = get_partition_filename(output_path, id, extension);
-            let mut partition_path = output_path.clone();
-            partition_path.set_file_name(partition_name);
+            partition_path.set_file_name(get_partition_filename(output_path, id, extension));
 
+            // TODO: If it doesn't exist, then we have issues. Should we throw
+            // an error? Rather than silently lose data?
             if partition_path.exists() {
-                let mut file = File::open(&partition_path)?;
-                file.read_to_end(&mut partition_data)?;
-                output_file.write_all(&partition_data)?;
-                output_file.flush()?;
+                let mut reader = BufReader::new(File::open(&partition_path)?);
+                std::io::copy(&mut reader, &mut writer)?;
                 std::fs::remove_file(&partition_path)?;
-                partition_data.clear();
             }
         }
     }

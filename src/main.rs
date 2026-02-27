@@ -1,20 +1,26 @@
 #![feature(string_from_utf8_lossy_owned, bufreader_peek, try_trait_v2)]
 
+use crate::app::{
+    io::{Writers, write_output},
+    num_cpus::init_thread_pool,
+};
 use app::{
     args::Args,
     grid::{self, Grid},
     input::QueryInput,
-    io, log,
+    log,
 };
 use clap::Parser;
 use dais_ribosome::{
-    annotation::AnnotationModule,
+    annotation::{AnnotationModule, error::UnimplementedCtype},
     config::{find_modules_toml, toml::TomlConfig},
     data::{ModuleData, RibosomeError},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{collections::HashSet, path::Path};
 use zoe::{data::err::OrFail, iter_utils::ProcessResultsExt};
+
+pub mod app;
 
 // If we later want to match the shell script, we can use:
 // <https://docs.rs/git-version/latest/git_version/macro.git_describe.html>
@@ -46,7 +52,7 @@ fn main() {
 
     // Grid array task
     if args.is_grid_task {
-        let g = Grid::task_vars_from_env();
+        let g = Grid::task_vars_from_env().unwrap_or_fail();
         let writers = args.get_grid_writers(g.task_id).unwrap_or_fail();
         let gen_writers = args.get_optional_writers().unwrap_or_fail();
 
@@ -59,8 +65,9 @@ fn main() {
     let writers = args.get_writers().unwrap_or_fail();
     let gen_writers = args.get_optional_writers().unwrap_or_fail();
 
-    let t = app::num_cpus::init_thread_pool(args.threads);
-    if t > 1 {
+    let num_threads = init_thread_pool(args.threads);
+
+    if num_threads > 1 {
         process_queries_parallel(&args.data_file, &annotation_module, writers, gen_writers)
             .unwrap_or_die("Query processing failed");
     } else {
@@ -71,7 +78,7 @@ fn main() {
 
 /// Processes queries sequentially (single-threaded).
 fn process_queries(
-    path: &Path, annotation_module: &AnnotationModule, mut writers: io::Writers, mut gen_writers: Option<io::Writers>,
+    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers, mut gen_writers: Option<Writers>,
 ) -> Result<(), RibosomeError> {
     log::ts("started, processing data");
     let queries = QueryInput::open(path)?;
@@ -83,7 +90,7 @@ fn process_queries(
         let output = match annotation_module.process(record) {
             Ok(output) => output,
             Err(RibosomeError::UnimplementedCtype(ctype)) => {
-                unimplemented_ctypes.insert(ctype);
+                unimplemented_ctypes.insert(ctype.0);
                 continue;
             }
             Err(e) => return Err(e),
@@ -91,7 +98,7 @@ fn process_queries(
 
         let computed_output = output.materialize();
 
-        io::write_output(&computed_output, &mut writers, &mut gen_writers)?;
+        write_output(&computed_output, &mut writers, &mut gen_writers)?;
     }
 
     log::print_unimplemented_ctypes(unimplemented_ctypes, annotation_module);
@@ -102,30 +109,38 @@ fn process_queries(
 
 /// Process queries in parallel using Rayon then write results sequentially.
 fn process_queries_parallel(
-    path: &Path, annotation_module: &AnnotationModule, mut writers: io::Writers, mut gen_writers: Option<io::Writers>,
+    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers, mut gen_writers: Option<Writers>,
 ) -> Result<(), RibosomeError> {
     log::ts("started, processing data (parallel)");
     let queries = QueryInput::open(path)?;
 
-    let results: Vec<_> = queries.process_results(|iter| {
+    // Use process_results to properly propagate catch errors that occur in the
+    // input iterator. Collect into a result that propagates all errors instead
+    // of UnimplementedCtype, so that rayon can end threads early when an error
+    // occurs.
+
+    let results = queries.process_results(|iter| {
         iter.par_bridge()
-            .map(|record| annotation_module.process(record).map(|o| o.materialize()))
-            .collect::<Vec<_>>()
-    })?;
+            .map(|record| match annotation_module.process(record) {
+                Ok(output) => Ok(Ok(output.materialize())),
+                Err(RibosomeError::UnimplementedCtype(e)) => Ok(Err(e)),
+                Err(e) => Err(e),
+            })
+            .collect::<Result<Vec<_>, _>>()
+    })??;
 
     let mut unimplemented_ctypes = HashSet::new();
 
     for result in results {
         let computed_output = match result {
             Ok(output) => output,
-            Err(RibosomeError::UnimplementedCtype(ctype)) => {
+            Err(UnimplementedCtype(ctype)) => {
                 unimplemented_ctypes.insert(ctype);
                 continue;
             }
-            Err(e) => return Err(e),
         };
 
-        io::write_output(&computed_output, &mut writers, &mut gen_writers)?;
+        write_output(&computed_output, &mut writers, &mut gen_writers)?;
     }
 
     log::print_unimplemented_ctypes(unimplemented_ctypes, annotation_module);
@@ -134,10 +149,13 @@ fn process_queries_parallel(
     Ok(())
 }
 
-/// Process a grid partition: skip/step through queries based on task geometry.
+/// Processes a grid partition: skip/step through queries based on task
+/// geometry.
+///
+/// Note that this will not provide any messages regarding unimplemented
+/// compound types.
 fn process_queries_grid(
-    path: &Path, annotation_module: &AnnotationModule, mut writers: io::Writers, mut gen_writers: Option<io::Writers>,
-    g: &Grid,
+    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers, mut gen_writers: Option<Writers>, g: &Grid,
 ) -> Result<(), RibosomeError> {
     let queries = QueryInput::open(path)?;
 
@@ -146,20 +164,19 @@ fn process_queries_grid(
     // modulus for interleaved partitioning
     let array_size = (g.task_last - g.task_first + 1).div_ceil(g.task_stepsize);
 
-    for result in queries.skip(offset).step_by(array_size) {
-        let record = result?;
-        let output = match annotation_module.process(record) {
-            Ok(output) => output,
-            Err(RibosomeError::UnimplementedCtype(_)) => continue,
-            Err(e) => return Err(e),
-        };
+    queries.process_results(|queries| {
+        for record in queries.skip(offset).step_by(array_size) {
+            let output = match annotation_module.process(record) {
+                Ok(output) => output,
+                Err(RibosomeError::UnimplementedCtype(_)) => continue,
+                Err(e) => return Err(e),
+            };
 
-        let computed_output = output.materialize();
+            let computed_output = output.materialize();
 
-        io::write_output(&computed_output, &mut writers, &mut gen_writers)?;
-    }
+            write_output(&computed_output, &mut writers, &mut gen_writers)?;
+        }
 
-    Ok(())
+        Ok(())
+    })?
 }
-
-pub mod app;
