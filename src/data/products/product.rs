@@ -250,7 +250,8 @@ impl<'a> Product<'a> {
 
         // Get the pivot codon bases that cross the deletion boundary
         if frame == 1 {
-            // Frame 1 pivot codon: is last 1 base before gap + first 2 bases after gap
+            // Frame 1 pivot codon: is last 1 base before gap + first 2 bases
+            // after gap
             let cp1 = query_seq.get(left_match.query_range.end - 1)?.to_ascii_uppercase();
             let cp2 = query_seq.get(right_match.query_range.start)?.to_ascii_uppercase();
             let cp3 = query_seq.get(right_match.query_range.start + 1)?.to_ascii_uppercase();
@@ -260,27 +261,30 @@ impl<'a> Product<'a> {
             // TODO: Likely want to compare with Ordering::is_gt instead, so
             // that ties resolve as right shift.
 
-            // By default, we shift right for frame 1 (causes movement of 1
-            // base, rather than 2). Only if there is evidence for left shift do
-            // we shift left. Validity: The codon is uppercase because it is
-            // derived from bases in query
-            let shift_left = product_spec
+            // By default, we shift the deletion left for frame 1 (causing 1
+            // match to shift right, rather than 2). Only if there is evidence
+            // for shifting the deletion to right do we do that. pos_left being
+            // better means shifting matches left is better, which means
+            // shifting deletion right is better. Validity: The codon is
+            // uppercase because it is derived from bases in query
+            let shift_del_right = product_spec
                 .compare_codon_positions(pos_left as u32, pos_right as u32, pivot)
                 .is_some_and(Ordering::is_ge);
 
-            if shift_left {
-                // Deletion shift right 2 for frame 1 (2 bases move left)
+            if shift_del_right {
+                // Shift the deletion right by 2, causing 2 matches to move left
                 left_match.extend_end(2);
                 del.shift_right(2);
                 right_match.cut_start(2);
             } else {
-                // Deletion shift left 1 for frame 1 (1 base moves right)
+                // Shift the deletion left by 1, causing 1 match to move right
                 left_match.cut_end(1);
                 del.shift_left(1);
                 right_match.extend_start(1);
             }
         } else if frame == 2 {
-            // Frame2 pivot codon is last 2 bases before gap + first 1 base after gap.
+            // Frame2 pivot codon is last 2 bases before gap + first 1 base
+            // after gap.
             let cp1 = query_seq.get(left_match.query_range.end - 2)?.to_ascii_uppercase();
             let cp2 = query_seq.get(left_match.query_range.end - 1)?.to_ascii_uppercase();
             let cp3 = query_seq.get(right_match.query_range.start)?.to_ascii_uppercase();
@@ -298,12 +302,12 @@ impl<'a> Product<'a> {
                 .is_some_and(Ordering::is_lt);
 
             if shift_del_left {
-                // Deletion left shift 2 for frame 2 (2 bases move right)
+                // Shift the deletion left by 2, causing 2 matches to move right
                 left_match.cut_end(2);
                 del.shift_left(2);
                 right_match.extend_start(2);
             } else {
-                // Deletion right shift 1 for frame 2 (1 base moves left)
+                // Shift the deletion right by 1, causing 1 match to move right
                 left_match.extend_end(1);
                 del.shift_right(1);
                 right_match.cut_start(1);

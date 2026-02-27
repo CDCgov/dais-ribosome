@@ -111,13 +111,24 @@ impl<'a> ReferenceGroup<'a> {
     /// The alignment with the highest score is considered best, or `None` is
     /// returned if no alignment was found.
     pub fn best_alignment<T: AsRef<[u8]> + ?Sized>(&self, query: &T) -> Option<Alignment<u32>> {
-        // TODO: Why did we hard code from i16? Will this potentially disagree
-        // with aligner? Also, the use of get feels questionable. Even if it is
+        // TODO: The use of get feels questionable. Even if it is
         // unlikely to ever happen, it feels like it should be an error/warning.
-        self.profiles
+        let mut alignments = self
+            .profiles
             .iter()
-            .filter_map(|p| p.sw_align_from_i16(query.as_query_src()).get())
-            .max_by_key(|a| a.score)
+            .filter_map(|p| p.sw_align_from_i16(query.as_query_src()).get());
+
+        let mut best_alignment = alignments.next()?;
+
+        for alignment in alignments {
+            // Instead of using max_by_key, we use manual comparison to ensure
+            // the first maximum is returned (not the last)
+            if alignment > best_alignment {
+                best_alignment = alignment;
+            }
+        }
+
+        Some(best_alignment)
     }
 }
 
