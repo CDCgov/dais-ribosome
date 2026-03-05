@@ -1,5 +1,9 @@
 # DAIS-RIBOSOME Change Log
 
+## v1.6.2 (TBD)
+
+- **Fixes**: The check for the required start codon in PB1-F2 properly checks the beginning of the coding sequence instead of the query sequence
+
 ## v1.6.1 (2025.04.18)
 
 - **Fixes**: The codon-weight matrix had the wrong number of sites for KF640637|L, this has been corrected.

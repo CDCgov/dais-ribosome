@@ -123,9 +123,9 @@ while ( my $fasta_record = <$FASTA> ) {
                 $cds .= substr( $sequence, $exons{$p}[$i][0], $exons{$p}[$i][1] );
             }
 
-            if ( $prefix ne q{} && $prefix ne substr( $sequence, 0, length($prefix) ) ) {
+            if ( $prefix ne q{} && $prefix ne substr( $cds, 0, length($prefix) ) ) {
                 next;
-            } elsif ( $suffix ne q{} && $suffix ne substr( $sequence, -length($suffix) ) ) {
+            } elsif ( $suffix ne q{} && $suffix ne substr( $cds, -length($suffix) ) ) {
                 next;
             }
 
