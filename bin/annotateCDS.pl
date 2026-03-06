@@ -300,7 +300,7 @@ while ( my $fasta_record = <$PRODUCTS> ) {
 
             # Let $idx + 1 = offset for the peptide within the segment alignment
             # Thus the starting original coordinate adds the peptide to ref and ref to original offsets.
-            my $oriCursor = $idx + 1 + $oriOffset + $leftPad;
+            my $oriCursor = $idx + 1 + $oriOffset;
 
             # Peptide cursor is after previous exon lengths (offsets). Start at 1.
             my $pepCursor = $pepOffset + 1;
@@ -311,6 +311,7 @@ while ( my $fasta_record = <$PRODUCTS> ) {
                 my ( $inc, $op ) = ( $1, $2 );
                 if ( $op eq 'N' ) {    ## no critic (ControlStructures::ProhibitCascadingIfElse)
                     if ($first) {
+                        $oriCursor += $inc;
                         $pepCursor += $inc;
                         $first = 0;
                     }
