@@ -4,7 +4,7 @@ use crate::{
     config::toml::Formatting,
     data::{
         Nullable,
-        products::{ComputedDeletion, ComputedInsertion, ComputedProduct, Product},
+        products::{ComputedDeletion, ComputedInsertion, ComputedProduct},
     },
 };
 use std::fmt::{self, Display};
@@ -16,8 +16,7 @@ pub struct SeqRow<'a> {
     pub id: &'a str,
     pub ctype: &'a str,
     pub ref_id: &'a str,
-    pub(crate) product: &'a Product<'a>,
-    pub(crate) computed_product: &'a ComputedProduct,
+    pub(crate) computed_product: &'a ComputedProduct<'a>,
     pub(crate) formatting: &'a Formatting,
 }
 
@@ -25,7 +24,7 @@ impl Display for SeqRow<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let d = self.computed_product;
 
-        let trailing = self.product.trailing_cds_gap_len();
+        let trailing = self.computed_product.trailing_cds_gap_len();
 
         // Regression: always pad CDS, never pad AA, synthesize empty AA alignments.
         #[cfg(feature = "regression-testing")]
@@ -75,7 +74,7 @@ impl Display for SeqRow<'_> {
             id = self.id,
             ctype = self.ctype,
             ref_id = self.ref_id,
-            prot = self.product.product_spec.name,
+            prot = self.computed_product.product_spec.name,
             vh = Nullable(&d.variant_hash),
             aa_seq = Nullable(&d.aa_seq),
             aa_aln = aa_aln,
@@ -133,7 +132,7 @@ pub struct DelRow<'a> {
     pub ctype: &'a str,
     pub ref_id: &'a str,
     pub protein: &'a str,
-    pub(crate) computed_product: &'a ComputedProduct,
+    pub(crate) computed_product: &'a ComputedProduct<'a>,
     pub(crate) deletion: &'a ComputedDeletion,
 }
 

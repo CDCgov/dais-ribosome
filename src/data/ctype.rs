@@ -1,14 +1,12 @@
 //! Compound type hierarchy: ctype → reference_id → protein_product.
-use crate::config::toml::AlignmentWeights;
+use crate::{config::toml::AlignmentWeights, data::spec::CdsSpecMap};
 
 use super::{
     error::ModuleLoadError,
-    exons::Exons,
     keys::{RefKey, SpecKey},
     products::ProductSpec,
     profiles::{AlignmentProfiles, build_alignment_profile},
     refs::ReferenceMap,
-    spec::CdsSpecMap,
     weights::CodonWeightMatrix,
 };
 use std::collections::HashMap;
@@ -53,7 +51,7 @@ impl<'a> ReferenceGroup<'a> {
 
 /// Build the ctype map from raw loaded data.
 pub(crate) fn build_ctype_map<'a>(
-    references: &'a ReferenceMap, cds_spec: CdsSpecMap, mut codon_weights: CodonWeightMatrix,
+    references: &'a ReferenceMap, mut cds_spec: CdsSpecMap, mut codon_weights: CodonWeightMatrix,
     alignment_weights: &'a AlignmentWeights,
 ) -> Result<CompoundTypeMap<'a>, ModuleLoadError> {
     // Regroup the sequences by compound_type and then reference_id (two levels
@@ -66,27 +64,10 @@ pub(crate) fn build_ctype_map<'a>(
             .push((&ref_key.reference_id, seqs));
     }
 
-    // TODO: This regrouping occurs solely using information already present in
-    // cds_spec, so why didn't we group it that way during parsing?
-
-    // Regroup coding sequence specifications by (reference_id, ctype) using
-    // RefKey. Previously it was grouped solely by the reference ID and protein
-    // product. The protein product now appears in the value, along with the
-    // exons.
-    let mut spec_by_ref: HashMap<RefKey, Vec<(String, Exons)>> = HashMap::new();
-    for (spec_key, ctype_exons) in cds_spec {
-        let (ctype, exons) = ctype_exons.into_ctype_exons();
-        let key = RefKey::new(spec_key.reference_id, ctype);
-        spec_by_ref.entry(key).or_default().push((spec_key.protein_product, exons));
-    }
-
     let mut result = HashMap::new();
 
     for (ctype, ref_entries) in ctype_refs {
         let alignment_params = alignment_weights.get(ctype);
-
-        // TODO: Why can't we do this regrouping immediately up above? When we
-        // make ctype_refs?
 
         // Group by reference_id within this ctype
         let mut ref_groups_map: HashMap<&str, Vec<&Nucleotides>> = HashMap::new();
@@ -113,7 +94,7 @@ pub(crate) fn build_ctype_map<'a>(
                 .map(|seq| build_alignment_profile(seq, alignment_params))
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let proteins = spec_by_ref
+            let proteins = cds_spec
                 .remove(&RefKey::new(reference_id, ctype))
                 .unwrap_or_default()
                 .into_iter()

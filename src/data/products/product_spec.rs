@@ -1,5 +1,3 @@
-use std::sync::OnceLock;
-
 use crate::data::{
     exons::Exons,
     keys::CodonKey,
@@ -35,7 +33,6 @@ impl ProductSpec {
         Product {
             product_ranges,
             product_spec: self,
-            computed_product: OnceLock::new(),
             stop_extension_query_range: None,
         }
     }

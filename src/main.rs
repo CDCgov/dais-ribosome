@@ -85,7 +85,9 @@ fn process_queries(
             Err(e) => return Err(e),
         };
 
-        io::write_output(&output, &mut writers, &mut gen_writers)?;
+        let computed_output = output.materialize();
+
+        io::write_output(&computed_output, &mut writers, &mut gen_writers)?;
     }
 
     log::print_unimplemented_ctypes(unimplemented_ctypes, annotation_module);
@@ -103,18 +105,14 @@ fn process_queries_parallel(
 
     let results: Vec<_> = queries.process_results(|iter| {
         iter.par_bridge()
-            .map(|record| {
-                annotation_module.process(record).inspect(|o| {
-                    o.materialize();
-                })
-            })
+            .map(|record| annotation_module.process(record).map(|o| o.materialize()))
             .collect::<Vec<_>>()
     })?;
 
     let mut unimplemented_ctypes = HashSet::new();
 
     for result in results {
-        let output = match result {
+        let computed_output = match result {
             Ok(output) => output,
             Err(RibosomeError::UnimplementedCtype(ctype)) => {
                 unimplemented_ctypes.insert(ctype);
@@ -123,7 +121,7 @@ fn process_queries_parallel(
             Err(e) => return Err(e),
         };
 
-        io::write_output(&output, &mut writers, &mut gen_writers)?;
+        io::write_output(&computed_output, &mut writers, &mut gen_writers)?;
     }
 
     log::print_unimplemented_ctypes(unimplemented_ctypes, annotation_module);
@@ -152,7 +150,9 @@ fn process_queries_grid(
             Err(e) => return Err(e),
         };
 
-        io::write_output(&output, &mut writers, &mut gen_writers)?;
+        let computed_output = output.materialize();
+
+        io::write_output(&computed_output, &mut writers, &mut gen_writers)?;
     }
 
     Ok(())

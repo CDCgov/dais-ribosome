@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::grid::get_partition_filename;
-use dais_ribosome::data::{RibosomeError, RibosomeOutput};
+use dais_ribosome::data::{ComputedRibosomeOutput, RibosomeError};
 use zoe::data::err::ResultWithErrorContext;
 use zoe::prelude::rand_sequence;
 
@@ -71,7 +71,7 @@ pub fn optional_writers(path: &Option<PathBuf>) -> Result<Option<Writers>, Ribos
 
 /// Write a single query's output rows to the appropriate writers.
 pub fn write_output(
-    output: &RibosomeOutput<'_>, writers: &mut Writers, gen_writers: &mut Option<Writers>,
+    output: &ComputedRibosomeOutput<'_>, writers: &mut Writers, gen_writers: &mut Option<Writers>,
 ) -> Result<(), RibosomeError> {
     for row in output.seq_rows() {
         writeln!(writers.seq, "{row}")?;

@@ -1,14 +1,14 @@
 //! CDS specification loading.
 
 use crate::data::{
-    exons::{CtypeExons, ExonCoords},
-    keys::SpecKey,
+    exons::{ExonCoords, Exons},
+    keys::RefKey,
 };
 use std::{collections::HashMap, fs::File, io::BufRead, ops::Range, path::Path};
 use zoe::data::err::ResultWithErrorContext;
 
 /// Map from spec key to exon specification (with ctype for grouping).
-pub type CdsSpecMap = HashMap<SpecKey, CtypeExons>;
+pub type CdsSpecMap = HashMap<RefKey, Vec<(String, Exons)>>;
 
 // TODO: Switch this to returning ModuleLoadError directly?
 
@@ -30,7 +30,8 @@ pub fn load_cds_spec(path: &Path) -> Result<CdsSpecMap, std::io::Error> {
     // TODO: Check non-empty
     let file = File::open(path)?;
     let reader = std::io::BufReader::new(file);
-    let mut result = HashMap::new();
+
+    let mut result: HashMap<RefKey, Vec<(String, Exons)>> = HashMap::new();
 
     for line in reader.lines() {
         let line = line.with_path_context("line read failed", path)?;
@@ -75,15 +76,26 @@ pub fn load_cds_spec(path: &Path) -> Result<CdsSpecMap, std::io::Error> {
                 c
             });
 
-        let key = SpecKey::new(reference_id, protein);
-        result.insert(
-            key,
-            CtypeExons {
-                ctype,
-                required_start,
-                coords,
-            },
+        let total_cds_length: usize = coords.iter().map(|r| r.ref_range.len()).sum();
+
+        // TODO: This is not guaranteed to be true, so this should be an actual
+        // check and result in an actual error. Does each range need to be a
+        // multiple of three (e.g., parse_coordinate_ranges does validation)? Or
+        // should the check be done here?
+        debug_assert!(
+            total_cds_length.is_multiple_of(3),
+            "{} product was not in-frame: {total_cds_length}",
+            ctype
         );
+
+        let exons = Exons {
+            required_start,
+            coords,
+            total_cds_length,
+        };
+
+        let key = RefKey::new(reference_id, ctype);
+        result.entry(key).or_default().push((protein.to_string(), exons));
     }
 
     Ok(result)

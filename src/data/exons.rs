@@ -1,42 +1,5 @@
 use std::ops::Range;
 
-/// Exon specification with a compound type, used during loading.
-///
-/// This contains the fields exactly as they were parsed from the
-/// `cds-specs.tsv` file.
-#[derive(Debug, Clone)]
-pub(crate) struct CtypeExons {
-    pub(crate) ctype:          String,
-    pub(crate) required_start: Option<[u8; 3]>,
-    pub(crate) coords:         Vec<ExonCoords>,
-}
-
-impl CtypeExons {
-    /// Consumes `self`, splitting it into the compound type and [`Exons`].
-    pub fn into_ctype_exons(self) -> (String, Exons) {
-        let total_cds_length: usize = self.coords.iter().map(|r| r.ref_range.len()).sum();
-
-        // TODO: This is not guaranteed to be true, so this should be an actual
-        // check and result in an actual error. Does each range need to be a
-        // multiple of three (e.g., parse_coordinate_ranges does validation)? Or
-        // should the check be done here?
-        debug_assert!(
-            total_cds_length.is_multiple_of(3),
-            "{} product was not in-frame: {total_cds_length}",
-            self.ctype
-        );
-
-        (
-            self.ctype,
-            Exons {
-                required_start: self.required_start,
-                coords: self.coords,
-                total_cds_length,
-            },
-        )
-    }
-}
-
 /// Exon specification for a protein product (ctype stripped).
 #[derive(Debug, Clone)]
 pub(crate) struct Exons {

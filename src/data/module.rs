@@ -1,20 +1,17 @@
 //! Module data loading.
 
-use crate::annotation::AnnotationModule;
-use crate::config::toml::{AlignmentWeights, Formatting, Rules, TomlConfig};
-use std::path::{Path, PathBuf};
-
-use super::{
-    ctype::build_ctype_map,
-    error::ModuleLoadError,
-    refs::{ReferenceMap, load_references},
-    spec::{CdsSpecMap, load_cds_spec},
-    weights::{CodonWeightMatrix, load_codon_weights},
+use crate::{
+    annotation::AnnotationModule,
+    config::toml::{AlignmentWeights, Formatting, Rules, TomlConfig},
+    data::{
+        ctype::build_ctype_map,
+        error::ModuleLoadError,
+        refs::{ReferenceMap, load_references},
+        spec::{CdsSpecMap, load_cds_spec},
+        weights::{CodonWeightMatrix, load_codon_weights},
+    },
 };
-
-// TODO: `cds_spec` is parsed into [`CdsSpecMap`], and then the first time it is
-// used, it is converted into a different structure (map using RefKey instead).
-// So, this could be altered.
+use std::path::{Path, PathBuf};
 
 /// Owned data backing an annotation module.
 #[derive(Debug)]
@@ -91,6 +88,7 @@ impl ModuleData {
             .codon_weights
             .take()
             .ok_or_else(|| ModuleLoadError::validation("build_annotation_module can only be called once"))?;
+
         let ctype_map = build_ctype_map(&self.references, cds_spec, codon_weights, &self.alignment_weights)?;
         Ok(AnnotationModule { data: self, ctype_map })
     }

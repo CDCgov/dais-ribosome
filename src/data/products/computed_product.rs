@@ -1,8 +1,12 @@
+use crate::data::{products::ProductSpec, ranges::CdsStateRange};
 use zoe::prelude::*;
 
 /// Pre-computed product data ready for output.
 #[derive(Debug)]
-pub struct ComputedProduct {
+pub struct ComputedProduct<'a> {
+    pub(crate) product_ranges: Vec<CdsStateRange>,
+    pub(crate) product_spec:   &'a ProductSpec,
+
     /// CDS sequence (without deletions, includes insertions)
     pub cds_seq:         Nucleotides,
     /// CDS alignment (with `-` for deletions, no insertions)
@@ -27,6 +31,25 @@ pub struct ComputedProduct {
     pub insertions:      Vec<ComputedInsertion>,
     /// Computed deletions for this product
     pub deletions:       Vec<ComputedDeletion>,
+}
+
+impl ComputedProduct<'_> {
+    pub(crate) fn trailing_cds_gap_len(&self) -> usize {
+        // Use the furthest CDS end from any M or D state to avoid
+        // double-padding when a deletion covers trailing positions.
+        let last_cds_end = self
+            .product_ranges
+            .iter()
+            .rev()
+            .find_map(|s| match s {
+                CdsStateRange::M(m) => Some(m.cds_range.end),
+                CdsStateRange::D(d) => Some(d.cds_range.end),
+                _ => None,
+            })
+            .unwrap_or(0);
+
+        self.product_spec.exons.total_cds_length - last_cds_end
+    }
 }
 
 /// Pre-computed insertion data ready for output.
