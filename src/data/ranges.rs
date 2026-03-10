@@ -111,18 +111,6 @@ pub(crate) enum StateRange {
     I(InsertionRange),
 }
 
-impl StateRange {
-    /// Shifts any query indices to the right (addition) without altering any
-    /// reference indices.
-    pub(crate) fn shift_query_right(&mut self, amount: usize) {
-        match self {
-            StateRange::M(m) => m.shift_query_right(amount),
-            StateRange::I(ins) => ins.shift_query_right(amount),
-            StateRange::D(_) => {}
-        }
-    }
-}
-
 /// The range within the query and reference where a continguous block of
 /// matches occurs.
 ///
@@ -152,23 +140,6 @@ pub(crate) struct InsertionRange {
     pub(crate) ref_index:   InsertionIdx,
     /// The 0-based end-exclusive range of the insertion within the query.
     pub(crate) query_range: Range<usize>,
-}
-
-impl MatchRange {
-    /// Shifts the `query_range` to the right (addition) without altering the
-    /// range in the reference.
-    pub(crate) fn shift_query_right(&mut self, amount: usize) {
-        // Validity: this does not alter the length of query_range
-        self.query_range = self.query_range.add(amount);
-    }
-}
-
-impl InsertionRange {
-    /// Shifts the `query_range` to the right (addition) without altering the
-    /// index in the reference.
-    pub(crate) fn shift_query_right(&mut self, amount: usize) {
-        self.query_range = self.query_range.add(amount);
-    }
 }
 
 /// Alignment state ranges converted to coding sequence coordinates by

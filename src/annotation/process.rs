@@ -4,7 +4,7 @@ use crate::{
     data::{
         GenomeAndProductStates, QueryRecord, RibosomeOutput,
         ctype::ReferenceGroup,
-        ranges::{InsertionIdx, InsertionRange, StateRange},
+        ranges::{InsertionIdx, InsertionRange, RangeExt, StateRange},
     },
 };
 use std::{ops::Range, sync::OnceLock};
@@ -22,21 +22,28 @@ impl<'a> AnnotationModule<'a> {
         let mut states = Vec::with_capacity(reference_data.len());
 
         for ref_id_data in reference_data.iter() {
-            let (query_ori_offset, query_seq) = self.rule_chew_to_start(&query, ref_id_data);
+            let (query_ori_offset, chewed_query) = self.rule_chew_to_start(&query, ref_id_data);
 
             // TODO: Do we ever do revcomp alignment?
 
             // Get the alignment to the best reference
-            let Some(mut genome_aln) = ref_id_data.best_alignment(&query_seq) else {
+            let Some(mut genome_aln) = ref_id_data.best_alignment(&chewed_query) else {
                 return Err(format!("Query '{}' could not be aligned to any reference", query.id).into());
             };
+
+            genome_aln.query_range = genome_aln.query_range.add(query_ori_offset);
+            genome_aln.query_len += query_ori_offset;
+            genome_aln.states.prepend_soft_clip(query_ori_offset);
 
             // Extend the left and right side of the alignments
             self.rule_repairable_ends(&mut genome_aln);
 
             // Compute the stop extension
-            let stop_extension = self.rule_stop_extension(&query_seq, &genome_aln);
-            let mut genome_aln_states = StateRange::state_ranges_from_aligment(&genome_aln);
+            let stop_extension = self.rule_stop_extension(&query.nucleotides, &genome_aln);
+
+            // Validity: requirements met based on best_alignment guarantees
+            let genome_aln_states = StateRange::state_ranges_from_aligment(&genome_aln);
+
             let mut products = Vec::with_capacity(ref_id_data.proteins.len());
 
             for product in &ref_id_data.proteins {
@@ -46,26 +53,22 @@ impl<'a> AnnotationModule<'a> {
 
                 // Validity: the same `query_seq` is passed as was used to form
                 // `genome_aln_states`
-                if product_ranges.missing_required_start(query_seq) {
+                if product_ranges.missing_required_start(&query.nucleotides) {
                     continue;
                 }
 
                 product_ranges.condense_deletions();
                 // Validity: QueryRecord contains unaligned, uppercase IUPAC
                 // bases
-                product_ranges.fix_frames(query_seq);
-                product_ranges.add_query_coords(query_ori_offset);
+                product_ranges.fix_frames(&query.nucleotides);
+                // product_ranges.add_query_coords(query_ori_offset);
 
                 products.push(product_ranges);
             }
 
             // Push stop extension into every product whose last exon ends at
             // the extension's reference position
-            if let Some(mut ext) = stop_extension {
-                if query_ori_offset > 0 {
-                    ext.shift_query_right(query_ori_offset);
-                }
-
+            if let Some(ext) = stop_extension {
                 for product in &mut products {
                     // Check whether the last exon ends at the same place the
                     // stop extension "ends" (the index before which it occurs).
@@ -74,12 +77,6 @@ impl<'a> AnnotationModule<'a> {
                     {
                         product.stop_extension_query_range = Some(ext.query_range.clone());
                     }
-                }
-            }
-
-            if query_ori_offset > 0 {
-                for state in &mut genome_aln_states {
-                    state.shift_query_right(query_ori_offset);
                 }
             }
 
@@ -103,9 +100,7 @@ impl<'a> AnnotationModule<'a> {
     /// unaligned bases at the end of the query, represent the bases up through
     /// the first in-frame stop codon with an insertion. This is called the
     /// "stop extension".
-    fn rule_stop_extension<'b>(
-        &self, query_seq: &'b NucleotidesView<'b>, genome_aln: &Alignment<u32>,
-    ) -> Option<InsertionRange> {
+    fn rule_stop_extension(&self, query_seq: &Nucleotides, genome_aln: &Alignment<u32>) -> Option<InsertionRange> {
         if self.data.rules.list_contig_stop_extension
             && genome_aln.unaligned_query_tail() >= 3
             // TODO: This codon might not be in-frame!

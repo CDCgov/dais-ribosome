@@ -2,7 +2,7 @@ use crate::{
     annotation::hashing::{nt_id, variant_hash},
     data::{
         products::{ComputedProduct, ProductSpec, incremental_products::ComputedIncrementalProducts},
-        ranges::{CdsMatchRange, CdsStateRange, RangeExt},
+        ranges::{CdsMatchRange, CdsStateRange},
     },
 };
 use std::{cmp::Ordering, ops::Range};
@@ -55,7 +55,7 @@ impl<'a> Product<'a> {
     /// The `query` should contain unaligned, uppercase IUPAC bases. It should
     /// be the same query which the alignment used to create `self` was formed
     /// from.
-    pub(crate) fn missing_required_start(&self, query: NucleotidesView) -> bool {
+    pub(crate) fn missing_required_start(&self, query: &Nucleotides) -> bool {
         if let Some(required) = self.product_spec.exons.required_start
             // Note that the first product range is either a match or deletion
             && let Some(CdsStateRange::M(m)) = self.product_ranges.first()
@@ -361,20 +361,6 @@ impl<'a> Product<'a> {
         let r = right.iter_mut().filter_map(CdsStateRange::match_range_mut).next()?;
 
         Some((l, mid, r))
-    }
-
-    pub(crate) fn add_query_coords(&mut self, offset: usize) {
-        if offset == 0 {
-            return;
-        }
-
-        for state in &mut self.product_ranges {
-            match state {
-                CdsStateRange::M(m) => m.query_range = m.query_range.add(offset),
-                CdsStateRange::I(i) => i.query_range = i.query_range.add(offset),
-                _ => {}
-            }
-        }
     }
 }
 
