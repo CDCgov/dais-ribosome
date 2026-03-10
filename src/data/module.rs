@@ -1,13 +1,12 @@
 //! Module data loading.
 
 use crate::annotation::AnnotationModule;
-use crate::config::toml::{Formatting, Rules, TomlConfig};
+use crate::config::toml::{AlignmentWeights, Formatting, Rules, TomlConfig};
 use std::path::{Path, PathBuf};
 
 use super::{
     ctype::build_ctype_map,
     error::ModuleLoadError,
-    profiles::AlignmentWeights,
     refs::{ReferenceMap, load_references},
     spec::{CdsSpecMap, load_cds_spec},
     weights::{CodonWeightMatrix, load_codon_weights},
@@ -20,16 +19,16 @@ use super::{
 /// Owned data backing an annotation module.
 #[derive(Debug)]
 pub struct ModuleData {
-    pub name:            String,
-    pub version:         String,
-    pub formatting:      Formatting,
-    pub rules:           Rules,
-    pub weight_matrices: AlignmentWeights,
-    pub other_modules:   Vec<(String, PathBuf)>,
-    pub references:      ReferenceMap,
+    pub name:              String,
+    pub version:           String,
+    pub formatting:        Formatting,
+    pub rules:             Rules,
+    pub alignment_weights: AlignmentWeights,
+    pub other_modules:     Vec<(String, PathBuf)>,
+    pub references:        ReferenceMap,
     // Consumed during build_annotation_module:
-    cds_spec:            Option<CdsSpecMap>,
-    codon_weights:       Option<CodonWeightMatrix>,
+    cds_spec:              Option<CdsSpecMap>,
+    codon_weights:         Option<CodonWeightMatrix>,
 }
 
 impl ModuleData {
@@ -62,14 +61,14 @@ impl ModuleData {
         let references = load_references(&references_path).map_err(|err| ModuleLoadError::io(&references_path, err))?;
         let codon_weights = load_codon_weights(&weights_path).map_err(|err| ModuleLoadError::io(&weights_path, err))?;
         let cds_spec = load_cds_spec(&cds_spec_path).map_err(|err| ModuleLoadError::io(&cds_spec_path, err))?;
-        let weight_matrices = AlignmentWeights::from_config(&module)?;
+        let alignment_weights = module.alignment;
 
         Ok(Self {
             name: module.name,
             version: module.version.unwrap_or_else(|| "unknown".to_string()),
             formatting: module.formatting,
             rules: module.rules,
-            weight_matrices,
+            alignment_weights,
             other_modules,
             references,
             cds_spec: Some(cds_spec),
@@ -92,7 +91,7 @@ impl ModuleData {
             .codon_weights
             .take()
             .ok_or_else(|| ModuleLoadError::validation("build_annotation_module can only be called once"))?;
-        let ctype_map = build_ctype_map(&self.references, cds_spec, codon_weights, &self.weight_matrices)?;
+        let ctype_map = build_ctype_map(&self.references, cds_spec, codon_weights, &self.alignment_weights)?;
         Ok(AnnotationModule { data: self, ctype_map })
     }
 }

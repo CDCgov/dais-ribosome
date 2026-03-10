@@ -1,10 +1,13 @@
-use serde::Deserialize;
+use serde::{
+    Deserialize, Deserializer,
+    de::{Error, Unexpected},
+};
 use serde_derive::Deserialize;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-use zoe::data::err::ResultWithErrorContext;
+use zoe::data::{WeightMatrix, err::ResultWithErrorContext};
 
 /// Root configuration structure parsed from `modules.toml`.
 #[derive(Debug, Clone, Deserialize)]
@@ -63,7 +66,31 @@ pub struct ConfiguredModule {
     pub formatting: Formatting,
     // TODO: What is this?
     pub rules:      Rules,
-    pub alignment:  HashMap<String, AlignmentParams>,
+    pub alignment:  AlignmentWeights,
+}
+
+/// Collection of alignment weights for a module.
+///
+/// Provides default scoring parameters plus optional overrides for specific
+/// compound types.
+#[derive(Clone, Debug, Deserialize)]
+pub struct AlignmentWeights {
+    /// Default scoring matrix and gap parameters.
+    pub default: AlignmentParams,
+
+    /// Per-compound-type overrides.
+    #[serde(flatten)]
+    pub overrides: HashMap<String, AlignmentParams>,
+}
+
+impl AlignmentWeights {
+    /// Gets the scoring parameters for a compound type.
+    ///
+    /// Returns the override for the compound type if it exists, otherwise
+    /// returns defaults.
+    pub fn get(&self, compound_type: &str) -> &AlignmentParams {
+        self.overrides.get(compound_type).unwrap_or(&self.default)
+    }
 }
 
 // TODO: What are these fields?
@@ -96,25 +123,64 @@ pub struct Rules {
 
 // TODO: Should we be negating the mismatch penalty too when parsing?
 
-/// Alignment scoring parameters.
-#[derive(Debug, Clone, Deserialize)]
-pub struct AlignmentParams {
+/// A helper type for parsing [`AlignmentParams`] that does not impose any
+/// conditions or checking on the integers.
+#[derive(Deserialize)]
+struct AlignmentParamsRaw {
     #[serde(rename = "match")]
-    pub match_score: i8,
-    pub mismatch:    i8,
+    match_score: i8,
+    mismatch:    i8,
     #[serde(deserialize_with = "deserialize_gap_penalty")]
-    pub gap_open:    i8,
+    gap_open:    i8,
     #[serde(deserialize_with = "deserialize_gap_penalty")]
-    pub gap_extend:  i8,
+    gap_extend:  i8,
 }
 
-// TODO: Currently it is not validating the range...
+/// Alignment scoring parameters.
+#[derive(Debug, Clone)]
+pub struct AlignmentParams {
+    pub matrix:     WeightMatrix<'static, i8, 5>,
+    pub gap_open:   i8,
+    pub gap_extend: i8,
+}
+
+impl<'de> Deserialize<'de> for AlignmentParams {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>, {
+        let raw = AlignmentParamsRaw::deserialize(deserializer)?;
+
+        if raw.gap_open == 0 && raw.gap_extend == 0 {
+            return Err(D::Error::custom("gap_open and gap_extend cannot both be 0"));
+        }
+
+        let matrix = WeightMatrix::new_dna_matrix(raw.match_score, raw.mismatch, Some(b'N'));
+
+        Ok(AlignmentParams {
+            matrix,
+            gap_open: raw.gap_open,
+            gap_extend: raw.gap_extend,
+        })
+    }
+}
 
 /// Deserializes a gap penalty, validating the range and normalizing to
 /// negative.
+///
+/// ## Errors
+///
+/// If the gap penalty is -128, then an error is thrown since this is out of the
+/// range *Zoe* can handle.
 fn deserialize_gap_penalty<'de, D>(deserializer: D) -> Result<i8, D::Error>
 where
     D: serde::Deserializer<'de>, {
     let value: i8 = Deserialize::deserialize(deserializer)?;
-    Ok(-value.abs())
+    match value {
+        -128 => Err(D::Error::invalid_value(
+            Unexpected::Signed(value as i64),
+            &"an integer of absolute value at most 127",
+        )),
+        -127..0 => Ok(value),
+        0.. => Ok(-value),
+    }
 }

@@ -1,10 +1,12 @@
 //! Compound type hierarchy: ctype → reference_id → protein_product.
+use crate::config::toml::AlignmentWeights;
+
 use super::{
     error::ModuleLoadError,
     exons::Exons,
     keys::{RefKey, SpecKey},
     products::ProductSpec,
-    profiles::{AlignmentProfiles, AlignmentWeights, build_alignment_profile},
+    profiles::{AlignmentProfiles, build_alignment_profile},
     refs::ReferenceMap,
     spec::CdsSpecMap,
     weights::CodonWeightMatrix,
@@ -52,7 +54,7 @@ impl<'a> ReferenceGroup<'a> {
 /// Build the ctype map from raw loaded data.
 pub(crate) fn build_ctype_map<'a>(
     references: &'a ReferenceMap, cds_spec: CdsSpecMap, mut codon_weights: CodonWeightMatrix,
-    weight_matrices: &'a AlignmentWeights,
+    alignment_weights: &'a AlignmentWeights,
 ) -> Result<CompoundTypeMap<'a>, ModuleLoadError> {
     // Regroup the sequences by compound_type and then reference_id (two levels
     // of grouping, rather than one using RefKey).
@@ -81,7 +83,7 @@ pub(crate) fn build_ctype_map<'a>(
     let mut result = HashMap::new();
 
     for (ctype, ref_entries) in ctype_refs {
-        let (aln_params, weight_matrix) = weight_matrices.get(ctype);
+        let alignment_params = alignment_weights.get(ctype);
 
         // TODO: Why can't we do this regrouping immediately up above? When we
         // make ctype_refs?
@@ -108,7 +110,7 @@ pub(crate) fn build_ctype_map<'a>(
             // Build the profiles for the equal-length sequences
             let profiles = seqs
                 .iter()
-                .map(|seq| build_alignment_profile(seq, weight_matrix, aln_params))
+                .map(|seq| build_alignment_profile(seq, alignment_params))
                 .collect::<Result<Vec<_>, _>>()?;
 
             let proteins = spec_by_ref
