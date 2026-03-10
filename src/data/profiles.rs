@@ -4,35 +4,13 @@ use crate::{
     config::{AlignmentParams, ConfiguredModule},
     data::error::ModuleLoadError,
 };
-use std::{collections::HashMap, ops::Deref};
+use std::collections::HashMap;
 use zoe::{
     alignment::{ProfileError, SharedProfiles},
     data::{matrices::WeightMatrix, nucleotides::Nucleotides},
 };
 
 const DNA_ALPHA_LEN: usize = 5;
-
-/// Gap penalty parameters for alignment.
-#[derive(Debug, Clone, Copy)]
-pub struct GapParams {
-    pub gap_open:   i8,
-    pub gap_extend: i8,
-}
-
-impl GapParams {
-    pub fn new(gap_open: i8, gap_extend: i8) -> Self {
-        Self { gap_open, gap_extend }
-    }
-}
-
-impl From<&AlignmentParams> for GapParams {
-    fn from(params: &AlignmentParams) -> Self {
-        Self {
-            gap_open:   params.gap_open,
-            gap_extend: params.gap_extend,
-        }
-    }
-}
 
 /// Collection of alignment weights for a module.
 ///
@@ -41,9 +19,9 @@ impl From<&AlignmentParams> for GapParams {
 #[derive(Debug)]
 pub struct AlignmentWeights {
     /// Default scoring matrix and gap parameters.
-    pub default:   (GapParams, WeightMatrix<'static, i8, DNA_ALPHA_LEN>),
+    pub default:   (AlignmentParams, WeightMatrix<'static, i8, DNA_ALPHA_LEN>),
     /// Per-compound-type overrides.
-    pub overrides: HashMap<String, (GapParams, WeightMatrix<'static, i8, DNA_ALPHA_LEN>)>,
+    pub overrides: HashMap<String, (AlignmentParams, WeightMatrix<'static, i8, DNA_ALPHA_LEN>)>,
 }
 
 impl AlignmentWeights {
@@ -58,7 +36,7 @@ impl AlignmentWeights {
             .get("default")
             .map(|params| {
                 (
-                    GapParams::from(params),
+                    params.clone(),
                     WeightMatrix::new_dna_matrix(params.match_score, params.mismatch, Some(b'N')),
                 )
             })
@@ -71,7 +49,7 @@ impl AlignmentWeights {
         for (key, params) in &module.alignment {
             if key != "default" {
                 let weights = (
-                    GapParams::from(params),
+                    params.clone(),
                     WeightMatrix::new_dna_matrix(params.match_score, params.mismatch, Some(b'N')),
                 );
                 overrides.insert(key.clone(), weights);
@@ -84,31 +62,17 @@ impl AlignmentWeights {
     /// Get the scoring parameters for a compound type.
     ///
     /// Returns the override for the compound type if it exists, otherwise returns defaults.
-    pub fn get(&self, compound_type: &str) -> &(GapParams, WeightMatrix<'static, i8, DNA_ALPHA_LEN>) {
+    pub fn get(&self, compound_type: &str) -> &(AlignmentParams, WeightMatrix<'static, i8, DNA_ALPHA_LEN>) {
         self.overrides.get(compound_type).unwrap_or(&self.default)
     }
 }
 
 /// Pre-computed alignment profile for a reference sequence.
-///
-/// For reverse strand alignment, the query is reverse-complemented instead.
-#[derive(Debug)]
-pub struct AlignmentProfiles<'a>(SharedProfiles<'a, 32, 16, 8, DNA_ALPHA_LEN>);
+pub type AlignmentProfiles<'a> = SharedProfiles<'a, 32, 16, 8, DNA_ALPHA_LEN>;
 
-impl<'a> AlignmentProfiles<'a> {
-    /// Build a profile for a reference sequence.
-    pub fn new(
-        sequence: &'a Nucleotides, matrix: &'a WeightMatrix<'static, i8, DNA_ALPHA_LEN>, params: &GapParams,
-    ) -> Result<Self, ProfileError> {
-        SharedProfiles::new_with_w256(sequence.as_bytes(), matrix, params.gap_open, params.gap_extend).map(Self)
-    }
-}
-
-impl<'a> Deref for AlignmentProfiles<'a> {
-    type Target = SharedProfiles<'a, 32, 16, 8, DNA_ALPHA_LEN>;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+/// Build an alignment profile for a reference sequence.
+pub fn build_alignment_profile<'a>(
+    sequence: &'a Nucleotides, matrix: &'a WeightMatrix<'static, i8, DNA_ALPHA_LEN>, params: &AlignmentParams,
+) -> Result<AlignmentProfiles<'a>, ProfileError> {
+    SharedProfiles::new_with_w256(sequence.as_bytes(), matrix, params.gap_open, params.gap_extend)
 }

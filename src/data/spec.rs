@@ -1,11 +1,10 @@
 //! CDS specification loading.
 
 use crate::data::{
-    TSVReader,
     exons::{CtypeExons, ExonCoords},
     keys::SpecKey,
 };
-use std::{collections::HashMap, io::BufRead, ops::Range, path::Path};
+use std::{collections::HashMap, fs::File, io::BufRead, ops::Range, path::Path};
 use zoe::data::err::ResultWithErrorContext;
 
 /// Map from spec key to exon specification (with ctype for grouping).
@@ -28,9 +27,8 @@ pub type CdsSpecMap = HashMap<SpecKey, CtypeExons>;
 /// - A line is missing required fields
 /// - Coordinate ranges are invalid
 pub fn load_cds_spec(path: &Path) -> Result<CdsSpecMap, std::io::Error> {
-    // TODO: We aren't actually making any sort of TSVReader... this abstraction
-    // holds no utility currently.
-    let file = TSVReader::open_nonempty_file(path)?;
+    // TODO: Check non-empty
+    let file = File::open(path)?;
     let reader = std::io::BufReader::new(file);
     let mut result = HashMap::new();
 

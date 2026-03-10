@@ -1,11 +1,9 @@
 //! Codon position weight matrix loading.
 
-use crate::data::{
-    TSVReader,
-    keys::{CodonKey, SpecKey},
-};
+use crate::data::keys::{CodonKey, SpecKey};
 use std::{
     collections::HashMap,
+    fs::File,
     io::{BufRead, BufReader},
     path::Path,
     sync::LazyLock,
@@ -63,7 +61,8 @@ pub type CodonWeightMatrix = HashMap<SpecKey, CodonPositionWeights>;
 /// - The file cannot be read
 /// - A section header is malformed
 pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Error> {
-    let file = TSVReader::open_nonempty_file(path)?;
+    // TODO: Check non-empty
+    let file = File::open(path)?;
     let reader = BufReader::new(file);
     let mut all_matrices = HashMap::new();
     let mut current_weights = HashMap::new();

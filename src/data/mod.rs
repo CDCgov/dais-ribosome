@@ -17,15 +17,3 @@ pub mod query;
 pub use module::ModuleData;
 pub use outputs::*;
 pub use query::*;
-
-use std::{fs::File, io, path::Path};
-
-/// Helper for constructing IO errors with path context.
-pub(crate) struct TSVReader;
-
-impl TSVReader {
-    /// Open a file, returning an error if the file is empty. TODO: Remove this
-    pub fn open_nonempty_file(path: &Path) -> io::Result<File> {
-        File::open(path)
-    }
-}

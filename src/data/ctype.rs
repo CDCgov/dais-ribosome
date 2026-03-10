@@ -4,7 +4,7 @@ use super::{
     exons::Exons,
     keys::{RefKey, SpecKey},
     products::ProductSpec,
-    profiles::{AlignmentProfiles, AlignmentWeights},
+    profiles::{AlignmentProfiles, AlignmentWeights, build_alignment_profile},
     refs::ReferenceMap,
     spec::CdsSpecMap,
     weights::CodonWeightMatrix,
@@ -66,7 +66,7 @@ pub(crate) fn build_ctype_map<'a>(
     let mut result = HashMap::new();
 
     for (ctype, ref_entries) in ctype_refs {
-        let (gap_params, weight_matrix) = weight_matrices.get(ctype);
+        let (aln_params, weight_matrix) = weight_matrices.get(ctype);
 
         // Group by reference_id within this ctype
         let mut ref_groups_map: HashMap<&str, Vec<&Nucleotides>> = HashMap::new();
@@ -90,7 +90,7 @@ pub(crate) fn build_ctype_map<'a>(
             // Build the profiles for the equal-length sequences
             let profiles = seqs
                 .iter()
-                .map(|seq| AlignmentProfiles::new(seq, weight_matrix, gap_params))
+                .map(|seq| build_alignment_profile(seq, weight_matrix, aln_params))
                 .collect::<Result<Vec<_>, _>>()?;
 
             let proteins = spec_by_ref
