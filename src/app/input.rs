@@ -10,6 +10,7 @@ use std::{
 };
 use zoe::{
     data::{err::ResultWithErrorContext, nucleotides::ToDNA},
+    define_whichever,
     prelude::*,
 };
 
@@ -117,7 +118,7 @@ impl Iterator for TsvQueryIter {
     }
 }
 
-zoe::define_whichever! {
+define_whichever! {
     /// Unified query iterator over FASTA or TSV input.
     pub enum QueryInput {
         /// Backed by a FASTA reader.
@@ -140,6 +141,8 @@ impl QueryInput {
         let mut buffer = BufReader::new(file);
 
         let first = buffer.peek(1)?;
+        // TODO: this isn't accurate (it would mean blank file, not blank first
+        // line)
         if first.is_empty() {
             return Err(RibosomeError::BlankFirstLine(path.to_path_buf()));
         }

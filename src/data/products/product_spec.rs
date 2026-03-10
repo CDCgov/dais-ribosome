@@ -40,15 +40,22 @@ impl ProductSpec {
         }
     }
 
-    /// Compare two codons at the same position: returns true if `left >= right`.
+    /// Compare two codons at the same position: returns true if `left >=
+    /// right`.
     ///
-    /// Uses position-specific weights if available, falling back to `DEFAULT_CODON_STATS`
-    /// when both position-specific counts are zero.
+    /// Uses position-specific weights if available, falling back to
+    /// `DEFAULT_CODON_STATS` when both position-specific counts are zero.
     ///
-    /// # Arguments
+    /// ## Arguments
+    ///
     /// - `left` - Left codon (uppercase)
     /// - `right` - Right codon (uppercase)
     /// - `codon_position` - 1-based codon position for weight lookup
+    ///
+    /// ## Validity
+    ///
+    /// The `left` and `right` codons must contain unaligned, uppercase IUPAC
+    /// bases.
     pub(crate) fn codon_left_ge_right(&self, left: [u8; 3], right: [u8; 3], codon_position: u32) -> bool {
         let (mut x, mut y) = (0u32, 0u32);
 
@@ -66,12 +73,14 @@ impl ProductSpec {
         x >= y
     }
 
-    /// Compare the same codon at two different positions: returns true if `pos_left >= pos_right`.
+    /// Compares the same codon at two different positions: returns true if
+    /// `pos_left >= pos_right`.
     ///
-    /// Used for deletion frame correction where we need to decide which position
-    /// the pivot codon should be assigned to.
+    /// Used for deletion frame correction where we need to decide which
+    /// position the pivot codon should be assigned to.
     ///
-    /// # Arguments
+    /// ## Arguments
+    ///
     /// - `pos_left` - 1-based left codon position
     /// - `pos_right` - 1-based right codon position
     /// - `codon` - The codon to compare (uppercase)

@@ -1,7 +1,7 @@
 //! Alignment profiles and weight matrices.
 
 use crate::{
-    config::{AlignmentParams, ConfiguredModule},
+    config::toml::{AlignmentParams, ConfiguredModule},
     data::error::ModuleLoadError,
 };
 use std::collections::HashMap;

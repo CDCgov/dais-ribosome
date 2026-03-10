@@ -68,20 +68,29 @@ impl<'a> Product<'a> {
         self.product_spec.exons.total_cds_length
     }
 
-    /// Because the exon intersection algorithm can split deletions spanning multiple
-    /// exons, this method merges adjacent deletion CDS for downstream correctness.
+    /// Because the exon intersection algorithm can split deletions spanning
+    /// multiple exons, this method merges adjacent deletion CDS for downstream
+    /// correctness.
     pub(crate) fn condense_deletions(&mut self) {
-        let mut i = 0;
-        let mut len = self.product_ranges.len().saturating_sub(1);
-        while i < len {
-            if let Some([CdsStateRange::D(current), CdsStateRange::D(next)]) = self.product_ranges.get_mut(i..i + 2) {
-                current.merge(next);
-                self.product_ranges.remove(i + 1);
-                len -= 1;
+        // The order of the closure arguments in dedup_by gets reversed.
+        self.product_ranges.dedup_by(|range2, range1| {
+            if let CdsStateRange::D(del1) = range1
+                && let CdsStateRange::D(del2) = range2
+            {
+                // Ensure the deletions are adjacent in the coding sequence.
+                // Validity: product_ranges forms an ordered partition over the
+                // portion of the coding sequence which is aligned against.
+                // Hence, adjacent deletions in product_ranges are guaranteed to
+                // also be adjacent in the coding sequence.
+                debug_assert_eq!(del1.cds_range.end, del2.cds_range.start);
+                // Extend del1 (the kept element) to encompass del2
+                del1.cds_range.end = del2.cds_range.end;
+                // Return true to signal that deduplication is needed
+                true
             } else {
-                i += 1;
+                false
             }
-        }
+        });
     }
 
     /// Fix indel frames by repositioning insertions and deletions to in-frame
@@ -91,6 +100,10 @@ impl<'a> Product<'a> {
     /// out-of-frame positions by shifting them left or right based on codon
     /// usage statistics. The algorithm mirrors the logic in
     /// `codonCorrectStats.pl`, albeit for coordinate math instead of strings.
+    ///
+    /// ## Validity
+    ///
+    /// `query_seq` should contain unaligned, uppercase IUPAC bases.
     pub(crate) fn fix_frames(&mut self, query: impl AsRef<[u8]>) {
         let len = self.product_ranges.len();
         let query_seq = query.as_ref();
@@ -105,6 +118,8 @@ impl<'a> Product<'a> {
 
                     // Only correct in-frame insertions at out-of-frame positions
                     if frame != 0 && ins.len() % 3 == 0 {
+                        // Validity: this function requires the same
+                        // requirements on query_seq
                         self.fix_insertion_frame(i, query_seq);
                     }
                 }
@@ -133,6 +148,10 @@ impl<'a> Product<'a> {
     /// - A2 (frame 2): Compare codons formed by:
     ///   - 2 preceding bases + first 1 insert base
     ///   - last 2 insert bases + 1 following
+    ///
+    /// ## Validity
+    ///
+    /// `query_seq` should contain unaligned, uppercase IUPAC bases.
     fn fix_insertion_frame(&mut self, idx: usize, query_seq: &[u8]) -> Option<()> {
         let Product {
             product_ranges,
@@ -140,8 +159,10 @@ impl<'a> Product<'a> {
             ..
         } = self;
 
-        // In practice this is idx +/- 1 since insertions cannot be split over exons.
-        // However, if the alignment algorithm permits a deletion after an insertion, then yes, search away.
+        // Insertions cannot be split over exons, and in practice many scoring
+        // schemes tend to avoid adjacent insertions and deletions, so in
+        // practice left_match and right_match occur at idx-1 and idx+1
+        // respectively. But in case either is a deletion, we perform a search.
         let Some((left_match, CdsStateRange::I(ins), right_match)) = Self::partition_states(product_ranges, idx) else {
             return None;
         };
@@ -167,10 +188,8 @@ impl<'a> Product<'a> {
             let cp2 = *query_seq.get(left_match.query_range.end - 1)?;
             let cp3 = *query_seq.get(right_match.query_range.start)?;
 
-            let mut a2l2 = [insert_seq[insert_len - 2], insert_seq[insert_len - 1], cp3];
-            let mut a2r1 = [cp1, cp2, insert_seq[0]];
-            a2l2.make_ascii_uppercase();
-            a2r1.make_ascii_uppercase();
+            let a2l2 = [insert_seq[insert_len - 2], insert_seq[insert_len - 1], cp3];
+            let a2r1 = [cp1, cp2, insert_seq[0]];
 
             if product_spec.codon_left_ge_right(a2r1, a2l2, codon_position as u32) {
                 // Insertion shifts right 1 for frame 2 split codon
@@ -196,10 +215,8 @@ impl<'a> Product<'a> {
             let cp2 = *query_seq.get(right_match.query_range.start)?;
             let cp3 = *query_seq.get(right_match.query_range.start + 1)?;
 
-            let mut a1l1 = [insert_seq[insert_len - 1], cp2, cp3];
-            let mut a1r2 = [cp1, insert_seq[0], insert_seq[1]];
-            a1l1.make_ascii_uppercase();
-            a1r2.make_ascii_uppercase();
+            let a1l1 = [insert_seq[insert_len - 1], cp2, cp3];
+            let a1r2 = [cp1, insert_seq[0], insert_seq[1]];
 
             if product_spec.codon_left_ge_right(a1l1, a1r2, codon_position as u32) {
                 // Insertion shifts left 1 for frame 1 split codon
@@ -230,11 +247,13 @@ impl<'a> Product<'a> {
             return None;
         };
 
-        // Codon positions (1-based) at the boundaries of the deletion for table checking
-        let left_codon_position = (del.cds_range.start / 3) + 1;
-        let right_codon_position = ((del.cds_range.end - 1) / 3) + 1;
+        // Codon positions (1-based) at the boundaries of the deletion for table
+        // checking
+        let pos_left = (del.cds_range.start / 3) + 1;
+        let pos_right = ((del.cds_range.end - 1) / 3) + 1;
 
-        let frame: usize = del.cds_range.start % 3;
+        let frame = del.cds_range.start % 3;
+
         // Get the pivot codon bases that cross the deletion boundary
         if frame == 1 {
             // Frame 1 pivot codon: is last 1 base before gap + first 2 bases after gap
@@ -245,12 +264,10 @@ impl<'a> Product<'a> {
             let pivot = [cp1, cp2, cp3];
 
             // Prefer right shift for frame 1
-            if product_spec.codon_pos_left_ge_right(
-                left_codon_position as u32,
-                right_codon_position as u32,
-                pivot,
-                ShiftPreference::Right,
-            ) {
+            //
+            // Validity: The codon is uppercase because it is derived from bases
+            // in query
+            if product_spec.codon_pos_left_ge_right(pos_left as u32, pos_right as u32, pivot, ShiftPreference::Right) {
                 // Deletion shift right 2 for frame 1 (2 bases move left)
                 left_match.extend_end(2);
                 del.shift_right(2);
@@ -270,12 +287,10 @@ impl<'a> Product<'a> {
             let pivot = [cp1, cp2, cp3];
 
             // Prefer left shift for frame 2
-            if product_spec.codon_pos_left_ge_right(
-                left_codon_position as u32,
-                right_codon_position as u32,
-                pivot,
-                ShiftPreference::Left,
-            ) {
+            //
+            // Validity: The codon is uppercase because it is derived from bases
+            // in query
+            if product_spec.codon_pos_left_ge_right(pos_left as u32, pos_right as u32, pivot, ShiftPreference::Left) {
                 // Deletion right shift 1 for frame 2 (1 base moves left)
                 left_match.extend_end(1);
                 del.shift_right(1);
@@ -318,7 +333,11 @@ impl<'a> Product<'a> {
     }
 }
 
+/// An extension trait for slices, providing functionality specific to
+/// DAIS-ribosome.
 pub(crate) trait SliceExt<T> {
+    /// Extracts a mutable index from a slice, along with the slice before it
+    /// and the slice after it.
     fn split_around_mut(&mut self, index: usize) -> Option<(&mut [T], &mut T, &mut [T])>;
 }
 

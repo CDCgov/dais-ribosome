@@ -9,7 +9,7 @@ use std::{
     sync::LazyLock,
 };
 
-/// Default codon usage statistics for Influenza A
+/// Default codon usage statistics for influenza A.
 ///
 /// We convert codon usage statistics from
 /// <http://www.kazusa.or.jp/codon/cgi-bin/showcodon.cgi?species=465364&aa=1&style=GCG>
@@ -89,6 +89,12 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
 
             continue;
         }
+
+        // TODO: Should error on failed parse, not ignore
+
+        // TODO: We should validate that the code is only ACTG, or specify what
+        // behavior is otherwise. For example, RTC codon appears in
+        // flu-codon-position-weights.tsv, which will never match.
 
         // Parse weight entry: position<TAB>codon<TAB>count
         let mut parts = line.split_ascii_whitespace();

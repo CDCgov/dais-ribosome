@@ -1,6 +1,6 @@
 use crate::{
     annotation::hashing::nt_id,
-    config::Formatting,
+    config::toml::Formatting,
     data::{
         ComputedGenomeInsertion, DelRow, GenDelRow, GenInsRow, GenRow, InsRow, PrecomputedGenomeData, QueryRecord, SeqRow,
         products::Product, ranges::StateRange,

@@ -1,5 +1,5 @@
 use crate::{
-    config::Formatting,
+    config::toml::Formatting,
     data::{Nullable, ranges::DeletionRange},
 };
 use std::fmt::{self, Display};

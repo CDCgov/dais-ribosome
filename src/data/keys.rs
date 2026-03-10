@@ -2,17 +2,20 @@
 
 use std::fmt;
 
-/// Key for reference sequences: combines reference ID and compound type.
+/// A key for reference sequences, combining a reference ID and a compound type.
 ///
-/// Used to index into `ReferenceMap` to retrieve reference sequences.
+/// Used to index into [`ReferenceMap`] to retrieve reference sequences.
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct RefKey {
+    /// The reference ID of the reference sequence (e.g., `ANHUI01`).
     pub reference_id:  String,
+    /// The compound type of the reference sequence (e.g., `A_HA_H7`).
     pub compound_type: String,
 }
 
 impl RefKey {
-    /// Create a new RefKey.
+    /// Create a new [`RefKey`] by combining a `reference_id` (e.g., `ANHUI01`)
+    /// and `compound_type` (e.g., `A_HA_H7`).
     pub fn new(reference_id: impl Into<String>, compound_type: impl Into<String>) -> Self {
         Self {
             reference_id:  reference_id.into(),
@@ -23,7 +26,7 @@ impl RefKey {
     /// Parses a pipe-delimited FASTA header of the form
     /// `reference_id|compound_type`.
     ///
-    /// Any additional pipe-delimited fields are dropped.
+    /// Any additional pipe-delimited fields are ignored.
     pub fn parse(name: &str) -> Option<Self> {
         let mut parts = name.split('|');
         let reference_id = parts.next()?;
@@ -38,17 +41,21 @@ impl fmt::Display for RefKey {
     }
 }
 
-/// Key for CDS specifications: combines reference ID and protein product name.
+/// A key for coding sequence (CDS) specifications, combining a reference ID and
+/// protein product name.
 ///
-/// Used to index into `CdsSpecMap` to retrieve exon coordinates.
+/// Used to index into [`CdsSpecMap`] to retrieve exon coordinates.
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct SpecKey {
+    /// The reference ID of the reference sequence (e.g., `ANHUI01`).
     pub reference_id:    String,
+    /// The protein product (e.g., `HA`).
     pub protein_product: String,
 }
 
 impl SpecKey {
-    /// Create a new SpecKey.
+    /// Create a new [`SpecKey`] by combining a `reference_id` (e.g., `ANHUI01`)
+    /// and `protein_product` (e.g., `HA`).
     pub fn new(reference_id: impl Into<String>, protein_product: impl Into<String>) -> Self {
         Self {
             reference_id:    reference_id.into(),
@@ -71,7 +78,9 @@ pub struct CodonKey {
 }
 
 impl CodonKey {
-    /// Create a new CodonKey, normalizing the codon to uppercase.
+    // TODO: We uppercase in so many places, I suggest not doing it here too
+
+    /// Creates a new CodonKey, normalizing the codon to uppercase.
     pub fn new(position: u32, codon: [u8; 3]) -> Self {
         let mut key = Self { position, codon };
         key.codon.make_ascii_uppercase();

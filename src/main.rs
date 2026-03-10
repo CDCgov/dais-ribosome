@@ -65,7 +65,7 @@ fn main() {
     }
 }
 
-/// Process queries sequentially (single-threaded).
+/// Processes queries sequentially (single-threaded).
 fn process_queries(
     path: &Path, annotation_module: &AnnotationModule, mut writers: io::Writers, mut gen_writers: Option<io::Writers>,
 ) -> Result<(), RibosomeError> {

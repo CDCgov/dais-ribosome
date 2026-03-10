@@ -1,4 +1,4 @@
-use super::io;
+use crate::app::io::{Writers, open_partition_writer, open_writer, optional_writers};
 use clap::Parser;
 use dais_ribosome::data::RibosomeError;
 use std::{num::NonZero, path::PathBuf};
@@ -55,19 +55,20 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn get_writers(&self) -> Result<io::Writers, RibosomeError> {
-        Ok(io::Writers {
-            seq: io::open_writer(&self.sequence_output, "seq")?,
-            ins: io::open_writer(&self.insertion_output, "ins")?,
-            del: io::open_writer(&self.deletion_output, "del")?,
+    pub fn get_writers(&self) -> Result<Writers, RibosomeError> {
+        Ok(Writers {
+            seq: open_writer(&self.sequence_output, "seq")?,
+            ins: open_writer(&self.insertion_output, "ins")?,
+            del: open_writer(&self.deletion_output, "del")?,
         })
     }
 
-    pub fn get_optional_writers(&self) -> Result<Option<io::Writers>, RibosomeError> {
-        io::optional_writers(&self.genomic_output_prefix)
+    pub fn get_optional_writers(&self) -> Result<Option<Writers>, RibosomeError> {
+        optional_writers(&self.genomic_output_prefix)
     }
 
-    /// Return the output paths paired with their extension labels for grid partition collation.
+    /// Return the output paths paired with their extension labels for grid
+    /// partition collation.
     pub fn output_paths_for_grid(&self) -> Vec<(PathBuf, &str)> {
         let mut paths = Vec::new();
         if let Some(ref p) = self.sequence_output {
@@ -84,11 +85,11 @@ impl Args {
     }
 
     /// Build partition-suffixed writers for a grid array task.
-    pub fn get_grid_writers(&self, task_id: usize) -> Result<io::Writers, RibosomeError> {
-        Ok(io::Writers {
-            seq: io::open_partition_writer(&self.sequence_output, task_id, "seq")?,
-            ins: io::open_partition_writer(&self.insertion_output, task_id, "ins")?,
-            del: io::open_partition_writer(&self.deletion_output, task_id, "del")?,
+    pub fn get_grid_writers(&self, task_id: usize) -> Result<Writers, RibosomeError> {
+        Ok(Writers {
+            seq: open_partition_writer(&self.sequence_output, task_id, "seq")?,
+            ins: open_partition_writer(&self.insertion_output, task_id, "ins")?,
+            del: open_partition_writer(&self.deletion_output, task_id, "del")?,
         })
     }
 }

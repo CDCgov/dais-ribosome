@@ -7,12 +7,21 @@ use zoe::{
     prelude::*,
 };
 
-/// Map from reference key to list of reference sequences.
+/// A [`HashMap`] from a reference key to list of reference sequences.
+///
+/// Each `reference_id` may have many compound types, which in turn may have
+/// many records due to distinct coding regions. Hence, we store multiple
+/// sequences per [`RefKey`].
 pub type ReferenceMap = HashMap<RefKey, Vec<Nucleotides>>;
 
-/// Load reference sequences from a FASTA file.
+/// Loads reference sequences from a FASTA file.
 ///
-/// Each sequence name must be pipe-delimited: `reference_id|compound_type`
+/// Each record header must be pipe-delimited of the form:
+/// `reference_id|compound_type`. Any additional pipe-delimited fields are
+/// ignored.
+///
+/// This function also recodes the sequence to uppercase IUPAC with corrected
+/// gaps, using `N` for anything that cannot be recoded.
 ///
 /// ## Errors
 ///

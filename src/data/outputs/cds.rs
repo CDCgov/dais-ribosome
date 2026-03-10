@@ -1,7 +1,7 @@
 use zoe::prelude::Len;
 
 use crate::{
-    config::Formatting,
+    config::toml::Formatting,
     data::{
         Nullable,
         products::{ComputedDeletion, ComputedInsertion, ComputedProduct, Product},
