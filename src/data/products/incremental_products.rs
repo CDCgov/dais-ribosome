@@ -52,11 +52,6 @@ impl ComputedIncrementalProducts {
 
         let end_cds_index = out.populate_from(query, product);
 
-        if let Some(ref ext_range) = product.stop_extension_query_range {
-            out.dependent_fields
-                .extend_from_stop_extension(query, ext_range, product.product_spec.exons.total_cds_length);
-        }
-
         let trailing_cds_unaligned = product.product_spec.exons.total_cds_length - end_cds_index;
 
         Self {
@@ -131,6 +126,13 @@ impl IncrementalAccumulator {
                 CdsStateRange::I(ins) => self.extend_from_insertion(query, ins),
                 CdsStateRange::D(del) => self.extend_from_deletion(del),
             };
+        }
+
+        // Add stop extension if the alignment includes one. This does not occur
+        // if a stop codon was reached above.
+        if let Some(ext_range) = &product.stop_extension_query_range {
+            self.dependent_fields
+                .extend_from_stop_extension(query, ext_range, product.product_spec.exons.total_cds_length);
         }
 
         // No stop codon reached, so finish the translation
@@ -321,9 +323,9 @@ impl DependentFields {
     /// Extends the dependent fields from a stop extension.
     fn extend_from_stop_extension(&mut self, query: &Nucleotides, ext_range: &Range<usize>, total_cds_length: usize) {
         if let Some(slice) = query.get(ext_range.clone()) {
-            let upstream_nt_pos = InsertionIdx::from_right_idx(total_cds_length);
+            let nt_insertion_idx = InsertionIdx::from_right_idx(total_cds_length);
             // Validity: slice is from query, which meets validity requirements
-            let (ins, filtered) = ComputedInsertion::new(upstream_nt_pos, slice);
+            let (ins, filtered) = ComputedInsertion::new(nt_insertion_idx, slice);
             if !filtered {
                 self.cds_seq.extend_from_slice(&ins.inserted_nucleotides);
                 self.insertions.push(ins);
@@ -333,7 +335,7 @@ impl DependentFields {
 
             self.query_coords.push_range(ext_range);
 
-            self.cds_coords.push_upstream(upstream_nt_pos);
+            self.cds_coords.push_upstream(nt_insertion_idx);
 
             if !ext_range.len().is_multiple_of(3) {
                 self.has_shift_indel = true;

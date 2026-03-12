@@ -68,7 +68,7 @@ impl<'a> AnnotationModule<'a> {
 
             // Push stop extension into every product whose last exon ends at
             // the extension's reference position
-            if let Some(ext) = stop_extension {
+            if let Some(ext) = &stop_extension {
                 for product in &mut products {
                     // Check whether the last exon ends at the same place the
                     // stop extension "ends" (the index before which it occurs).
@@ -104,10 +104,12 @@ impl<'a> AnnotationModule<'a> {
 
             states.push(GenomeAndProductStates {
                 reference_id: &ref_id_data.reference_id,
+                ref_len,
                 genome_aln_states,
                 leading_ref_unaligned,
                 trailing_ref_unaligned,
                 products,
+                stop_extension_query_range: stop_extension.map(|ins| ins.query_range),
                 computed_genome: OnceLock::new(),
             });
         }
@@ -119,25 +121,27 @@ impl<'a> AnnotationModule<'a> {
         })
     }
 
-    /// If the `list_contig_stop_extension` rule is enabled, and there are
-    /// unaligned bases at the end of the query, represent the bases up through
-    /// the first in-frame stop codon with an insertion. This is called the
-    /// "stop extension".
+    /// If the alignment reaches the end of the reference but does not end in a
+    /// stop codon as expected, then attempts to represent any unaligned bases
+    /// at the tail of the query up until the first stop codon as an insertion.
+    ///
+    /// This insertion is called the stop extension. The stop codon that is
+    /// searched for must be in-frame.
     fn rule_stop_extension(&self, query_seq: &Nucleotides, genome_aln: &Alignment<u32>) -> Option<InsertionRange> {
         if self.data.rules.list_contig_stop_extension
+            && genome_aln.uanligned_ref_tail() == 0
             && genome_aln.unaligned_query_tail() >= 3
-            // TODO: This codon might not be in-frame!
             && let Some(last_aligned_codon) = query_seq.slice(genome_aln.aln_query_range()).get_tail_codon()
-            && last_aligned_codon.is_amino_acid()
-            // TODO: Maybe we don't want to call in-frame?
-            && let Some(stop_codon_index) = query_seq.search_in(genome_aln.query_range.end..).find_next_aa_in_frame(b'*')
+            // Do not extend past known stop codon
+            && !last_aligned_codon.is_std_stop_codon()
+            && let Some(stop_codon_index) = query_seq.slice(genome_aln.query_range.end..).find_next_aa_in_frame(b'*')
         {
             // The exclusive end of the last alignment range is the inclusive
             // start of the insertion
             let start_index = genome_aln.query_range.end;
 
             // Convert inclusive start of codon to exclusive end of codon
-            let end_index = stop_codon_index + 3;
+            let end_index = genome_aln.query_range.end + stop_codon_index + 3;
 
             Some(InsertionRange {
                 // The insertion is before the end (ref_range.end)

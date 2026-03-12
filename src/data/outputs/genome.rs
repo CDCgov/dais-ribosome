@@ -1,6 +1,9 @@
 use crate::{
     config::Formatting,
-    data::{Nullable, ranges::DeletionRange},
+    data::{
+        Nullable,
+        ranges::{DeletionRange, InsertionIdx},
+    },
 };
 use std::fmt::{self, Display};
 use zoe::prelude::*;
@@ -12,6 +15,15 @@ pub struct ComputedGenomeInsertion {
     pub upstream_nt_pos:      usize,
     /// Inserted nucleotides
     pub inserted_nucleotides: Nucleotides,
+}
+
+impl ComputedGenomeInsertion {
+    pub fn new(nt_insertion_idx: InsertionIdx, slice: &[u8]) -> Self {
+        ComputedGenomeInsertion {
+            upstream_nt_pos:      nt_insertion_idx.left_pos(),
+            inserted_nucleotides: Nucleotides::from(slice),
+        }
+    }
 }
 
 /// Pre-computed genome data for `.gen` output.

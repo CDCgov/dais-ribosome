@@ -86,7 +86,7 @@ impl ComputedInsertion {
     /// unaligned, uppercase IUPAC bases.
     pub fn new(nt_insertion_idx: InsertionIdx, slice: &[u8]) -> (Self, bool) {
         let ins_len = slice.len();
-        let inserted_nucleotides = Nucleotides::from(slice.to_vec());
+        let inserted_nucleotides = Nucleotides::from(slice);
 
         let aa_insertion_idx = nt_insertion_idx.to_aa_idx();
         let codon_shift = nt_insertion_idx.codon_shift();

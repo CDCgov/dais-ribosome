@@ -4,10 +4,10 @@ use crate::{
     data::{
         ComputedGenomeInsertion, DelRow, GenDelRow, GenInsRow, GenRow, InsRow, PrecomputedGenomeData, QueryRecord, SeqRow,
         products::{ComputedProduct, Product},
-        ranges::StateRange,
+        ranges::{InsertionIdx, StateRange},
     },
 };
-use std::sync::OnceLock;
+use std::{ops::Range, sync::OnceLock};
 use zoe::prelude::*;
 
 #[derive(Debug)]
@@ -50,8 +50,14 @@ pub(crate) struct GenomeAndProductStates<'a> {
     /// Reference ID
     pub(crate) reference_id: &'a str,
 
+    /// The length of the reference sequence.
+    pub(crate) ref_len: usize,
+
     /// Genome alignment to nucleotide reference sequence expressed as [`StateRange`]
     pub(crate) genome_aln_states: Vec<StateRange>,
+
+    /// The range of the stop extension within the query, if present.
+    pub(crate) stop_extension_query_range: Option<Range<usize>>,
 
     /// The number of bases in the reference sequence that were not aligned
     /// against in the beginning (i.e., not included in `genome_aln_states`).
@@ -62,7 +68,8 @@ pub(crate) struct GenomeAndProductStates<'a> {
     pub(crate) trailing_ref_unaligned: usize,
 
     /// Contains all relevant product data, including the protein name.
-    pub(crate) products:        Vec<Product<'a>>,
+    pub(crate) products: Vec<Product<'a>>,
+
     /// Lazily computed genome data, cached via OnceLock.
     pub(crate) computed_genome: OnceLock<PrecomputedGenomeData>,
 }
@@ -75,23 +82,32 @@ impl<'a> GenomeAndProductStates<'a> {
     /// The `query` should contain unaligned, uppercase IUPAC bases.
     fn materialize(self, query: &Nucleotides) -> ComputedGenomeAndProductStates<'a> {
         ComputedGenomeAndProductStates {
-            reference_id:           self.reference_id,
-            genome_aln_states:      self.genome_aln_states,
-            leading_ref_unaligned:  self.leading_ref_unaligned,
-            trailing_ref_unaligned: self.trailing_ref_unaligned,
-            computed_genome:        self.computed_genome,
-            products:               self.products.into_iter().map(|product| product.materialize(query)).collect(),
+            reference_id:               self.reference_id,
+            ref_len:                    self.ref_len,
+            genome_aln_states:          self.genome_aln_states,
+            stop_extension_query_range: self.stop_extension_query_range,
+            leading_ref_unaligned:      self.leading_ref_unaligned,
+            trailing_ref_unaligned:     self.trailing_ref_unaligned,
+            computed_genome:            self.computed_genome,
+            products:                   self.products.into_iter().map(|product| product.materialize(query)).collect(),
         }
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct ComputedGenomeAndProductStates<'a> {
-    /// Reference ID
+    /// The reference ID.
     pub(crate) reference_id: &'a str,
 
-    /// Genome alignment to nucleotide reference sequence expressed as [`StateRange`]
+    /// The length of the reference sequence.
+    pub(crate) ref_len: usize,
+
+    /// Genome alignment to nucleotide reference sequence expressed as
+    /// [`StateRange`].
     pub(crate) genome_aln_states: Vec<StateRange>,
+
+    /// The range of the stop extension within the query, if present.
+    pub(crate) stop_extension_query_range: Option<Range<usize>>,
 
     /// The number of bases in the reference sequence that were not aligned
     /// against in the beginning (i.e., not included in `genome_aln_states`).
@@ -216,32 +232,31 @@ impl<'a> ComputedGenomeAndProductStates<'a> {
             let mut insertions = Vec::new();
             let mut has_insertion = false;
 
-            let query_bytes = query.as_bytes();
-
             for state in &self.genome_aln_states {
                 match state {
                     StateRange::M(m) => {
-                        let slice = &query_bytes[m.query_range.clone()];
+                        let slice = &query[m.query_range.clone()];
                         genome_seq.extend_from_slice(slice);
                         genome_aln.extend_from_slice(slice);
                     }
                     StateRange::I(ins) => {
-                        let slice = &query_bytes[ins.query_range.clone()];
+                        let slice = &query[ins.query_range.clone()];
                         genome_seq.extend_from_slice(slice);
                         has_insertion = true;
-
-                        let inserted_nucleotides = Nucleotides::from(slice);
-                        insertions.push(ComputedGenomeInsertion {
-                            // 1-based index before is equivalent to 0-based
-                            // index after
-                            upstream_nt_pos: ins.ref_index.right(),
-                            inserted_nucleotides,
-                        });
+                        insertions.push(ComputedGenomeInsertion::new(ins.ref_index, slice));
                     }
                     StateRange::D(del) => {
                         genome_aln.pad_end(b'-', del.ref_range.len());
                     }
                 }
+            }
+
+            if let Some(ref ext_range) = self.stop_extension_query_range {
+                let nt_insertion_idx = InsertionIdx::from_right_idx(self.ref_len);
+                let slice = &query[ext_range.clone()];
+                genome_seq.extend_from_slice(slice);
+                has_insertion = true;
+                insertions.push(ComputedGenomeInsertion::new(nt_insertion_idx, slice));
             }
 
             let genome_id = nt_id(&genome_seq);
