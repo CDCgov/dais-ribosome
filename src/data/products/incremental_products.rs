@@ -46,10 +46,9 @@ pub struct ComputedIncrementalProducts {
 impl ComputedIncrementalProducts {
     /// Computes the incremental products from a `query` and `product`.
     pub fn new(query: &Nucleotides, product: &Product) -> Self {
-        let leading_gap_len = product.leading_cds_gap_len();
         let range_capacity = product.product_ranges.len();
 
-        let mut out = IncrementalAccumulator::new(leading_gap_len, range_capacity);
+        let mut out = IncrementalAccumulator::new(product.leading_cds_unaligned, range_capacity);
 
         let end_cds_index = out.populate_from(query, product);
 
@@ -110,9 +109,9 @@ struct IncrementalAccumulator {
 impl IncrementalAccumulator {
     /// Initializes an [`IncrementalAccumulator`] containing just the gap
     /// indicated by `leading_gap_len`.
-    fn new(leading_gap_len: usize, range_capacity: usize) -> Self {
+    fn new(leading_cds_unaligned: usize, range_capacity: usize) -> Self {
         Self {
-            cds_aln:            Nucleotides::from(vec![b'.'; leading_gap_len]),
+            cds_aln:            Nucleotides::from(vec![b'.'; leading_cds_unaligned]),
             aa_aln:             AminoAcids::new(),
             untranslated_start: 0,
             dependent_fields:   DependentFields::new(range_capacity),

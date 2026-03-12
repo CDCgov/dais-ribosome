@@ -80,10 +80,33 @@ impl<'a> AnnotationModule<'a> {
                 }
             }
 
+            let ref_len = ref_id_data.length;
+
+            let leading_ref_unaligned = genome_aln_states
+                .iter()
+                .find_map(|s| match s {
+                    StateRange::M(m) => Some(m.ref_range.start),
+                    StateRange::D(d) => Some(d.ref_range.start),
+                    _ => None,
+                })
+                .unwrap_or(0);
+
+            let trailing_ref_unaligned = ref_len
+                - genome_aln_states
+                    .iter()
+                    .rev()
+                    .find_map(|s| match s {
+                        StateRange::M(m) => Some(m.ref_range.end),
+                        StateRange::D(d) => Some(d.ref_range.end),
+                        _ => None,
+                    })
+                    .unwrap_or(0);
+
             states.push(GenomeAndProductStates {
                 reference_id: &ref_id_data.reference_id,
-                ref_len: ref_id_data.length,
                 genome_aln_states,
+                leading_ref_unaligned,
+                trailing_ref_unaligned,
                 products,
                 computed_genome: OnceLock::new(),
             });

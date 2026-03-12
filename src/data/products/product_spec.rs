@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use crate::data::{
     exons::Exons,
     products::Product,
-    ranges::StateRange,
+    ranges::{CdsStateRange, StateRange},
     weights::{CodonPositionWeights, DEFAULT_CODON_STATS},
 };
 
@@ -55,9 +55,34 @@ impl ProductSpec {
         // beginning/end which are not aligned against (or partially aligned
         // against)
 
+        // TODO: Add validity that at least one match or delete must be present,
+        // so that unwrap_or can be removed
+
+        let leading_cds_unaligned = product_ranges
+            .iter()
+            .find_map(|s| match s {
+                CdsStateRange::M(m) => Some(m.cds_range.start),
+                CdsStateRange::D(d) => Some(d.cds_range.start),
+                _ => None,
+            })
+            .unwrap_or(0);
+
+        let trailing_cds_unaligned = self.exons.total_cds_length
+            - product_ranges
+                .iter()
+                .rev()
+                .find_map(|s| match s {
+                    CdsStateRange::M(m) => Some(m.cds_range.end),
+                    CdsStateRange::D(d) => Some(d.cds_range.end),
+                    _ => None,
+                })
+                .unwrap_or(0);
+
         Product {
-            product_ranges,
             product_spec: self,
+            product_ranges,
+            leading_cds_unaligned,
+            trailing_cds_unaligned,
             stop_extension_query_range: None,
         }
     }

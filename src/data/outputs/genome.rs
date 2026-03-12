@@ -32,6 +32,8 @@ pub struct PrecomputedGenomeData {
     pub genome_aln:    Nucleotides,
     /// Genome-level insertions
     pub insertions:    Vec<ComputedGenomeInsertion>,
+
+    pub trailing_ref_unaligned: usize,
 }
 
 /// A single row for `.gen` output.
@@ -40,16 +42,13 @@ pub struct GenRow<'a> {
     pub ctype:             &'a str,
     pub ref_id:            &'a str,
     pub genome:            &'a PrecomputedGenomeData,
-    pub(crate) ref_len:    usize,
     pub(crate) formatting: &'a Formatting,
 }
 
 impl Display for GenRow<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let g = self.genome;
         let gen_rpad = if self.formatting.right_pad_gen {
-            let trailing = self.ref_len.saturating_sub(g.genome_aln.len());
-            ".".repeat(trailing)
+            ".".repeat(self.genome.trailing_ref_unaligned)
         } else {
             String::new()
         };
@@ -59,11 +58,11 @@ impl Display for GenRow<'_> {
             self.id,
             self.ctype,
             self.ref_id,
-            Nullable(&g.genome_id),
-            g.genome_length,
-            g.has_insertion,
-            g.genome_seq,
-            g.genome_aln,
+            Nullable(&self.genome.genome_id),
+            self.genome.genome_length,
+            self.genome.has_insertion,
+            self.genome.genome_seq,
+            self.genome.genome_aln,
             gen_rpad,
         )
     }

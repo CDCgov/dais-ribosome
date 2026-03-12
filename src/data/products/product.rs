@@ -23,7 +23,8 @@ use zoe::prelude::*;
 pub(crate) struct Product<'a> {
     /// The information for the protein product being aligned against, including
     /// the name and exons.
-    pub(crate) product_spec:               &'a ProductSpec,
+    pub(crate) product_spec: &'a ProductSpec,
+
     /// The ranges within the exons that the query covers. This is initially
     /// formed by intersecting the query ranges with the exon ranges, then is
     /// tweaked.
@@ -33,7 +34,19 @@ pub(crate) struct Product<'a> {
     /// portion of the coding sequence (the exons), the ranges will be adjacent
     /// (forming a partition). However, there may be exons at the beginning or
     /// end which are not aligned against (or partially aligned against).
-    pub(crate) product_ranges:             Vec<CdsStateRange>,
+    pub(crate) product_ranges: Vec<CdsStateRange>,
+
+    /// The number of bases in the coding sequence that were not aligned against
+    /// in the beginning (i.e., not included in `product_ranges`).
+    pub(crate) leading_cds_unaligned: usize,
+
+    /// The number of bases in the coding sequence that were not aligned against
+    /// at the end (i.e., not included in `product_ranges`).
+    ///
+    /// Materialization may use an _increased_ version of this if it truncates
+    /// the alignment at the first stop codon encountered.
+    pub(crate) trailing_cds_unaligned: usize,
+
     /// If this product's last exon ends at the stop extension position, this
     /// holds the query range of the stop extension nucleotides.
     pub(crate) stop_extension_query_range: Option<Range<usize>>,
@@ -72,17 +85,6 @@ impl<'a> Product<'a> {
         } else {
             false
         }
-    }
-
-    pub(crate) fn leading_cds_gap_len(&self) -> usize {
-        self.product_ranges
-            .iter()
-            .find_map(|s| match s {
-                CdsStateRange::M(m) => Some(m.cds_range.start),
-                CdsStateRange::D(d) => Some(d.cds_range.start),
-                _ => None,
-            })
-            .unwrap_or(0)
     }
 
     /// Condenses adjacent deletions in the coding sequence.

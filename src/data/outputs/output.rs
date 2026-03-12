@@ -48,15 +48,23 @@ pub struct ComputedRibosomeOutput<'a> {
 #[derive(Debug)]
 pub(crate) struct GenomeAndProductStates<'a> {
     /// Reference ID
-    pub(crate) reference_id:      &'a str,
-    /// Reference sequence length for genome padding
-    pub(crate) ref_len:           usize,
+    pub(crate) reference_id: &'a str,
+
     /// Genome alignment to nucleotide reference sequence expressed as [`StateRange`]
     pub(crate) genome_aln_states: Vec<StateRange>,
+
+    /// The number of bases in the reference sequence that were not aligned
+    /// against in the beginning (i.e., not included in `genome_aln_states`).
+    pub(crate) leading_ref_unaligned: usize,
+
+    /// The number of bases in the reference sequence that were not aligned
+    /// against at the end (i.e., not included in `genome_aln_states`).
+    pub(crate) trailing_ref_unaligned: usize,
+
     /// Contains all relevant product data, including the protein name.
-    pub(crate) products:          Vec<Product<'a>>,
+    pub(crate) products:        Vec<Product<'a>>,
     /// Lazily computed genome data, cached via OnceLock.
-    pub(crate) computed_genome:   OnceLock<PrecomputedGenomeData>,
+    pub(crate) computed_genome: OnceLock<PrecomputedGenomeData>,
 }
 
 impl<'a> GenomeAndProductStates<'a> {
@@ -67,11 +75,12 @@ impl<'a> GenomeAndProductStates<'a> {
     /// The `query` should contain unaligned, uppercase IUPAC bases.
     fn materialize(self, query: &Nucleotides) -> ComputedGenomeAndProductStates<'a> {
         ComputedGenomeAndProductStates {
-            reference_id:      self.reference_id,
-            ref_len:           self.ref_len,
-            genome_aln_states: self.genome_aln_states,
-            computed_genome:   self.computed_genome,
-            products:          self.products.into_iter().map(|product| product.materialize(query)).collect(),
+            reference_id:           self.reference_id,
+            genome_aln_states:      self.genome_aln_states,
+            leading_ref_unaligned:  self.leading_ref_unaligned,
+            trailing_ref_unaligned: self.trailing_ref_unaligned,
+            computed_genome:        self.computed_genome,
+            products:               self.products.into_iter().map(|product| product.materialize(query)).collect(),
         }
     }
 }
@@ -79,15 +88,24 @@ impl<'a> GenomeAndProductStates<'a> {
 #[derive(Debug)]
 pub(crate) struct ComputedGenomeAndProductStates<'a> {
     /// Reference ID
-    pub(crate) reference_id:      &'a str,
-    /// Reference sequence length for genome padding
-    pub(crate) ref_len:           usize,
+    pub(crate) reference_id: &'a str,
+
     /// Genome alignment to nucleotide reference sequence expressed as [`StateRange`]
     pub(crate) genome_aln_states: Vec<StateRange>,
+
+    /// The number of bases in the reference sequence that were not aligned
+    /// against in the beginning (i.e., not included in `genome_aln_states`).
+    pub(crate) leading_ref_unaligned: usize,
+
+    /// The number of bases in the reference sequence that were not aligned
+    /// against at the end (i.e., not included in `genome_aln_states`).
+    pub(crate) trailing_ref_unaligned: usize,
+
     /// Contains all relevant product data, including the protein name.
-    pub(crate) products:          Vec<ComputedProduct<'a>>,
+    pub(crate) products: Vec<ComputedProduct<'a>>,
+
     /// Lazily computed genome data, cached via OnceLock.
-    pub(crate) computed_genome:   OnceLock<PrecomputedGenomeData>,
+    pub(crate) computed_genome: OnceLock<PrecomputedGenomeData>,
 }
 
 impl<'a> ComputedRibosomeOutput<'a> {
@@ -152,7 +170,6 @@ impl<'a> ComputedRibosomeOutput<'a> {
                 ctype: &self.query.ctype,
                 ref_id: state.reference_id,
                 genome,
-                ref_len: state.ref_len,
                 formatting: self.formatting,
             }
         })
@@ -194,8 +211,8 @@ impl<'a> ComputedGenomeAndProductStates<'a> {
     /// Lazily compute and cache genome data from genome alignment states.
     pub fn materialize_genome(&self, query: &Nucleotides) -> &PrecomputedGenomeData {
         self.computed_genome.get_or_init(|| {
-            let mut genome_seq_bytes = Vec::new();
-            let mut genome_aln_bytes = Vec::new();
+            let mut genome_seq = Nucleotides::new();
+            let mut genome_aln = Nucleotides::from(vec![b'.'; self.leading_ref_unaligned]);
             let mut insertions = Vec::new();
             let mut has_insertion = false;
 
@@ -205,15 +222,15 @@ impl<'a> ComputedGenomeAndProductStates<'a> {
                 match state {
                     StateRange::M(m) => {
                         let slice = &query_bytes[m.query_range.clone()];
-                        genome_seq_bytes.extend_from_slice(slice);
-                        genome_aln_bytes.extend_from_slice(slice);
+                        genome_seq.extend_from_slice(slice);
+                        genome_aln.extend_from_slice(slice);
                     }
                     StateRange::I(ins) => {
                         let slice = &query_bytes[ins.query_range.clone()];
-                        genome_seq_bytes.extend_from_slice(slice);
+                        genome_seq.extend_from_slice(slice);
                         has_insertion = true;
 
-                        let inserted_nucleotides = Nucleotides::from_vec_unchecked(slice.to_vec());
+                        let inserted_nucleotides = Nucleotides::from(slice);
                         insertions.push(ComputedGenomeInsertion {
                             // 1-based index before is equivalent to 0-based
                             // index after
@@ -222,15 +239,13 @@ impl<'a> ComputedGenomeAndProductStates<'a> {
                         });
                     }
                     StateRange::D(del) => {
-                        genome_aln_bytes.extend(std::iter::repeat_n(b'-', del.ref_range.len()));
+                        genome_aln.pad_end(b'-', del.ref_range.len());
                     }
                 }
             }
 
-            let genome_seq = Nucleotides::from_vec_unchecked(genome_seq_bytes);
             let genome_id = nt_id(&genome_seq);
             let genome_length = genome_seq.len();
-            let genome_aln = Nucleotides::from_vec_unchecked(genome_aln_bytes);
 
             PrecomputedGenomeData {
                 genome_id,
@@ -239,6 +254,7 @@ impl<'a> ComputedGenomeAndProductStates<'a> {
                 genome_seq,
                 genome_aln,
                 insertions,
+                trailing_ref_unaligned: self.trailing_ref_unaligned,
             }
         })
     }
