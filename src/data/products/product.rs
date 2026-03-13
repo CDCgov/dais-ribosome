@@ -53,10 +53,6 @@ pub(crate) struct Product<'a> {
 }
 
 impl<'a> Product<'a> {
-    // TODO: If the deletion is short enough (e.g., 1 or 2 bases), should we
-    // still apply the rule as much as possible?? Or if the match range is
-    // shorter than 3 in length?
-
     /// Returns true if a required start codon is required for the exons, a
     /// long-enough match state occurs in the [`Product`] to span this codon,
     /// and yet the codon is not equal to the required one.
@@ -72,10 +68,7 @@ impl<'a> Product<'a> {
         if let Some(required) = self.product_spec.exons.required_start
             // Note that the first product range is either a match or deletion
             && let Some(CdsStateRange::M(m)) = self.product_ranges.first()
-            // This might not be true if the aligned query failed to cover the
-            // beginning of the exons (the CDS)
-            && m.cds_range.start == 0
-            && m.cds_range.end >= 3
+            && m.cds_range.len() >= 3
         {
             // Validity: query_range always refers to valid indices in query. At
             // least 3 residues exist since cds_range and query_range are the
