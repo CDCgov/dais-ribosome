@@ -306,8 +306,8 @@ impl DependentFields {
         // end.
         let del_aa_end = range.cds_range.end.div_ceil(3);
 
-        // Add 1 since our range is end-inclusive.
-        let del_aa_len = del_aa_end - del_aa_start + 1;
+        // TODO: Modified due to regression tests
+        let del_aa_len = range.cds_range.len().div_ceil(3);
 
         self.deletions.push(ComputedDeletion {
             del_aa_start,
