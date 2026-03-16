@@ -43,7 +43,7 @@ impl<'a> Product<'a> {
         let aa_seq = {
             let mut out = AminoAcids::new();
 
-            let mut aa_aln_without_deletions = aa_aln.iter().filter(|&&b| b != b'-' && b != b'.').copied();
+            let mut aa_aln_iter = aa_aln.iter().copied();
 
             // The number of amino acids consumed from aa_aln so far
             let mut num_consumed = 0;
@@ -52,14 +52,18 @@ impl<'a> Product<'a> {
                 // the count of the number of amino acids before the insertion.
                 let num_to_consume = insertion.upstream_aa_pos - num_consumed;
 
-                out.extend(aa_aln_without_deletions.by_ref().take(num_to_consume));
+                // Extend with non-deleted aligned residues before the insertion
+                let aligned_before_insertion = aa_aln_iter.by_ref().take(num_to_consume).filter(|&b| b != b'-' && b != b'.');
+                out.extend(aligned_before_insertion);
+
+                // Extend with the insertion
                 out.extend_from_slice(&insertion.inserted_residues);
 
                 num_consumed += num_to_consume;
             }
 
-            // Consume the rest of the amino acids after the last insertion
-            out.extend(aa_aln_without_deletions);
+            // Extend with non-deleted aligned residues after the last insertion
+            out.extend(aa_aln_iter.filter(|&b| b != b'-' && b != b'.'));
 
             out
         };
@@ -194,7 +198,12 @@ impl IncrementalAccumulator {
 
     /// Populates the [`IncrementalAccumulator`] from all ranges in `product`.
     fn populate_from(&mut self, query: &Nucleotides, product: &Product) -> usize {
-        for state in &product.product_ranges {
+        let ranges = product.product_ranges.iter().enumerate();
+
+        // Populate from ranges up to the last
+        for (i, state) in ranges {
+            let is_terminal = i == 0 || i == product.product_ranges.len() - 1;
+
             match state {
                 CdsStateRange::M(m) => {
                     // Short circuit if a stop codon is found
@@ -203,7 +212,7 @@ impl IncrementalAccumulator {
                     }
                 }
                 CdsStateRange::I(ins) => self.extend_from_insertion(query, ins),
-                CdsStateRange::D(del) => self.extend_from_deletion(del),
+                CdsStateRange::D(del) => self.extend_from_deletion(del, is_terminal),
             };
         }
 
@@ -271,9 +280,9 @@ impl IncrementalAccumulator {
     }
 
     /// Updates the accumulator with a deletion range.
-    fn extend_from_deletion(&mut self, range: &CdsDeletionRange) {
+    fn extend_from_deletion(&mut self, range: &CdsDeletionRange, is_terminal: bool) {
         self.cds_aln.extend(std::iter::repeat_n(b'-', range.len()));
-        self.dependent_fields.extend_from_deletion(range);
+        self.dependent_fields.extend_from_deletion(range, is_terminal);
     }
 
     /// Updates the `aa_aln` translation to include as many of the bytes in
@@ -365,8 +374,10 @@ impl DependentFields {
     }
 
     /// Extends the dependent fields from a deletion range.
-    fn extend_from_deletion(&mut self, range: &CdsDeletionRange) {
-        if !range.len().is_multiple_of(3) {
+    fn extend_from_deletion(&mut self, range: &CdsDeletionRange, is_terminal: bool) {
+        // Only allow has_shift_indel to be updated for a deletion if it is not
+        // at the beginning or end of the ranges for the given exon
+        if !is_terminal && !range.len().is_multiple_of(3) {
             self.has_shift_indel = true;
         }
 

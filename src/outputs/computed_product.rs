@@ -75,21 +75,21 @@ impl ComputedInsertion {
     /// Creates a [`ComputedInsertion`] from raw insertion data, and returns
     /// whether it should be filtered.
     ///
-    /// The `upstream_nt_pos` argument is the 0-based upstream nucleotide
-    /// position in CDS space after which the insertion occurs. The second
-    /// return argument is true (indicating that it should be filtered) if the
+    /// The `cds_index` argument is the 0-based upstream nucleotide position in
+    /// the coding sequence where the insertion occurs. The second return
+    /// argument is true (indicating that it should be filtered) if the
     /// insertion length is less than 3 or the insertion is all `N`.
     ///
     /// ## Validity
     ///
     /// The slice of the query range representing the insertion should contain
     /// unaligned, uppercase IUPAC bases.
-    pub(crate) fn new(nt_insertion_idx: InsertionIdx, slice: &[u8]) -> (Self, bool) {
+    pub(crate) fn new(cds_index: InsertionIdx, slice: &[u8]) -> (Self, bool) {
         let ins_len = slice.len();
         let inserted_nucleotides = Nucleotides::from(slice);
 
-        let aa_insertion_idx = nt_insertion_idx.to_aa_idx();
-        let codon_shift = nt_insertion_idx.codon_shift();
+        let aa_insertion_idx = cds_index.to_aa_idx();
+        let codon_shift = cds_index.codon_shift();
 
         let (inserted_residues, filtered) = if ins_len < 3 || slice.iter().all(|&b| b == b'N') {
             // Do not include the all N insertion or shorter than 3 insertions
@@ -102,7 +102,7 @@ impl ComputedInsertion {
         (
             ComputedInsertion {
                 upstream_aa_pos: aa_insertion_idx.left_pos(),
-                upstream_nt_pos: nt_insertion_idx.left_pos(),
+                upstream_nt_pos: cds_index.left_pos(),
                 inserted_nucleotides,
                 inserted_residues,
                 codon_shift,
