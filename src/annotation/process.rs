@@ -21,7 +21,7 @@ use zoe::{
 impl<'a> AnnotationModule<'a> {
     /// Processes a single query, returning [`RibosomeOutput`] containing all
     /// the genome alignments against the relevant references, as well as the
-    /// protein products formed for each reference.  
+    /// protein products formed for each reference.
     pub fn process(&self, query: QueryRecord) -> Result<RibosomeOutput<'_>, RibosomeError> {
         // Get the corresponding reference information for the compound type of
         // the query
@@ -287,23 +287,41 @@ impl<'a> Product<'a> {
     /// The `query` should be the same query which the alignment used to create
     /// `self` was formed from.
     pub(crate) fn missing_required_start(&self, query: &QueryRecord) -> bool {
-        if let Some(required) = self.product_spec.exons.required_start
-            // Note that the first product range is either a match or deletion
-            && let Some(CdsStateRange::M(m)) = self.product_ranges.first()
-            && m.cds_range.len() >= 3
-        {
-            // Validity: query_range always refers to valid indices in query. At
-            // least 3 residues exist since cds_range and query_range are the
-            // same length
-            let mut first: [u8; 3] = *query.nucleotides[m.query_range.start..].first_chunk().expect("The length of the query_range should be at least 3, and the query_range should not refer to out of bounds indices");
+        let Some(required) = self.product_spec.exons.required_start else {
+            // The specs do not require a start codon, so return false
+            return false;
+        };
 
-            // Convert U to T for the purpose of identifying the required start
-            first = first.map(|b| b.recode_base(RecodeDNAStrat::AnyToAcgtnNoGapsUpper));
+        // Get the index of the start codon in query coordinates, if available
+        let start_codon_idx_in_query = match self.product_ranges.first() {
+            Some(CdsStateRange::M(state)) => (state.cds_range.start == 0).then_some(state.query_range.start),
+            // Leading insertions shouldn't be possible, but we can handle them anyways
+            Some(CdsStateRange::I(state)) => state.cds_index.at_start().then_some(state.query_range.start),
+            // Deletion or empty ranges implies start codon was partly deleted
+            // or clipped
+            Some(CdsStateRange::D(_)) | None => None,
+        };
 
-            first != required
-        } else {
-            false
-        }
+        let Some(start_codon_idx_in_query) = start_codon_idx_in_query else {
+            return true;
+        };
+
+        // We use get_slice since technically an empty match state could cause
+        // query_range.start to be out of bounds, but this will never happen
+        let Some(mut first_cds_codon) = query
+            .nucleotides
+            .get_slice(start_codon_idx_in_query..)
+            .and_then(|slice| slice.get_first_codon())
+        else {
+            // The entire CDS is less than a single codon in length, so the required start codon is missing
+            return true;
+        };
+
+        // Convert U to T for the purpose of identifying the required start
+        first_cds_codon = first_cds_codon.map(|b| b.recode_base(RecodeDNAStrat::AnyToAcgtnNoGapsUpper));
+
+        // Check for equality
+        first_cds_codon != required
     }
 
     /// Condenses adjacent deletions in the coding sequence.
