@@ -2,7 +2,9 @@
 
 ## v1.7.0 (TBD)
 
-- **Changes**: The ranges for the `HA1` product for `A_HA_H1` and `A_HA_H3` are extended by 3 nucleotides and 18 nucleotides respectively
+- **Changes**: 
+  - The ranges for the `HA1` product for `A_HA_H1` and `A_HA_H3` are extended by 3 nucleotides and 18 nucleotides respectively
+  - The check for the required start codon in PB1-F2 now allows for AUG in addition to ATG
 
 ## v1.6.2 (2026.03.19)
 

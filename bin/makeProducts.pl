@@ -123,10 +123,22 @@ while ( my $fasta_record = <$FASTA> ) {
                 $cds .= substr( $sequence, $exons{$p}[$i][0], $exons{$p}[$i][1] );
             }
 
-            if ( $prefix ne q{} && $prefix ne substr( $cds, 0, length($prefix) ) ) {
-                next;
-            } elsif ( $suffix ne q{} && $suffix ne substr( $cds, -length($suffix) ) ) {
-                next;
+            if ( $prefix ne q{} ) {
+                $prefix =~ tr/Uu/Tt/;
+                my $cds_prefix = substr( $cds, 0, length($prefix) );
+                $cds_prefix =~ tr/Uu/Tt/;
+                if ( $prefix ne $cds_prefix ) {
+                    next;
+                }
+            }
+            
+            if ( $suffix ne q{} ) {
+                $suffix =~ tr/Uu/Tt/;
+                my $cds_suffix = substr( $cds, -length($suffix) );
+                $cds_suffix =~ tr/Uu/Tt/;
+                if ( $suffix ne $cds_suffix ) {
+                    next;
+                }
             }
 
             $length = length($cds);
