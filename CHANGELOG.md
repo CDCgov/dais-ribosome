@@ -1,5 +1,9 @@
 # DAIS-RIBOSOME Change Log
 
+## v1.7.0 (TBD)
+
+- **Changes**: The ranges for the `HA1` product for `A_HA_H1` and `A_HA_H3` are extended by 3 nucleotides and 18 nucleotides respectively
+
 ## v1.6.2 (2026.03.19)
 
 - **Fixes**: The check for the required start codon in PB1-F2 properly checks the beginning of the coding sequence instead of the query sequence
