@@ -1,6 +1,6 @@
 # DAIS-RIBOSOME Change Log
 
-## v1.6.2 (TBD)
+## v1.6.2 (2026.03.19)
 
 - **Fixes**: The check for the required start codon in PB1-F2 properly checks the beginning of the coding sequence instead of the query sequence
 
