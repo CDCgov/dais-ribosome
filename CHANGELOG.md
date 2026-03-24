@@ -7,6 +7,8 @@
   - The translation of insertions now supports `U`
   - An out-of-frame deletion that occurs within 3 bases of another is properly shifted
   - Partially fixes a bug where trailing insertions appear at the end of a product. **It is a known bug that in some cases, an insertion still may appear after a stop codon in the aligned CDS sequence for a product. This will be resolved in DAIS-ribosome v2**
+  - Trailing insertions at the end of a product are now properly excluded from the
+  unaligned sequence outputs (fix in `convert`)
 
 ## v1.7.0 (2026.04.23)
 
@@ -16,16 +18,30 @@
 - **Changes**:
   - The ranges for the `HA1` product for `A_HA_H1` and `A_HA_H3` are extended by 3 nucleotides and 18 nucleotides respectively
   - In advance of ribosome/sswsort v2, we pin ribosome v1 to sswsort v1.
+  - Codons containing a mix of `.` and `-` now translate to `.` instead of `-` (fix in `convert`)
 
 - **Fixes**:
   - The check for the required start codon in PB1-F2 now allows for AUG in addition to ATG
   - Fixes a bug causing some query coordinate ranges to be incorrectly shifted right for `M2`, `NEP`, and `PA-X`
   - Fixes Dockerfile build process to allow for custom certificates
   - Fixes the majority of bugs where indels in non-coding regions are not reflected in query coordinates. **It is a known bug that in rare cases, the query coordinates may still be incorrect. This will be resolved in DAIS-ribosome v2**
+  - Trailing indels that are then followed by padding no longer are counted as
+  causing a frame shift (fix in `convert`)
+  - Stop extension now properly occurs even in the presence of prior insertions (fix in `convert`)
+  - Insertions near the end of a product are now properly output, even if their
+  frames could not be corrected (fix in `editMSA`)
+  - The default codon/position weights are now properly accessed when shifting
+  insertions, which may improve the direction chosen when position-specific
+  information is unavailable or has a tie (fix in `editMSA`)
+  - Insertions that shift to the beginning of a product are now properly removed (fix in `editMSA`)
+  - Deletions that are near each other are now both properly shifted, instead of
+  just the first (fix in `editMSA`)
 
 ## v1.6.2 (2026.03.19)
 
-- **Fixes**: The check for the required start codon in PB1-F2 properly checks the beginning of the coding sequence instead of the query sequence
+- **Fixes**: 
+  - The check for the required start codon in PB1-F2 properly checks the beginning of the coding sequence instead of the query sequence
+  - Translation from nucleotides to amino acids for matched regions properly supports `U` (fix in `convert`)
 
 ## v1.6.1 (2025.04.18)
 
