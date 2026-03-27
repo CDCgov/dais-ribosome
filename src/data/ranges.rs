@@ -1,5 +1,6 @@
 use crate::data::exons::ExonCoords;
 use std::{
+    cmp::Ordering,
     fmt::{self, Display, Formatter},
     ops::Range,
 };
@@ -289,54 +290,41 @@ impl CdsInsertionRange {
 
 impl MatchRange {
     fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsMatchRange> {
-        self.ref_range.overlaps(&exon.ref_range).then(|| {
-            // The number bases that the match range extends past the end of the
-            // exon on the left
-            let cut_start = exon.ref_range.start.saturating_sub(self.ref_range.start);
+        // Intersect the two ranges in reference coordinates
+        self.ref_range.intersect(&exon.ref_range).map(|intersect_ref_range| {
+            let self_shrinkage = self.ref_range.compute_shrinkage(&intersect_ref_range);
+            let intersect_query_range = self.query_range.shrink(self_shrinkage);
 
-            // The number of bases that the match range extends past the end of
-            // the exon on the right
-            let cut_end = self.ref_range.end.saturating_sub(exon.ref_range.end);
+            // self.query_range and self.ref_range have the same length, so the
+            // same should be true for the intersected versions
+            debug_assert_eq!(intersect_query_range.len(), intersect_ref_range.len());
 
-            // Cut the reference range to not include this overhang
-            let ref_range = self.ref_range.cut(cut_start, cut_end);
+            let exon_shrinkage = exon.ref_range.compute_shrinkage(&intersect_ref_range);
+            let intersect_cds_range = exon.cds_range.shrink(exon_shrinkage);
 
-            // Cut the query range by the same amounts
-            let query_range = self.query_range.cut(cut_start, cut_end);
+            // exon.cds_range and exon.ref_range have the same length, so the
+            // same should be true for the intersected versions
+            debug_assert_eq!(intersect_cds_range.len(), intersect_ref_range.len());
 
-            // Map to the CDS
-            let cut_start = ref_range.start - exon.ref_range.start;
-            let cut_end = exon.ref_range.end - ref_range.end;
-            let cds_range = exon.cds_range.cut(cut_start, cut_end);
-
-            // Validity: both ranges were cut by the same amount, so they remain
-            // the same length
-            CdsMatchRange { query_range, cds_range }
+            // Validity: Per above, these are the same length, equal to the
+            // intersect_ref_range.len()
+            CdsMatchRange {
+                query_range: intersect_query_range,
+                cds_range:   intersect_cds_range,
+            }
         })
     }
 }
 
 impl DeletionRange {
     fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsDeletionRange> {
-        self.ref_range.overlaps(&exon.ref_range).then(|| {
-            // The number bases that the match range extends past the end of the
-            // exon on the left
-            let cut_start = exon.ref_range.start.saturating_sub(self.ref_range.start);
+        self.ref_range.intersect(&exon.ref_range).map(|intersect_ref_range| {
+            let exon_shrinkage = exon.ref_range.compute_shrinkage(&intersect_ref_range);
+            let intersect_cds_range = exon.cds_range.shrink(exon_shrinkage);
 
-            // The number of bases that the match range extends past the end of
-            // the exon on the right
-            let cut_end = self.ref_range.end.saturating_sub(exon.ref_range.end);
-
-            // Cut the reference range to not include this overhang
-            let ref_range = self.ref_range.cut(cut_start, cut_end);
-
-            // Map to the CDS
-            let cut_start = ref_range.start - exon.ref_range.start;
-            let cut_end = exon.ref_range.end - ref_range.end;
-            let cds_range = exon.cds_range.cut(cut_start, cut_end);
-
-            // The range is non-empty since overlap was detected
-            CdsDeletionRange { cds_range }
+            CdsDeletionRange {
+                cds_range: intersect_cds_range,
+            }
         })
     }
 }
@@ -354,10 +342,15 @@ impl InsertionRange {
         // right < end.
 
         (exon.ref_range.start < self.ref_index.right && self.ref_index.right < exon.ref_range.end).then(|| {
+            // Intuitively, cds_range.start + (ref_index.right-ref_range.start)
+            // where the second term is the offsetof the insertion within the
+            // reference range. However, that offset may be positive or
+            // negative, so we need to do additions before substractions to
+            // prevent underflow
+            let cds_index = InsertionIdx::from_right_idx(self.ref_index.right + exon.cds_range.start - exon.ref_range.start);
+
             CdsInsertionRange {
-                cds_index:   InsertionIdx::from_right_idx(
-                    self.ref_index.right - exon.ref_range.start + exon.cds_range.start,
-                ),
+                cds_index,
                 query_range: self.query_range.clone(),
             }
         })
@@ -436,7 +429,8 @@ impl StateRange {
     }
 }
 
-pub(crate) trait RangeExt {
+/// An extension trait for basic 0-based range manipulation.
+pub(crate) trait RangeExt: Sized {
     /// Adds a constant value to the range, shifting it right.
     #[must_use]
     fn add(&self, n: usize) -> Self;
@@ -445,30 +439,50 @@ pub(crate) trait RangeExt {
     #[must_use]
     fn sub(&self, n: usize) -> Self;
 
-    /// Shrinks a range by cutting `start` from the beginning and `end` from the
-    /// end.
+    /// Computes the shrinkage that was applied to go from `self` to `subset`.
+    fn compute_shrinkage(&self, subset: &Self) -> RangeShrinkage;
+
+    /// Shrinks the range by the given [`RangeShrinkage`] amount.
     ///
-    /// This increases the beginning of the range and decreases the end.
-    #[must_use]
-    fn cut(&self, start: usize, end: usize) -> Self;
+    /// The amount can be computed from [`compute_shrinkage`] or manually
+    /// defined.
+    ///
+    /// [`compute_shrinkage`]: RangeExt::compute_shrinkage
+    fn shrink(&self, amount: RangeShrinkage) -> Self;
 
     /// Checks whether the range overlaps with another.
     #[must_use]
+    #[allow(dead_code)]
     fn overlaps(&self, other: &Self) -> bool;
 
-    /// Returns a formatter for the equivalent 1-based inclusive range.
+    /// Intersects the two ranges, returning `Some` only if the result is
+    /// non-empty.
+    #[must_use]
+    fn intersect(&self, other: &Self) -> Option<Self>;
+
+    /// Checks whether the range is a superset of `other`.
+    ///
+    /// If the ranges are equal, this returns `true` (it is not strict).
+    #[must_use]
+    fn is_superset_of(&self, other: &Self) -> bool;
+
+    /// Compares the positions of the ranges, returning `None` if the ranges
+    /// overlap but are not equal.
+    #[must_use]
+    #[allow(dead_code)]
+    fn strict_cmp(&self, other: &Self) -> Option<Ordering>;
+
+    /// Compares the positions of the ranges, returning `None` if one range
+    /// contains the other as a strict subset. Overlap is permitted.
+    #[must_use]
+    fn relaxed_cmp(&self, other: &Self) -> Option<Ordering>;
+
+    /// Returns a formatter displaying the 0-based range as 1-based, and
+    /// end-inclusive instead of end-exclusive.
+    ///
+    /// See [`InclusiveRangeDisplay`] for more details.
     #[must_use]
     fn display_inclusive(&self) -> InclusiveRangeDisplay<'_>;
-}
-
-pub(crate) struct InclusiveRangeDisplay<'a> {
-    range: &'a Range<usize>,
-}
-
-impl Display for InclusiveRangeDisplay<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}..{}", self.range.start + 1, self.range.end)
-    }
 }
 
 impl RangeExt for Range<usize> {
@@ -480,17 +494,113 @@ impl RangeExt for Range<usize> {
         self.start - n..self.end - n
     }
 
-    fn cut(&self, start: usize, end: usize) -> Self {
-        self.start + start..self.end - end
+    fn compute_shrinkage(&self, subset: &Self) -> RangeShrinkage {
+        debug_assert!(self.is_superset_of(subset), "The range must be a subset of `self`!");
+
+        let shrink_left = subset.start - self.start;
+        let shrink_right = self.end - subset.end;
+
+        RangeShrinkage {
+            shrink_left,
+            shrink_right,
+        }
+    }
+
+    fn shrink(&self, amount: RangeShrinkage) -> Self {
+        self.start + amount.shrink_left..self.end - amount.shrink_right
     }
 
     fn overlaps(&self, other: &Self) -> bool {
+        dbg_check_endpoints(self);
+        dbg_check_endpoints(other);
+
         // Both ranges must end strictly after the other one starts in order for
         // overlap to occur
         self.end > other.start && other.end > self.start
     }
 
+    fn intersect(&self, other: &Self) -> Option<Self> {
+        dbg_check_endpoints(self);
+        dbg_check_endpoints(other);
+
+        let start = self.start.max(other.start);
+        let end = self.end.min(other.end);
+        (start < end).then_some(start..end)
+    }
+
+    fn is_superset_of(&self, other: &Self) -> bool {
+        dbg_check_endpoints(self);
+        dbg_check_endpoints(other);
+
+        self.start <= other.start && other.end <= self.end
+    }
+
+    fn strict_cmp(&self, other: &Self) -> Option<Ordering> {
+        dbg_check_endpoints(self);
+        dbg_check_endpoints(other);
+
+        if self == other {
+            Some(Ordering::Equal)
+        } else if self.end <= other.start {
+            Some(Ordering::Less)
+        } else if self.start >= other.end {
+            Some(Ordering::Greater)
+        } else {
+            None
+        }
+    }
+
+    fn relaxed_cmp(&self, other: &Self) -> Option<Ordering> {
+        dbg_check_endpoints(self);
+        dbg_check_endpoints(other);
+
+        match (self.start.cmp(&other.start), self.end.cmp(&other.end)) {
+            // Handle equality first
+            (Ordering::Equal, Ordering::Equal) => Some(Ordering::Equal),
+
+            // At least one is strictly less per first case failing
+            (Ordering::Less | Ordering::Equal, Ordering::Less | Ordering::Equal) => Some(Ordering::Less),
+
+            // At least one is strictly greater per first case failing
+            (Ordering::Greater | Ordering::Equal, Ordering::Greater | Ordering::Equal) => Some(Ordering::Greater),
+
+            // One range contains the other
+            (Ordering::Less, Ordering::Greater) | (Ordering::Greater, Ordering::Less) => None,
+        }
+    }
+
     fn display_inclusive(&self) -> InclusiveRangeDisplay<'_> {
         InclusiveRangeDisplay { range: self }
     }
+}
+
+pub(crate) struct RangeShrinkage {
+    shrink_left:  usize,
+    shrink_right: usize,
+}
+
+/// A wrapper around a [`Range`] such that the end is displayed as 1-based and
+/// end-inclusive.
+///
+/// Note that the same `..` syntax is used, rather than `..=`.
+pub(crate) struct InclusiveRangeDisplay<'a> {
+    /// The 0-based, end-exclusive range.
+    range: &'a Range<usize>,
+}
+
+impl Display for InclusiveRangeDisplay<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}..{}", self.range.start + 1, self.range.end)
+    }
+}
+
+/// When in debug mode, checks to make sure the end of the range is not less
+/// than the start.
+fn dbg_check_endpoints(range: &Range<usize>) {
+    debug_assert!(
+        range.start <= range.end,
+        "The end of the range cannot be less than the start! Found {}..{}",
+        range.start,
+        range.end
+    );
 }

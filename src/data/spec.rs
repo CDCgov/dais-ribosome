@@ -6,6 +6,7 @@ use crate::data::{
     ranges::RangeExt,
 };
 use std::{
+    cmp::Ordering,
     collections::HashMap,
     fs::File,
     io::{BufRead, BufReader, Lines},
@@ -219,18 +220,35 @@ fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
         let ref_range = parse_coordinate_range(coord_range)?;
 
         if let Some(last) = exon_ranges.last() {
-            if ref_range.start < last.ref_range.start || ref_range.end <= last.ref_range.end {
-                return Err(std::io::Error::other(format!(
-                    "Exons out of order: {} then {}",
-                    last.ref_range.display_inclusive(),
-                    ref_range.display_inclusive(),
-                )));
+            match ref_range.relaxed_cmp(&last.ref_range) {
+                Some(Ordering::Greater) => {}
+                Some(Ordering::Less) => {
+                    return Err(std::io::Error::other(format!(
+                        "Exons out of order! Found {} then {}",
+                        last.ref_range.display_inclusive(),
+                        ref_range.display_inclusive(),
+                    )));
+                }
+                Some(Ordering::Equal) => {
+                    return Err(std::io::Error::other(format!(
+                        "Found the same exon twice: {}",
+                        ref_range.display_inclusive()
+                    )));
+                }
+                None => {
+                    return Err(std::io::Error::other(format!(
+                        "One exon cannot completely contain another! Found {} then {}",
+                        last.ref_range.display_inclusive(),
+                        ref_range.display_inclusive(),
+                    )));
+                }
             }
 
+            // Exclusive index - inclusive index is valid length
             let overlap_nt = last.ref_range.end.saturating_sub(ref_range.start);
             if overlap_nt > MAX_DUPLICATED_OVERLAP_NT {
                 return Err(std::io::Error::other(format!(
-                    "Exon overlap exceeds {MAX_DUPLICATED_OVERLAP_NT} nt: {} then {}",
+                    "Exon overlap exceeds {MAX_DUPLICATED_OVERLAP_NT} nt! Found {} then {}",
                     last.ref_range.display_inclusive(),
                     ref_range.display_inclusive(),
                 )));
@@ -240,7 +258,8 @@ fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
         let cds_end = cds_start + ref_range.len();
 
         // Validity: ref_range is non-empty per guarantees from
-        // parse_coordinate_range
+        // parse_coordinate_range, and they are the same length per above
+        // definition
         exon_ranges.push(ExonCoords {
             ref_range,
             cds_range: cds_start..cds_end,

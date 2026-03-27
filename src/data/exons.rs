@@ -17,20 +17,18 @@ pub(crate) struct Exons {
 
 /// The coordinates of an exon (coding sequence) within a reference and coding
 /// sequence.
+///
+/// ## Validity
+///
+/// The two ranges should be the same length and must be non-empty. They need
+/// not be multiples of 3 in length.
 #[derive(Debug, Clone)]
 pub struct ExonCoords {
     /// The 0-based end-exclusive range where the exon occurs within the
     /// reference sequence.
-    ///
-    /// ## Validity
-    ///
-    /// This range is always non-empty. This range need not be a multiple of 3
-    /// in length.
     pub(crate) ref_range: Range<usize>,
 
     /// The 0-based end-exclusive range where the exon occurs within the coding
     /// sequence.
-    ///
-    /// This range always has the same length as [`Self::ref_range`].
     pub(crate) cds_range: Range<usize>,
 }
