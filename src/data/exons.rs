@@ -4,18 +4,19 @@ use std::ops::Range;
 #[derive(Debug, Clone)]
 pub(crate) struct Exons {
     pub(crate) required_start:   Option<[u8; 3]>,
-    /// The coordinates and offsets of the exons (coding sequences) within the
-    /// reference.
+    /// The coordinates of the exons (coding sequences) within the reference
+    /// and coding sequence.
     ///
-    /// These are guaranteed to be in order and non-overlapping.
+    /// These are guaranteed to be in order. Reference overlaps of up to two
+    /// nucleotides are allowed and are duplicated in CDS order.
     pub(crate) coords:           Vec<ExonCoords>,
     /// The total length of all the exons for this entry in
     /// the `cds-spec.tsv` file.
     pub(crate) total_cds_length: usize,
 }
 
-/// The coordinates of an exon (coding sequence) within a reference, as well as
-/// an offset from the previous exon.
+/// The coordinates of an exon (coding sequence) within a reference and coding
+/// sequence.
 #[derive(Debug, Clone)]
 pub struct ExonCoords {
     /// The 0-based end-exclusive range where the exon occurs within the
@@ -27,11 +28,9 @@ pub struct ExonCoords {
     /// in length.
     pub(crate) ref_range: Range<usize>,
 
-    /// The offset of the reference coordinates to the coding sequence
-    /// coordinates (i.e., the number of non-coding residues up until this
-    /// exon).
+    /// The 0-based end-exclusive range where the exon occurs within the coding
+    /// sequence.
     ///
-    /// This is subtracted from reference coordinates to get coding sequence
-    /// coordinates.
-    pub(crate) ref_to_cds_offset: usize,
+    /// This range always has the same length as [`Self::ref_range`].
+    pub(crate) cds_range: Range<usize>,
 }

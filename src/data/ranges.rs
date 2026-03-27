@@ -1,5 +1,8 @@
 use crate::data::exons::ExonCoords;
-use std::ops::Range;
+use std::{
+    fmt::{self, Display, Formatter},
+    ops::Range,
+};
 use zoe::{alignment::Alignment, data::cigar::Ciglet};
 
 /// A helper struct to avoid confusion when storing the 0-based index of an
@@ -301,8 +304,10 @@ impl MatchRange {
             // Cut the query range by the same amounts
             let query_range = self.query_range.cut(cut_start, cut_end);
 
-            // Convert reference coordinates to coding sequence coordinates
-            let cds_range = ref_range.sub(exon.ref_to_cds_offset);
+            // Map to the CDS
+            let cut_start = ref_range.start - exon.ref_range.start;
+            let cut_end = exon.ref_range.end - ref_range.end;
+            let cds_range = exon.cds_range.cut(cut_start, cut_end);
 
             // Validity: both ranges were cut by the same amount, so they remain
             // the same length
@@ -325,8 +330,10 @@ impl DeletionRange {
             // Cut the reference range to not include this overhang
             let ref_range = self.ref_range.cut(cut_start, cut_end);
 
-            // Shift the reference range to the left to for the CDS range
-            let cds_range = ref_range.sub(exon.ref_to_cds_offset);
+            // Map to the CDS
+            let cut_start = ref_range.start - exon.ref_range.start;
+            let cut_end = exon.ref_range.end - ref_range.end;
+            let cds_range = exon.cds_range.cut(cut_start, cut_end);
 
             // The range is non-empty since overlap was detected
             CdsDeletionRange { cds_range }
@@ -348,7 +355,9 @@ impl InsertionRange {
 
         (exon.ref_range.start < self.ref_index.right && self.ref_index.right < exon.ref_range.end).then(|| {
             CdsInsertionRange {
-                cds_index:   InsertionIdx::from_right_idx(self.ref_index.right - exon.ref_to_cds_offset),
+                cds_index:   InsertionIdx::from_right_idx(
+                    self.ref_index.right - exon.ref_range.start + exon.cds_range.start,
+                ),
                 query_range: self.query_range.clone(),
             }
         })
@@ -446,6 +455,20 @@ pub(crate) trait RangeExt {
     /// Checks whether the range overlaps with another.
     #[must_use]
     fn overlaps(&self, other: &Self) -> bool;
+
+    /// Returns a formatter for the equivalent 1-based inclusive range.
+    #[must_use]
+    fn display_inclusive(&self) -> InclusiveRangeDisplay<'_>;
+}
+
+pub(crate) struct InclusiveRangeDisplay<'a> {
+    range: &'a Range<usize>,
+}
+
+impl Display for InclusiveRangeDisplay<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}..{}", self.range.start + 1, self.range.end)
+    }
 }
 
 impl RangeExt for Range<usize> {
@@ -465,5 +488,9 @@ impl RangeExt for Range<usize> {
         // Both ranges must end strictly after the other one starts in order for
         // overlap to occur
         self.end > other.start && other.end > self.start
+    }
+
+    fn display_inclusive(&self) -> InclusiveRangeDisplay<'_> {
+        InclusiveRangeDisplay { range: self }
     }
 }

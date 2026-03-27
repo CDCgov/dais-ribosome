@@ -3,6 +3,7 @@
 use crate::data::{
     exons::{ExonCoords, Exons},
     keys::RefKey,
+    ranges::RangeExt,
 };
 use std::{
     collections::HashMap,
@@ -87,7 +88,7 @@ struct TsvRow {
     /// A list of the exon coordinates in column 4 (e.g., `55..1683`,
     /// `1..33;689..1024`).
     ///
-    /// These are guaranteed to be in order and non-overlapping.
+    /// These are guaranteed to be in order.
     coords:         Vec<ExonCoords>,
     /// An optional required codon at the start in column 5 (e.g., `ATG`).
     required_start: Option<[u8; 3]>,
@@ -203,45 +204,48 @@ impl Iterator for TsvReader {
 /// ## Errors
 ///
 /// - Each range must successfully parse
-/// - The ranges must be non-overlapping and in order
-/// - The lengths of all the ranges must sum to a multiple of three (it must be
-///   in-frame). Each individual range can have an arbitrary length however.
+/// - The ranges must be in order, with at most 2 nt of overlap
 fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
+    // SARS-CoV-2 requires -1 exon-to-exon frameshift with other viruses
+    // reported up to -2
+    const MAX_DUPLICATED_OVERLAP_NT: usize = 2;
+
     let mut exon_ranges: Vec<ExonCoords> = Vec::new();
-    let mut ref_to_cds_offset = 0;
+    let mut cds_start = 0;
 
     // Parses and pushes a range to exon_ranges. Iterators do not work since we
-    // need to access the previous ExonCoords to compute offset.
+    // need to access the previous ExonCoords to validate order and overlap.
     for coord_range in coords.split(';') {
         let ref_range = parse_coordinate_range(coord_range)?;
 
-        // Compute offset from previous exon (i.e., length of non-coding
-        // sequence between them)
-        let len_of_gap_between_exons = if let Some(last) = exon_ranges.last() {
-            // 0-based inclusive minus exclusive will yield length of gap
-            // between exons
-            ref_range.start.checked_sub(last.ref_range.end).ok_or_else(|| {
-                std::io::Error::other(format!(
-                    "The coordinate ranges must be non-overlapping and sorted. Found range {last_start}..{last_end} followed by {current_start}..{current_end}",
-                    last_start = last.ref_range.start + 1,
-                    last_end = last.ref_range.end,
-                    current_start = ref_range.start + 1,
-                    current_end = ref_range.end,
-                ))
-            })?
-        } else {
-            ref_range.start
-        };
+        if let Some(last) = exon_ranges.last() {
+            if ref_range.start < last.ref_range.start || ref_range.end <= last.ref_range.end {
+                return Err(std::io::Error::other(format!(
+                    "Exons out of order: {} then {}",
+                    last.ref_range.display_inclusive(),
+                    ref_range.display_inclusive(),
+                )));
+            }
 
-        // Increment the reference to coding sequence coordinate offset
-        ref_to_cds_offset += len_of_gap_between_exons;
+            let overlap_nt = last.ref_range.end.saturating_sub(ref_range.start);
+            if overlap_nt > MAX_DUPLICATED_OVERLAP_NT {
+                return Err(std::io::Error::other(format!(
+                    "Exon overlap exceeds {MAX_DUPLICATED_OVERLAP_NT} nt: {} then {}",
+                    last.ref_range.display_inclusive(),
+                    ref_range.display_inclusive(),
+                )));
+            }
+        }
+
+        let cds_end = cds_start + ref_range.len();
 
         // Validity: ref_range is non-empty per guarantees from
         // parse_coordinate_range
         exon_ranges.push(ExonCoords {
             ref_range,
-            ref_to_cds_offset,
+            cds_range: cds_start..cds_end,
         });
+        cds_start = cds_end;
     }
 
     // Validity: exon_ranges will be non-empty since split is always non-empty.
