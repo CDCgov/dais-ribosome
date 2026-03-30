@@ -252,20 +252,20 @@ impl QueryInput {
 /// iterator.
 pub trait HandleNoNucleotidesExt {
     /// Filters any records with empty sequences post-filtering, issuing a
-    /// warning to `stderr` if `warn_no_nucleotides` is set.
-    fn handle_no_nucleotides(self, warn_no_nucleotides: bool) -> impl Iterator<Item = std::io::Result<QueryRecord>>;
+    /// warning to `stderr` if `verbose` is set.
+    fn handle_no_nucleotides(self, verbose: bool) -> impl Iterator<Item = std::io::Result<QueryRecord>>;
 }
 
 impl<I> HandleNoNucleotidesExt for I
 where
     I: Iterator<Item = Result<QueryRecord, QueryInputError>>,
 {
-    fn handle_no_nucleotides(self, warn_no_nucleotides: bool) -> impl Iterator<Item = std::io::Result<QueryRecord>> {
+    fn handle_no_nucleotides(self, verbose: bool) -> impl Iterator<Item = std::io::Result<QueryRecord>> {
         self.filter_map(move |res| match res {
             Ok(record) => Some(Ok(record)),
             Err(QueryInputError::Io(e)) => Some(Err(e)),
             Err(QueryInputError::NoNucleotides(header, reader_type)) => {
-                if warn_no_nucleotides {
+                if verbose {
                     let field = match reader_type {
                         ReaderType::Fasta => "header",
                         ReaderType::Tsv => "ID",

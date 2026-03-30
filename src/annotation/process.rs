@@ -31,6 +31,8 @@ impl<'a> AnnotationModule<'a> {
 
         let mut states = Vec::with_capacity(reference_data.len());
 
+        let mut failed_ref_ids = Vec::new();
+
         for ref_id_data in reference_data.iter() {
             let (query_ori_offset, chewed_query) = self.rule_chew_to_start(&query, ref_id_data);
 
@@ -38,7 +40,8 @@ impl<'a> AnnotationModule<'a> {
 
             // Get the alignment to the best reference
             let Some(mut genome_aln) = self.best_alignment(ref_id_data, &chewed_query) else {
-                return Err(format!("Query '{}' could not be aligned to any reference", query.id).into());
+                failed_ref_ids.push(ref_id_data.reference_id.clone());
+                continue;
             };
 
             genome_aln.query_range = genome_aln.query_range.add(query_ori_offset);
@@ -123,6 +126,7 @@ impl<'a> AnnotationModule<'a> {
         Ok(RibosomeOutput {
             query,
             states,
+            failed_ref_ids,
             formatting: &self.data.formatting,
         })
     }

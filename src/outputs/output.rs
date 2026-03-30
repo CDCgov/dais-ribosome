@@ -13,11 +13,13 @@ use zoe::prelude::*;
 #[derive(Debug)]
 pub struct RibosomeOutput<'a> {
     /// Original query record
-    pub query:      QueryRecord,
+    pub query:          QueryRecord,
     /// Both genome and protein product alignment states
-    pub states:     Vec<GenomeAndProductStates<'a>>,
+    pub states:         Vec<GenomeAndProductStates<'a>>,
+    /// A vector of any reference IDs which failed to be aligned against
+    pub failed_ref_ids: Vec<String>,
     /// Output formatting rules, parsed from the TOML configuration.
-    pub formatting: &'a Formatting,
+    pub formatting:     &'a Formatting,
 }
 
 #[derive(Debug)]
