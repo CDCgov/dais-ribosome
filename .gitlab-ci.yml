@@ -1,0 +1,50 @@
+image: rustlang/rust:nightly
+
+stages:
+  - build
+  - test
+  - deploy
+
+cache: {}
+
+ribosome-build:
+  stage: build
+  tags:
+    - docker
+  script:
+    - cargo build
+  artifacts:
+    paths:
+      - .cargo
+      - target
+    expire_in: 12 hours
+
+ribosome-test:
+  stage: test
+  tags:
+    - docker
+  dependencies:
+    - ribosome-build
+  script:
+    - cargo test
+    - cargo doc --no-deps --document-private-items
+  artifacts:
+    paths:
+      - target/doc
+    expire_in: 12 hours
+
+pages:
+  stage: deploy
+  image: rustlang/rust:nightly
+  tags:
+    - pages
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  dependencies:
+    - ribosome-test
+  script:
+    - mv target/doc public/
+    - echo "<meta http-equiv=\"refresh\" content=\"0; url=irma_core\">" > public/index.html
+  artifacts:
+    paths:
+      - public
