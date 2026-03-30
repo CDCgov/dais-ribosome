@@ -216,6 +216,7 @@ close $PROD_INS or croak("Cannot close file $insprodfile: $OS_ERROR\n");
 # process the segment coordinates to create a bounding box for segment alignments via reference
 local $RS = ">";
 my %segmentOffset = ();
+my %alignedSeqWithIns = ();
 my ( $total, $found ) = ( 0, 0 );
 open( my $ALIGNED, '<', $fassegfile ) or die("$PROGRAM_NAME ERROR: Could not open $fassegfile for reading.\n");
 while ( my $fasta_record = <$ALIGNED> ) {
@@ -235,7 +236,19 @@ while ( my $fasta_record = <$ALIGNED> ) {
         # Remove the trailing insertions (3' elongation) if applicable.
         # Goal is to get the Reference boundary coords, which excludes elongation.
         if ( defined $segmentInsertions{$ref_id}{$segment}{$flu_seq_id} ) {
-            $seq = removeElongation( addInsertions( $seq, \%{ $segmentInsertions{$ref_id}{$segment}{$flu_seq_id} } ) );
+            $seq = addInsertions( $seq, \%{ $segmentInsertions{$ref_id}{$segment}{$flu_seq_id} } );
+            
+            # Store this for later use (we need it to help handle indels between
+            # products, which shift the query coordinates)
+            $alignedSeqWithIns{$segment}{$ref_id}{$flu_seq_id} = $seq;
+            
+            # Removing the elongation isn't actually necessary... it would be
+            # sufficient to convert the case to lowercase. But this is fine too.
+            $seq = removeElongation( $seq );
+        } else {
+            # Store this for later use (we need it to help handle indels between
+            # products, which shift the query coordinates)
+            $alignedSeqWithIns{$segment}{$ref_id}{$flu_seq_id} = $seq;
         }
 
         # Reference-Aligned Query to Original
@@ -285,6 +298,70 @@ while ( my $fasta_record = <$PRODUCTS> ) {
         foreach my $i ( 0 .. $#exons ) {
             my ( $idx, $L ) = @{ $exons[$i] };
 
+            my $lastEnd;
+            if ( $i > 0 ) {
+                my ( $lastIdx, $lastL ) = @{ $exons[$i-1] };
+                $lastEnd = $lastIdx + $lastL;
+            } else {
+                $lastEnd = 0;
+            }
+        
+            my $seq = $alignedSeqWithIns{$segment}{$ref_id}{$flu_seq_id};
+
+            if ( $idx > $lastEnd && $lastEnd < length($seq) ) {
+                my $len_noncoding = $idx - $lastEnd;
+
+                # This will be initialized because we ensured lastEnd <
+                # length(seq)
+                my $noncoding = substr($seq, $lastEnd);
+                my $before = substr($seq, 0, $lastEnd);
+                my $insCount = ($before =~ tr/A-Z//);
+                while ($insCount > 0) {
+                    my $newLastEnd = $lastEnd + $insCount;
+                    if ( $newLastEnd < length($seq) ) {
+                        $noncoding = substr($seq, $newLastEnd);
+                        $before = substr($seq, $lastEnd, $newLastEnd);
+                        $insCount = ($before =~ tr/A-Z//);
+                        $lastEnd = $newLastEnd;
+                    } else {
+                        $lastEnd = $newLastEnd;
+                        last;
+                    }
+                }
+
+                if ( $lastEnd < length($seq) ) {
+                    my $noncodingCigar = sequenceToCigar( $noncoding );
+                    my $num_ref_consumed = 0;
+                    while ( $noncodingCigar =~ m/(\d+)([MDNI])/gsmx ) {
+                        my ( $inc, $op ) = ( $1, $2 );
+                        if ( $op eq 'N' ) {    ## no critic (ControlStructures::ProhibitCascadingIfElse)
+                            # TODO: Do we need first variable?
+                            $num_ref_consumed += $inc;
+                            if ( $num_ref_consumed > $len_noncoding ) {
+                                last;
+                            }
+                        } elsif ( $op eq 'M' ) {
+                            $num_ref_consumed += $inc;
+                            if ( $num_ref_consumed > $len_noncoding ) {
+                                last;
+                            } 
+                        } elsif ( $op eq 'I' ) {
+                            $oriOffset += $inc;
+                        } elsif ( $op eq 'D' ) {
+                            $num_ref_consumed += $inc;
+                            if ( $num_ref_consumed > $len_noncoding ) {
+                                $oriOffset -= $inc - ($num_ref_consumed - $len_noncoding);
+                                last;
+                            } else {
+                                $oriOffset -= $inc;
+                            }
+                        } else {
+                            die("$op : Unknown\n");
+                        }
+                    }
+                }
+            }
+            
             # Get the cigar for the current exon, do not add insertions outside the valid bounds.
             # We process the exons from the peptide / product sequence.
             # I use the peptide term interchangably with product, although the product files are untranslated in DAIS terms.
@@ -295,8 +372,9 @@ while ( my $fasta_record = <$PRODUCTS> ) {
                 }
             }
             my $exon = substr( $seq_prod, $pepOffset, $L );
-            my $exonCigar = sequenceToCigar(
-                      addInsertionsBounded( $exon, \%{ $productInsertions{$ref_id}{$peptide}{$flu_seq_id} }, -$pepOffset ) );
+            $exon = addInsertionsBounded( $exon, \%{ $productInsertions{$ref_id}{$peptide}{$flu_seq_id} }, -$pepOffset );       
+            
+            my $exonCigar = sequenceToCigar( $exon );
 
             # Let $idx + 1 = offset for the peptide within the segment alignment
             # Thus the starting original coordinate adds the peptide to ref and ref to original offsets.
@@ -340,6 +418,12 @@ while ( my $fasta_record = <$PRODUCTS> ) {
                 }
             }
             $pepOffset += $L;    # reflect that the exon has moved forward
+
+            # If we truncated the exon due to the sequence being too short, then
+            # there will be no more exons in the sequence, so end now
+            if ( $L < $exons[$i][1] ) {
+                last
+            }
         }
 
         chop($pepCoords);
