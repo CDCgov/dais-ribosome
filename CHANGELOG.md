@@ -2,11 +2,14 @@
 
 ## v1.7.0 (TBD)
 
+**Feature**: DAIS-ribosome now supports aarch64/arm64 on both Mac and Linux, albeit SSWSORT requires Rosetta 2 if it is called.
+
 - **Changes**: The ranges for the `HA1` product for `A_HA_H1` and `A_HA_H3` are extended by 3 nucleotides and 18 nucleotides respectively
 
 - **Fixes**:
   - The check for the required start codon in PB1-F2 now allows for AUG in addition to ATG
   - Fixes a bug causing some query coordinate ranges to be incorrectly shifted right for `M2`, `NEP`, and `PA-X`
+  - Fixes Dockerfile build process to allow for custom certificates
 
 ## v1.6.2 (2026.03.19)
 

@@ -155,14 +155,14 @@ case $1 in
 esac
 
 # programs
-OS="Linux"
 command -v uname > /dev/null 2>&1 && OS=$(uname -s)
 if [ "$OS" != "Linux" ] && [ "$OS" != "Darwin" ]; then
     time_stamp "Your $OS OS not yet supported."
     exit 0
 fi
-SSW="$binp"/ssw_$OS
-PARALLEL="$binp/parallel --will-cite"
+SSW="$binp"/third_party/ssw_$OS
+[[ "$OS" == "Linux" ]] && SSW+="_$(uname -m)"
+PARALLEL="$binp/third_party/parallel --will-cite"
 BASH=bash
 LIMIT_SSW=500                             # threshold before grid
 SINGLE_LOCAL_PROCS=${IFX_LOCAL_PROCS:-16} # local processes on executing node

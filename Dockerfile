@@ -32,7 +32,9 @@ RUN --mount=type=secret,id=gitlab_ca \
     && for i in $(ls "$libp/sampling/"|grep -vP 'partitionByField.pl'); do rm "$libp/sampling/$i";done \
     && rm -rf /dais-ribosome/workdir /dais-ribosome/lib/sswsort/workdir \
     && ln -s /tmp /dais-ribosome/workdir \
-    && ln -s /tmp /dais-ribosome/lib/sswsort/workdir
+    && ln -s /tmp /dais-ribosome/lib/sswsort/workdir \
+    && rm /dais-ribosome/lib/sswsort/bin/ssw_* \
+    && ln -s /dais-ribosome/bin/third_party/ssw_Linux_$(uname -m) /dais-ribosome/lib/sswsort/bin/ssw_Linux
 
 
 FROM base AS final
