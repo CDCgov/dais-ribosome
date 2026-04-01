@@ -6,10 +6,15 @@ ARG APT_MIRROR_NAME=
 RUN if [ -n "$APT_MIRROR_NAME" ]; then sed -i.bak -E '/security/! s^https?://.+?/(debian|ubuntu)^http://'"$APT_MIRROR_NAME"'/\1^' /etc/apt/sources.list && grep '^deb' /etc/apt/sources.list; fi
 
 RUN apt-get update --allow-releaseinfo-change --fix-missing \
-    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y perl procps \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y perl procps locales \
+    && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
+    && locale-gen \
     && apt clean autoclean \
     && apt autoremove --yes \
     && rm -rf /var/lib/{apt,dpkg,cache,log}/
+
+ENV LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8
 
 
 FROM base AS builder
