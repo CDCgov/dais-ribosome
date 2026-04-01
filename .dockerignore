@@ -11,6 +11,8 @@
 
 out.log
 debug/
+target/
+supp_docs/
 *.fa
 *.fasta
 *.seq
@@ -18,6 +20,7 @@ debug/
 test*
 junk*
 .nfs*
+*pem
 
 **/lib/*
 !**/lib/sswsort/

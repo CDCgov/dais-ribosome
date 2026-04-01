@@ -14,13 +14,17 @@ RUN apt-get update --allow-releaseinfo-change --fix-missing \
 
 FROM base AS builder
 
-ARG gitlab_ca
-ENV gitlab_ca=${gitlab_ca:-https://docs.cdc.gov/assets/files/CDC-G2-04c520f295e01d5e2dc95573c085c35b.pem}
+# To inject a CA certificate at build time (e.g. for corporate/air-gapped environments):
+#   docker build --secret id=gitlab_ca,src=/path/to/cert.pem -t cdcgov/dais-ribosome:test .
+
 COPY . /dais-ribosome
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y git wget ca-certificates \
-    && wget ${gitlab_ca} \
-    && git config --global http.sslCAInfo $(pwd)/$(basename ${gitlab_ca}) \
+RUN --mount=type=secret,id=gitlab_ca \
+    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y git ca-certificates \
+    && if [ -f /run/secrets/gitlab_ca ]; then \
+        cp /run/secrets/gitlab_ca /usr/local/share/ca-certificates/gitlab-ca.crt \
+        && update-ca-certificates; \
+    fi \
     && /dais-ribosome/ribosome install \
     && libp=/dais-ribosome/lib \
     && for i in $(ls "$libp/convert/"|grep -vP 'sam2fasta.pl|delim2fasta.pl|fa2delim.pl|nt2aa.pl');do rm "$libp/convert/$i";done \
@@ -31,12 +35,11 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y gi
     && ln -s /tmp /dais-ribosome/lib/sswsort/workdir
 
 
-FROM base as final
+FROM base AS final
 
 COPY --from=builder /dais-ribosome /dais-ribosome
 
 # Recommended mount point for data volume from host
 WORKDIR /data
 
-# Export IRMA and LABEL to PATH
-ENV PATH "/dais-ribosome:${PATH}"
+ENV PATH="/dais-ribosome:${PATH}"
