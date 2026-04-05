@@ -9,6 +9,7 @@ pub mod config;
 pub mod data;
 pub mod error;
 pub(crate) mod hashing;
+pub mod tsv;
 
 trait IteratorExt: Iterator {
     fn take_until_inclusive<F>(self, f: F) -> TakeUntilInclusive<Self, F>

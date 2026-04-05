@@ -394,3 +394,9 @@ impl Display for Coords {
         self.0.fmt(f)
     }
 }
+
+impl AsRef<str> for Coords {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}

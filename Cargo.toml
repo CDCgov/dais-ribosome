@@ -23,6 +23,7 @@ sha1_smol = "1"
 md5 = "0.8"
 getrandom = "0.4"
 jiff = "0.2.18"
+csv = "1.4.0"
 
 [[bin]]
 bench = false

@@ -80,7 +80,7 @@ impl<'a> GenomeAndProductStates<'a> {
     /// ## Validity
     ///
     /// The `query` should contain unaligned, uppercase IUPAC bases.
-    fn materialize(self, query: &Nucleotides) -> ComputedGenomeAndProductStates<'a> {
+    pub fn materialize(self, query: &Nucleotides) -> ComputedGenomeAndProductStates<'a> {
         ComputedGenomeAndProductStates {
             reference_id:               self.reference_id,
             ref_len:                    self.ref_len,
@@ -90,6 +90,54 @@ impl<'a> GenomeAndProductStates<'a> {
             trailing_ref_unaligned:     self.trailing_ref_unaligned,
             computed_genome:            self.computed_genome,
             products:                   self.products.into_iter().map(|product| product.materialize(query)).collect(),
+        }
+    }
+
+    /// Lazily compute and cache genome data from genome alignment states.
+    pub fn materialize_genome(&self, query: &Nucleotides) -> PrecomputedGenomeData {
+        let mut genome_seq = Nucleotides::new();
+        let mut genome_aln = Nucleotides::from(vec![b'.'; self.leading_ref_unaligned]);
+        let mut insertions = Vec::new();
+        let mut has_insertion = false;
+
+        for state in &self.genome_aln_states {
+            match state {
+                StateRange::M(m) => {
+                    let slice = &query[m.query_range.clone()];
+                    genome_seq.extend_from_slice(slice);
+                    genome_aln.extend_from_slice(slice);
+                }
+                StateRange::I(ins) => {
+                    let slice = &query[ins.query_range.clone()];
+                    genome_seq.extend_from_slice(slice);
+                    has_insertion = true;
+                    insertions.push(ComputedGenomeInsertion::new(ins.ref_index, slice));
+                }
+                StateRange::D(del) => {
+                    genome_aln.pad_end(b'-', del.ref_range.len());
+                }
+            }
+        }
+
+        if let Some(ref ext_range) = self.stop_extension_query_range {
+            let nt_insertion_idx = InsertionIdx::from_right_idx(self.ref_len);
+            let slice = &query[ext_range.clone()];
+            genome_seq.extend_from_slice(slice);
+            has_insertion = true;
+            insertions.push(ComputedGenomeInsertion::new(nt_insertion_idx, slice));
+        }
+
+        let genome_id = nt_id(&genome_seq);
+        let genome_length = genome_seq.len();
+
+        PrecomputedGenomeData {
+            genome_id,
+            genome_length,
+            has_insertion,
+            genome_seq,
+            genome_aln,
+            insertions,
+            trailing_ref_unaligned: self.trailing_ref_unaligned,
         }
     }
 }
