@@ -12,12 +12,10 @@ use app::{
 };
 use clap::Parser;
 use dais_ribosome::{
-    annotation::{
-        AnnotationModule,
-        error::{RibosomeError, UnimplementedCtype},
-    },
+    annotation::AnnotationModule,
     config::{TomlConfig, find_modules_toml},
     data::ModuleData,
+    error::{RibosomeError, UnimplementedCtype},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{collections::HashSet, path::Path};

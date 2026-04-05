@@ -7,6 +7,8 @@ pub mod annotation;
 pub mod config;
 /// Data loading and structures for module resources.
 pub mod data;
+pub mod error;
+pub(crate) mod hashing;
 
 trait IteratorExt: Iterator {
     fn take_until_inclusive<F>(self, f: F) -> TakeUntilInclusive<Self, F>

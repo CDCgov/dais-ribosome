@@ -1,11 +1,11 @@
 use crate::{
-    annotation::hashing::nt_id,
     config::Formatting,
     data::{
         ComputedGenomeInsertion, DelRow, GenDelRow, GenInsRow, GenRow, InsRow, PrecomputedGenomeData, QueryRecord, SeqRow,
         products::{ComputedProduct, Product},
         ranges::{InsertionIdx, StateRange},
     },
+    hashing::nt_id,
 };
 use std::{ops::Range, sync::OnceLock};
 use zoe::prelude::*;

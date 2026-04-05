@@ -1,6 +1,6 @@
 use crate::app::io::{Writers, open_partition_writer, open_writer, optional_writers};
 use clap::Parser;
-use dais_ribosome::annotation::error::RibosomeError;
+use dais_ribosome::error::RibosomeError;
 use std::{num::NonZero, path::PathBuf};
 
 #[derive(Debug, Parser)]

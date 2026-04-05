@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::grid::get_partition_filename;
-use dais_ribosome::{annotation::error::RibosomeError, data::ComputedRibosomeOutput};
+use dais_ribosome::{data::ComputedRibosomeOutput, error::RibosomeError};
 use zoe::data::err::ResultWithErrorContext;
 use zoe::prelude::rand_sequence;
 

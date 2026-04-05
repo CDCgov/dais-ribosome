@@ -1,7 +1,5 @@
 //! Protein annotation engine.
 
-pub mod error;
-pub(crate) mod hashing;
 mod process;
 
 use crate::data::{ctype::CompoundTypeMap, keys::RefKey, module::ModuleData};

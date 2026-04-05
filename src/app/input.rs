@@ -2,7 +2,7 @@
 //! first byte, then yields [`QueryRecord`]s through a unified iterator.
 //! The file is opened only once.
 
-use dais_ribosome::{annotation::error::RibosomeError, data::QueryRecord};
+use dais_ribosome::{data::QueryRecord, error::RibosomeError};
 use std::{
     fs::File,
     io::{BufRead, BufReader, Lines},

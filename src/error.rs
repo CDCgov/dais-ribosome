@@ -1,7 +1,9 @@
-//! Error construction helpers for data loading.
+//! Error types for DAIS-ribosome.
 
 use zoe::data::err::{ErrorWithContext, GetCode};
 
+/// An error holding a compound type that was not implemented for the given
+/// module.
 #[derive(Debug)]
 pub struct UnimplementedCtype(pub String);
 
@@ -30,6 +32,7 @@ pub enum RibosomeError {
 }
 
 impl std::error::Error for RibosomeError {
+    #[inline]
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             RibosomeError::Io(e) => e.source(),
@@ -39,6 +42,7 @@ impl std::error::Error for RibosomeError {
 }
 
 impl GetCode for RibosomeError {
+    #[inline]
     fn get_code(&self) -> i32 {
         match self {
             RibosomeError::UnimplementedCtype(e) => e.get_code(),
@@ -49,6 +53,7 @@ impl GetCode for RibosomeError {
 }
 
 impl std::fmt::Display for RibosomeError {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RibosomeError::UnimplementedCtype(e) => write!(f, "{e}"),
@@ -59,24 +64,28 @@ impl std::fmt::Display for RibosomeError {
 }
 
 impl From<&str> for RibosomeError {
+    #[inline]
     fn from(value: &str) -> Self {
         RibosomeError::Io(std::io::Error::other(value))
     }
 }
 
 impl From<String> for RibosomeError {
+    #[inline]
     fn from(value: String) -> Self {
         RibosomeError::Io(std::io::Error::other(value))
     }
 }
 
 impl From<std::io::Error> for RibosomeError {
+    #[inline]
     fn from(e: std::io::Error) -> Self {
         RibosomeError::Io(e)
     }
 }
 
 impl From<ErrorWithContext> for RibosomeError {
+    #[inline]
     fn from(e: ErrorWithContext) -> Self {
         RibosomeError::Io(std::io::Error::other(e))
     }
