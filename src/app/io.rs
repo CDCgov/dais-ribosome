@@ -1,20 +1,8 @@
-use std::{
-    fs::File,
-    io::{BufWriter, Write},
-    path::PathBuf,
-    sync::LazyLock,
-};
-
 use super::grid::get_partition_filename;
-use dais_ribosome::{data::ComputedRibosomeOutput, error::RibosomeError};
+use dais_ribosome::{error::RibosomeError, tsv::Writers};
+use std::{fs::File, io::BufWriter, path::PathBuf, sync::LazyLock};
 use zoe::data::err::ResultWithErrorContext;
 use zoe::prelude::rand_sequence;
-
-pub struct Writers {
-    pub seq: BufWriter<File>,
-    pub ins: BufWriter<File>,
-    pub del: BufWriter<File>,
-}
 
 pub fn open_writer(path: &Option<PathBuf>, extension: &str) -> Result<BufWriter<File>, RibosomeError> {
     let mut new_path = PathBuf::with_capacity(TEMP_PREFIX.len() + extension.len() + 1);
@@ -44,7 +32,7 @@ pub fn open_partition_writer(
     Ok(BufWriter::new(f))
 }
 
-pub fn optional_writers(path: &Option<PathBuf>) -> Result<Option<Writers>, RibosomeError> {
+pub fn optional_writers(path: &Option<PathBuf>) -> Result<Option<Writers<BufWriter<File>>>, RibosomeError> {
     if let Some(p) = path {
         let mut p = p.clone();
         p.set_extension("gen_seq.txt");
@@ -67,40 +55,6 @@ pub fn optional_writers(path: &Option<PathBuf>) -> Result<Option<Writers>, Ribos
     } else {
         Ok(None)
     }
-}
-
-/// Write a single query's output rows to the appropriate writers.
-pub fn write_output(
-    output: &ComputedRibosomeOutput<'_>, writers: &mut Writers, gen_writers: &mut Option<Writers>,
-) -> Result<(), RibosomeError> {
-    for row in output.seq_rows() {
-        writeln!(writers.seq, "{row}")?;
-    }
-
-    for row in output.ins_rows() {
-        writeln!(writers.ins, "{row}")?;
-    }
-
-    for row in output.del_rows() {
-        writeln!(writers.del, "{row}")?;
-    }
-
-    // Genome output rows
-    if let Some(w) = gen_writers {
-        for row in output.gen_rows() {
-            writeln!(w.seq, "{row}")?;
-        }
-
-        for row in output.gen_ins_rows() {
-            writeln!(w.ins, "{row}")?;
-        }
-
-        for row in output.gen_del_rows() {
-            writeln!(w.del, "{row}")?;
-        }
-    }
-
-    Ok(())
 }
 
 static TEMP_PREFIX: LazyLock<String> = LazyLock::new(temp_name);

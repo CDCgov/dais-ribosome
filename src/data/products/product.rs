@@ -1,6 +1,7 @@
 use crate::{
     data::{
-        products::{ComputedProduct, ProductSpec, incremental_products::ComputedIncrementalProducts},
+        ComputedProduct,
+        products::{ProductSpec, incremental_products::ComputedIncrementalProducts},
         ranges::CdsStateRange,
     },
     hashing::{nt_id, variant_hash},

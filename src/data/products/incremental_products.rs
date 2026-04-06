@@ -1,7 +1,8 @@
 use crate::{
     IteratorExt,
     data::{
-        products::{ComputedDeletion, ComputedInsertion, Product},
+        ComputedDeletion, ComputedInsertion,
+        products::Product,
         ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, CdsStateRange, InsertionIdx},
     },
 };

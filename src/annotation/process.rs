@@ -9,7 +9,7 @@ use crate::{
     },
     error::RibosomeError,
 };
-use std::{cmp::Ordering, ops::Range, sync::OnceLock};
+use std::{cmp::Ordering, ops::Range};
 use zoe::{alignment::Alignment, data::types::nucleotides::CodonExtension, prelude::*};
 
 impl<'a> AnnotationModule<'a> {
@@ -112,7 +112,6 @@ impl<'a> AnnotationModule<'a> {
                 trailing_ref_unaligned,
                 products,
                 stop_extension_query_range: stop_extension.map(|ins| ins.query_range),
-                computed_genome: OnceLock::new(),
             });
         }
 

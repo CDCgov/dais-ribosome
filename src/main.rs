@@ -1,9 +1,6 @@
 #![feature(string_from_utf8_lossy_owned, bufreader_peek, try_trait_v2)]
 
-use crate::app::{
-    io::{Writers, write_output},
-    num_cpus::init_thread_pool,
-};
+use crate::app::num_cpus::init_thread_pool;
 use app::{
     args::Args,
     grid::{self, Grid},
@@ -16,9 +13,10 @@ use dais_ribosome::{
     config::{TomlConfig, find_modules_toml},
     data::ModuleData,
     error::{RibosomeError, UnimplementedCtype},
+    tsv::{Writers, write_genome_output, write_product_output},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
-use std::{collections::HashSet, path::Path};
+use std::{collections::HashSet, fs::File, io::BufWriter, path::Path};
 use zoe::{data::err::OrFail, iter_utils::ProcessResultsExt};
 
 pub mod app;
@@ -79,7 +77,8 @@ fn main() {
 
 /// Processes queries sequentially (single-threaded).
 fn process_queries(
-    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers, mut gen_writers: Option<Writers>,
+    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers<BufWriter<File>>,
+    mut gen_writers: Option<Writers<BufWriter<File>>>,
 ) -> Result<(), RibosomeError> {
     log::ts("started, processing data");
     let queries = QueryInput::open(path)?;
@@ -97,9 +96,10 @@ fn process_queries(
             Err(e) => return Err(e),
         };
 
-        let computed_output = output.materialize();
-
-        write_output(&computed_output, &mut writers, &mut gen_writers)?;
+        write_product_output(&output, &mut writers)?;
+        if let Some(gen_writers) = &mut gen_writers {
+            write_genome_output(&output, gen_writers)?;
+        }
     }
 
     log::print_unimplemented_ctypes(unimplemented_ctypes, annotation_module);
@@ -110,7 +110,8 @@ fn process_queries(
 
 /// Process queries in parallel using Rayon then write results sequentially.
 fn process_queries_parallel(
-    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers, mut gen_writers: Option<Writers>,
+    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers<BufWriter<File>>,
+    mut gen_writers: Option<Writers<BufWriter<File>>>,
 ) -> Result<(), RibosomeError> {
     log::ts("started, processing data (parallel)");
     let queries = QueryInput::open(path)?;
@@ -123,7 +124,7 @@ fn process_queries_parallel(
     let results = queries.process_results(|iter| {
         iter.par_bridge()
             .map(|record| match annotation_module.process(record) {
-                Ok(output) => Ok(Ok(output.materialize())),
+                Ok(output) => Ok(Ok(output)),
                 Err(RibosomeError::UnimplementedCtype(e)) => Ok(Err(e)),
                 Err(e) => Err(e),
             })
@@ -133,7 +134,7 @@ fn process_queries_parallel(
     let mut unimplemented_ctypes = HashSet::new();
 
     for result in results {
-        let computed_output = match result {
+        let output = match result {
             Ok(output) => output,
             Err(UnimplementedCtype(ctype)) => {
                 unimplemented_ctypes.insert(ctype);
@@ -141,7 +142,10 @@ fn process_queries_parallel(
             }
         };
 
-        write_output(&computed_output, &mut writers, &mut gen_writers)?;
+        write_product_output(&output, &mut writers)?;
+        if let Some(gen_writers) = &mut gen_writers {
+            write_genome_output(&output, gen_writers)?;
+        }
     }
 
     log::print_unimplemented_ctypes(unimplemented_ctypes, annotation_module);
@@ -156,7 +160,8 @@ fn process_queries_parallel(
 /// Note that this will not provide any messages regarding unimplemented
 /// compound types.
 fn process_queries_grid(
-    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers, mut gen_writers: Option<Writers>, g: &Grid,
+    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers<BufWriter<File>>,
+    mut gen_writers: Option<Writers<BufWriter<File>>>, g: &Grid,
 ) -> Result<(), RibosomeError> {
     let queries = QueryInput::open(path)?;
 
@@ -173,9 +178,10 @@ fn process_queries_grid(
                 Err(e) => return Err(e),
             };
 
-            let computed_output = output.materialize();
-
-            write_output(&computed_output, &mut writers, &mut gen_writers)?;
+            write_product_output(&output, &mut writers)?;
+            if let Some(gen_writers) = &mut gen_writers {
+                write_genome_output(&output, gen_writers)?;
+            }
         }
 
         Ok(())

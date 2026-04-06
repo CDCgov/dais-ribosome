@@ -3,7 +3,7 @@
 
 use crate::{
     config::Formatting,
-    data::products::ComputedProduct,
+    data::ComputedProduct,
     tsv::{HADOOP_NULL, Nullable},
 };
 use csv::{Reader, ReaderBuilder};

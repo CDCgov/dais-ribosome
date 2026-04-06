@@ -10,7 +10,7 @@ use zoe::{
     prelude::{AminoAcids, AminoAcidsView, DataOwned, Nucleotides, NucleotidesView},
 };
 
-use crate::data::products::{ComputedInsertion, ComputedProduct};
+use crate::data::{ComputedInsertion, ComputedProduct};
 
 /// The data in a single row of the product insertion file.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]

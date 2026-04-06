@@ -1,7 +1,7 @@
-use crate::app::io::{Writers, open_partition_writer, open_writer, optional_writers};
+use crate::app::io::{open_partition_writer, open_writer, optional_writers};
 use clap::Parser;
-use dais_ribosome::error::RibosomeError;
-use std::{num::NonZero, path::PathBuf};
+use dais_ribosome::{error::RibosomeError, tsv::Writers};
+use std::{fs::File, io::BufWriter, num::NonZero, path::PathBuf};
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -56,7 +56,7 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn get_writers(&self) -> Result<Writers, RibosomeError> {
+    pub fn get_writers(&self) -> Result<Writers<BufWriter<File>>, RibosomeError> {
         Ok(Writers {
             seq: open_writer(&self.sequence_output, "seq")?,
             ins: open_writer(&self.insertion_output, "ins")?,
@@ -64,7 +64,7 @@ impl Args {
         })
     }
 
-    pub fn get_optional_writers(&self) -> Result<Option<Writers>, RibosomeError> {
+    pub fn get_optional_writers(&self) -> Result<Option<Writers<BufWriter<File>>>, RibosomeError> {
         optional_writers(&self.genomic_output_prefix)
     }
 
@@ -86,7 +86,7 @@ impl Args {
     }
 
     /// Build partition-suffixed writers for a grid array task.
-    pub fn get_grid_writers(&self, task_id: usize) -> Result<Writers, RibosomeError> {
+    pub fn get_grid_writers(&self, task_id: usize) -> Result<Writers<BufWriter<File>>, RibosomeError> {
         Ok(Writers {
             seq: open_partition_writer(&self.sequence_output, task_id, "seq")?,
             ins: open_partition_writer(&self.insertion_output, task_id, "ins")?,
