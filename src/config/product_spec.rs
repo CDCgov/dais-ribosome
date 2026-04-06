@@ -34,8 +34,52 @@ impl<'a> ProductSpec<'a> {
     /// The `state_ranges` must contain ordered non-overlapping ranges that
     /// fully partition the aligned query and reference ranges (if any part of
     /// the sequences was not locally aligned, this will not be included). It
-    /// also must begin and end with [`StateRange::M`].
+    /// also must begin and end with [`StateRange::M`] (and hence be non-empty).
     pub(crate) fn make_product_ranges(self, state_ranges: &[StateRange]) -> Product<'a> {
+        let product_ranges = self.intersect(state_ranges);
+
+        let leading_cds_unaligned = self.compute_leading_cds_unaligned(&product_ranges);
+        let trailing_cds_unaligned = self.compute_trailing_cds_unaligned(&product_ranges);
+
+        Product {
+            product_spec: self,
+            product_ranges,
+            leading_cds_unaligned,
+            trailing_cds_unaligned,
+            stop_extension_query_range: None,
+        }
+    }
+
+    /// A helper function for [`make_product_ranges`] which computes the
+    /// `leading_cds_unaligned` field.
+    ///
+    /// [`make_product_ranges`]: ProductSpec::make_product_ranges
+    fn compute_leading_cds_unaligned(self, product_ranges: &[CdsStateRange]) -> usize {
+        let Some(first) = product_ranges.first() else {
+            // No intersection between query and exons, so put all the CDS
+            // length as leading unaligned
+            return self.exons.cds_len();
+        };
+
+        match first {
+            CdsStateRange::M(m) => m.cds_range.start,
+            CdsStateRange::D(d) => d.cds_range.start,
+
+            #[cfg(debug_assertions)]
+            CdsStateRange::I(_) => {
+                panic!("product_ranges cannot begin with an insertion!");
+            }
+
+            #[cfg(not(debug_assertions))]
+            CdsStateRange::I(i) => i.cds_index.right(),
+        }
+    }
+
+    /// A helper function for [`make_product_ranges`] which computes the
+    /// `product_ranges` field.
+    ///
+    /// [`make_product_ranges`]: ProductSpec::make_product_ranges
+    fn intersect(self, state_ranges: &[StateRange]) -> Vec<CdsStateRange> {
         // TODO: Is this a good enough capacity? We could end up exceeding it.
         let mut product_ranges = Vec::with_capacity(state_ranges.len());
 
@@ -47,43 +91,40 @@ impl<'a> ProductSpec<'a> {
         // inner loop is over the state ranges (query coordinates).
         for exon in &self.exons.coords {
             for state in state_ranges {
-                // A state can span multiple exons: e.g., long match for full contig
-                // An exon can span multiple states: e.g., a match with an indel
+                // A state can span multiple exons, such as a long match for a
+                // full contig. An exon can span multiple states, such as a
+                // match with an indel
                 if let Some(cds_state) = state.intersect_exon(exon) {
                     product_ranges.push(cds_state);
                 }
             }
         }
 
-        // TODO: Add validity that at least one match or delete must be present,
-        // so that unwrap_or can be removed
+        product_ranges
+    }
 
-        let leading_cds_unaligned = product_ranges
-            .iter()
-            .find_map(|s| match s {
-                CdsStateRange::M(m) => Some(m.cds_range.start),
-                CdsStateRange::D(d) => Some(d.cds_range.start),
-                _ => None,
-            })
-            .unwrap_or(0);
+    /// A helper function for [`make_product_ranges`] which computes the
+    /// `trailing_cds_unaligned` field.
+    ///
+    /// [`make_product_ranges`]: ProductSpec::make_product_ranges
+    fn compute_trailing_cds_unaligned(self, product_ranges: &[CdsStateRange]) -> usize {
+        let Some(last) = product_ranges.last() else {
+            // No intersection between query and exons, and we counted all the
+            // CDS length as leading unaligned
+            return 0;
+        };
 
-        let trailing_cds_unaligned = self.exons.cds_len()
-            - product_ranges
-                .iter()
-                .rev()
-                .find_map(|s| match s {
-                    CdsStateRange::M(m) => Some(m.cds_range.end),
-                    CdsStateRange::D(d) => Some(d.cds_range.end),
-                    _ => None,
-                })
-                .unwrap_or(0);
+        match last {
+            CdsStateRange::M(m) => m.cds_range.end,
+            CdsStateRange::D(d) => d.cds_range.end,
 
-        Product {
-            product_spec: self,
-            product_ranges,
-            leading_cds_unaligned,
-            trailing_cds_unaligned,
-            stop_extension_query_range: None,
+            #[cfg(debug_assertions)]
+            CdsStateRange::I(_) => {
+                panic!("product_ranges cannot begin with an insertion!");
+            }
+
+            #[cfg(not(debug_assertions))]
+            CdsStateRange::I(i) => i.cds_index.right(),
         }
     }
 

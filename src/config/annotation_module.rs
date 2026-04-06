@@ -73,8 +73,8 @@ impl<'a> AnnotationModule<'a> {
     ///
     /// The alignment with the highest score is considered best, or `None` is
     /// returned if no alignment was found. The `states` in the alignment will
-    /// only include `M`, `I`, `D`, and `S`. Furthermore, any alignments are
-    /// guaranteed to start and end with `M` states, excluding soft clipping.
+    /// only include `M`, `I`, `D`, and `S`. Furthermore, the alignment is
+    /// guaranteed to start and end with `M` states excluding soft clipping.
     pub(crate) fn best_alignment<T: AsRef<[u8]> + ?Sized>(
         &self, refs: &ReferenceGroup, query: &T,
     ) -> Option<Alignment<u32>> {

@@ -124,7 +124,9 @@ pub struct Product<'a> {
     /// cause the query ranges to have repeated indices and not be in order, so
     /// no guarantees can be made for those fields.
     ///
-    /// This field does not begin or end with [`CdsStateRange::I`].
+    /// This field does not begin or end with [`CdsStateRange::I`]. This field
+    /// may be empty if there is no intersection between the query and the
+    /// exons.
     pub product_ranges: Vec<CdsStateRange>,
 
     /// The number of bases in the coding sequence that were not aligned against

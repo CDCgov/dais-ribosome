@@ -364,6 +364,9 @@ impl StateRange {
     /// Intersects a [`StateRange`] with an exon in reference coordinates,
     /// returning the resulting query coordinates and coding sequence
     /// coordinates.
+    ///
+    /// An insertion is only considered to intersect an exon if it occurs
+    /// strictly within the exon (not on the boundaries).
     pub(crate) fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsStateRange> {
         match self {
             Self::M(m) => m.intersect_exon(exon).map(CdsStateRange::M),
