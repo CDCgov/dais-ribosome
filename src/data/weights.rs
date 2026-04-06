@@ -3,14 +3,17 @@
 use crate::data::keys::SpecKey;
 use std::{
     cmp::Ordering,
-    collections::HashMap,
+    collections::{HashMap, HashSet, hash_map::Entry},
     fs::File,
-    io::{BufRead, BufReader},
+    io::{BufRead, ErrorKind},
     path::Path,
     str::FromStr,
     sync::LazyLock,
 };
-use zoe::data::err::ResultWithErrorContext;
+use zoe::{
+    data::err::{ResultWithErrorContext, WithErrorContext},
+    prelude::NucleotidesView,
+};
 
 /// Map from spec key to codon position weights.
 pub type CodonWeightMatrix = HashMap<SpecKey, CodonPositionWeights>;
@@ -55,12 +58,26 @@ impl CodonPositionWeights {
     /// Inserts a 1-based position and codon into the map, returning the old
     /// count if present.
     ///
+    /// ## Errors
+    ///
+    /// The position/codon pair must not already be present in the
+    /// [`CodonPositionWeights`].
+    ///
     /// ## Validity
     ///
     /// The `codon` must contain unaligned, uppercase IUPAC bases. `T` must be
     /// used instead of `U`.
-    pub fn insert(&mut self, position: u32, codon: [u8; 3], count: u32) -> Option<u32> {
-        self.map.insert(CodonKey { position, codon }, count)
+    pub fn insert(&mut self, position: u32, codon: [u8; 3], count: u32) -> std::io::Result<()> {
+        match self.map.entry(CodonKey { position, codon }) {
+            Entry::Occupied(_) => Err(std::io::Error::other(format!(
+                "The position/codon combination already exists in the specs.\n | Position: {position}\n | Codon: {codon}",
+                codon = NucleotidesView::from(&codon)
+            ))),
+            Entry::Vacant(entry) => {
+                entry.insert(count);
+                Ok(())
+            }
+        }
     }
 
     /// Compares two counts of two codons at a specified 1-based position,
@@ -153,12 +170,20 @@ pub(crate) static DEFAULT_CODON_STATS: LazyLock<HashMap<[u8; 3], u32>> = LazyLoc
 /// - The file cannot be read
 /// - A section header is malformed
 pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Error> {
-    // TODO: Check non-empty
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
+    let file = File::open(path).with_path_context("Failed to open path", path)?;
+    let mut reader = std::io::BufReader::new(file);
+
+    if reader.fill_buf()?.is_empty() {
+        return Err(std::io::Error::new(
+            ErrorKind::InvalidData,
+            format!("No data was found at path {path}", path = path.display()),
+        ));
+    }
+
     let mut all_matrices = HashMap::new();
     let mut current_weights = CodonPositionWeights::new();
     let mut current_key: Option<SpecKey> = None;
+    let mut current_raw_codons: HashSet<[u8; 3]> = HashSet::new();
 
     for (line_idx, line) in reader.lines().enumerate() {
         let line = line?;
@@ -174,7 +199,7 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
 
             // Parse new section header
             let line = line.trim_start_matches('#').trim_ascii();
-            let mut parts = line.split('|');
+            let mut parts = line.split('|').map(|s| s.trim_ascii());
 
             let (Some(reference_id), Some(protein_product)) = (parts.next(), parts.next()) else {
                 return Err(std::io::Error::other(format!(
@@ -183,6 +208,7 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
             };
 
             current_key = Some(SpecKey::new(reference_id, protein_product));
+            current_raw_codons = HashSet::new();
 
             continue;
         } else if line.is_empty() {
@@ -196,7 +222,27 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
 
         // TODO: Validity not quite met Validity: the codon is uppercase with
         // T instead of U per TsvRow guarantees
-        current_weights.insert(row.position, row.codon, row.count);
+        if let Err(e) = current_weights.insert(row.position, row.codon, row.count) {
+            let normalized = row.codon;
+            if let Some(other) = current_raw_codons
+                .into_iter()
+                .find(|raw_codon| normalize_codon(*raw_codon) == normalized)
+            {
+                return Err(e
+                    .with_context(format!(
+                        "Both {} and {} were found in the specs",
+                        NucleotidesView::from(&other),
+                        NucleotidesView::from(&row.raw_codon)
+                    ))
+                    .into());
+            } else {
+                // This branch should never happen, but just in case we handle
+                // it
+                return Err(e);
+            }
+        }
+
+        current_raw_codons.insert(row.raw_codon);
     }
 
     // Save final section
@@ -213,12 +259,14 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
 /// the module.
 struct TsvRow {
     /// The 1-based position of the codon.
-    position: u32,
+    position:  u32,
     // TODO: DOES NOT MEET IUPAC VALIDITY REQUIREMENT!
     /// The codon, in uppercase, with `U` substituted for `T`.
-    codon:    [u8; 3],
+    codon:     [u8; 3],
     /// The count of the codon at the specified position.
-    count:    u32,
+    count:     u32,
+    /// The original codon, before recoding. This is useful for error messages.
+    raw_codon: [u8; 3],
 }
 
 // TODO: We should validate that the code is only ACTG, or specify what
@@ -234,7 +282,7 @@ impl FromStr for TsvRow {
     /// The codons are converted to uppercase, and `U` is substituted for `T`.
     fn from_str(line: &str) -> Result<Self, Self::Err> {
         // End the iterator on empty fields, so that missing field errors appear
-        let mut parts = line.split('\t').map(str::trim_ascii).take_while(|s| !s.is_empty());
+        let mut parts = line.split_ascii_whitespace().take_while(|s| !s.is_empty());
 
         // Get fields as string slices
         let Some(position) = parts.next() else {
@@ -251,24 +299,38 @@ impl FromStr for TsvRow {
             .parse::<u32>()
             .with_context("Failed to parse position field (first field)")?;
 
-        let mut codon: [u8; 3] = codon.as_bytes().try_into().map_err(|_| {
+        let raw_codon: [u8; 3] = codon.as_bytes().try_into().map_err(|_| {
             std::io::Error::other(format!(
                 "The codon was expected to have 3 ASCII characters, but {} were found",
                 codon.len()
             ))
         })?;
 
-        codon.make_ascii_uppercase();
-        for base in &mut codon {
-            if *base == b'U' {
-                *base = b'T';
-            }
-        }
+        let codon = normalize_codon(raw_codon);
 
         let count = count
             .parse::<u32>()
             .with_context("Failed to parse count field (third field)")?;
 
-        Ok(Self { position, codon, count })
+        Ok(Self {
+            position,
+            codon,
+            count,
+            raw_codon,
+        })
     }
+}
+
+/// Normalizes the codon for use with [`CodonWeightMatrix`].
+///
+/// This converts all residues to uppercase, as well as `U` to `T`.
+fn normalize_codon(mut codon: [u8; 3]) -> [u8; 3] {
+    // TODO: Use ByteMap?
+    codon.make_ascii_uppercase();
+    for base in &mut codon {
+        if *base == b'U' {
+            *base = b'T';
+        }
+    }
+    codon
 }

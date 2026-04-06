@@ -67,7 +67,7 @@ impl<'a> ProductSpec<'a> {
             })
             .unwrap_or(0);
 
-        let trailing_cds_unaligned = self.exons.total_cds_length
+        let trailing_cds_unaligned = self.exons.cds_len()
             - product_ranges
                 .iter()
                 .rev()

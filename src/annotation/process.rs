@@ -80,11 +80,10 @@ impl<'a> AnnotationModule<'a> {
             // the extension's reference position
             if let Some(ext) = &stop_extension {
                 for product in &mut products {
+                    let last_exon = product.product_spec.exons.last();
                     // Check whether the last exon ends at the same place the
                     // stop extension "ends" (the index before which it occurs).
-                    if let Some(last_exon) = product.product_spec.exons.coords.last()
-                        && last_exon.ref_range.end == ext.ref_index.right()
-                    {
+                    if last_exon.ref_range.end == ext.ref_index.right() {
                         product.stop_extension_query_range = Some(ext.query_range.clone());
                     }
                 }

@@ -17,14 +17,19 @@ use std::{
     cmp::Ordering,
     collections::HashMap,
     fs::File,
-    io::{BufRead, BufReader, Lines},
+    io::{BufRead, BufReader, ErrorKind, Lines},
     iter::Enumerate,
     ops::Range,
     path::{Path, PathBuf},
     str::FromStr,
 };
 use zoe::{
-    data::{SanitizeBase, err::ResultWithErrorContext, fasta::FastaSeq, nucleotides::ToDNA},
+    data::{
+        SanitizeBase,
+        err::{ResultWithErrorContext, WithErrorContext},
+        fasta::FastaSeq,
+        nucleotides::ToDNA,
+    },
     prelude::{FastaReader, Nucleotides, RefineDNAStrat},
     unwrap_or_return_some_err,
 };
@@ -146,7 +151,7 @@ pub(crate) type CdsSpecMap = HashMap<RefKey, Vec<(String, Exons)>>;
 /// - A parsing error occurs on one of the lines (e.g., missing required field,
 ///   invalid range, invalid residues in required beginning field, etc.)
 pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
-    let reader = TsvReader::new(path)?;
+    let reader = TsvReader::from_path(path)?;
 
     let mut cds_specs: HashMap<RefKey, Vec<(String, Exons)>> = HashMap::new();
 
@@ -172,23 +177,22 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
             }
         }
 
-        let total_cds_length: usize = coords.iter().map(|r| r.ref_range.len()).sum();
+        let cds_len = coords
+            .last()
+            .expect("The coords field of TsvRow should be non-empty")
+            .cds_range
+            .end;
 
-        // TODO: This is not guaranteed to be true, so this should be an actual
-        // check and result in an actual error. Does each range need to be a
-        // multiple of three (e.g., parse_coordinate_ranges does validation)? Or
-        // should the check be done here?
-        debug_assert!(
-            total_cds_length.is_multiple_of(3),
-            "{} product was not in-frame: {total_cds_length}",
-            ctype
-        );
+        if !cds_len.is_multiple_of(3) {
+            return Err(std::io::Error::other(
+                "The length of the coding sequence (sum of all exon lengths) was not a multiple of 3.",
+            )
+            .with_context(format!("Failed to parse {ctype} product for reference ID {reference_id}"))
+            .into());
+        }
 
-        let exons = Exons {
-            required_start,
-            coords,
-            total_cds_length,
-        };
+        // Validity: coords is non-empty, CDS length is multiple of 3, etc.
+        let exons = Exons { required_start, coords };
 
         let key = RefKey::new(reference_id, ctype);
         cds_specs.entry(key).or_default().push((protein, exons));
@@ -219,6 +223,8 @@ struct TsvRow {
     /// The `ref_range` fields are in order, although up to 2 nucleotides
     /// overlap is allowed between ranges. Note that any repeated indices are
     /// represented twice with distinct coordinates in the coding sequence.
+    ///
+    /// This vector is non-empty.
     coords: Vec<ExonCoords>,
 
     /// An optional required codon at the start in column 5 (e.g., `ATG`).
@@ -256,10 +262,8 @@ impl FromStr for TsvRow {
         let protein = protein.to_string();
         let ctype = ctype.to_string();
 
-        // TODO: Why are we trimming quotation marks?
-        //
-        // Parse coordinate ranges (e.g., "1..54" or "1..36;692..1027")
-        let coords = parse_coordinate_ranges(coords.trim_matches('"'))?;
+        // Parse coordinate ranges (e.g., 1..54 or 1..36;692..1027)
+        let coords = parse_coordinate_ranges(coords)?;
 
         // Parse optional required start codon
         let required_start = match required_start {
@@ -298,10 +302,18 @@ struct TsvReader {
 }
 
 impl TsvReader {
-    fn new(path: impl AsRef<Path>) -> std::io::Result<Self> {
-        // TODO: handle non-empty and context
-        let file = File::open(path.as_ref())?;
-        let reader = std::io::BufReader::new(file);
+    fn from_path(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        let path = path.as_ref();
+        let file = File::open(path).with_path_context("Failed to open path", path)?;
+        let mut reader = std::io::BufReader::new(file);
+
+        if reader.fill_buf()?.is_empty() {
+            return Err(std::io::Error::new(
+                ErrorKind::InvalidData,
+                format!("No data was found at path {path}", path = path.display()),
+            ));
+        }
+
         Ok(Self {
             lines: reader.lines().enumerate(),
         })
@@ -329,12 +341,14 @@ impl Iterator for TsvReader {
     }
 }
 
-/// Parses a semicolon-delimited list of 1-based end-inclusive reference ranges,
-/// converting them to 0-based [`ExonCoords`] ranges.
+/// Parses a non-empty semicolon-delimited list of 1-based end-inclusive
+/// reference ranges, converting them to 0-based [`ExonCoords`] ranges.
 ///
 /// The length of the coding sequence is the sum of the lengths of all the
 /// reference ranges. The `cds_range` fields of the resulting [`ExonCoords`]
 /// partition this length, starting from 0.
+///
+/// The output vector will be non-empty.
 ///
 /// ## Errors
 ///
@@ -404,7 +418,6 @@ fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
     }
 
     // Validity: exon_ranges will be non-empty since split is always non-empty.
-    // An empty field manifests as an error in parse_coordinate_range
     Ok(exon_ranges)
 }
 

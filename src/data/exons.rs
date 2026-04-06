@@ -12,15 +12,37 @@ pub(crate) struct Exons {
     /// The coordinates of the exons within the reference and coding sequence.
     ///
     /// The exons are ordered by `cds_range`, which form a partition of
-    /// `0..cds_len` where `cds_len` is the total length of the coding sequence.
-    /// The `ref_range` fields are in order, although up to 2 nucleotides
-    /// overlap is allowed between ranges. Note that any repeated indices are
-    /// represented twice with distinct coordinates in the coding sequence.
+    /// `0..cds_len` where `cds_len` is the total length of the coding sequence
+    /// (a multiple of 3). The `ref_range` fields are in order, although up to 2
+    /// nucleotides overlap is allowed between ranges. Note that any repeated
+    /// indices are represented twice with distinct coordinates in the coding
+    /// sequence.
+    ///
+    /// This vector is non-empty.
     pub(crate) coords: Vec<ExonCoords>,
+}
 
-    /// The total length of all the exons for this entry in the `cds-spec.tsv`
-    /// file.
-    pub(crate) total_cds_length: usize,
+impl Exons {
+    /// The coordinates of the first exon.
+    #[inline]
+    #[allow(dead_code)]
+    pub fn first(&self) -> &ExonCoords {
+        self.coords.first().expect("The coords field of Exons should be non-empty")
+    }
+
+    /// The coordinates of the last exon.
+    #[inline]
+    pub fn last(&self) -> &ExonCoords {
+        self.coords.last().expect("The coords field of Exons should be non-empty")
+    }
+
+    /// The length of the coding sequence as defined by the exons.
+    ///
+    /// This is guaranteed to be a multiple of 3.
+    #[inline]
+    pub fn cds_len(&self) -> usize {
+        self.last().cds_range.end
+    }
 }
 
 /// The coordinates of an exon (coding sequence) within a reference and coding

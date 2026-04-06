@@ -135,7 +135,7 @@ impl ComputedIncrementalProducts {
 
         let end_cds_index = out.populate_from(query, product);
 
-        let trailing_cds_unaligned = product.product_spec.exons.total_cds_length - end_cds_index;
+        let trailing_cds_unaligned = product.product_spec.exons.cds_len() - end_cds_index;
 
         Self {
             cds_aln: out.cds_aln,
@@ -220,7 +220,7 @@ impl IncrementalAccumulator {
         // if a stop codon was reached above.
         if let Some(ext_range) = &product.stop_extension_query_range {
             self.dependent_fields
-                .extend_from_stop_extension(query, ext_range, product.product_spec.exons.total_cds_length);
+                .extend_from_stop_extension(query, ext_range, product.product_spec.exons.cds_len());
         }
 
         // No stop codon reached, so finish the translation
@@ -411,9 +411,9 @@ impl DependentFields {
     }
 
     /// Extends the dependent fields from a stop extension.
-    fn extend_from_stop_extension(&mut self, query: &Nucleotides, ext_range: &Range<usize>, total_cds_length: usize) {
+    fn extend_from_stop_extension(&mut self, query: &Nucleotides, ext_range: &Range<usize>, cds_length: usize) {
         if let Some(slice) = query.get(ext_range.clone()) {
-            let nt_insertion_idx = InsertionIdx::from_right_idx(total_cds_length);
+            let nt_insertion_idx = InsertionIdx::from_right_idx(cds_length);
             // Validity: slice is from query, which meets validity requirements
             let (ins, filtered) = ComputedInsertion::new(nt_insertion_idx, slice);
             if !filtered {
