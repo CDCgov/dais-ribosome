@@ -1,10 +1,9 @@
 //! Compound type hierarchy: ctype → reference_id → protein_product.
 use crate::{
-    config::{AlignmentParams, AlignmentWeights},
+    config::{AlignmentParams, AlignmentWeights, product_spec::ProductSpec},
     data::{
         exons::Exons,
         keys::{RefKey, SpecKey},
-        products::ProductSpec,
         refs::ReferenceMap,
         spec::CdsSpecMap,
         weights::CodonWeightMatrix,

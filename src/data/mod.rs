@@ -2,15 +2,13 @@ pub(crate) mod coords;
 pub(crate) mod ctype;
 pub(crate) mod exons;
 pub(crate) mod keys;
-pub(crate) mod module;
 mod outputs;
 pub(crate) mod products;
 pub(crate) mod ranges;
-mod refs;
-mod spec;
+pub(crate) mod refs;
+pub(crate) mod spec;
 pub(crate) mod weights;
 
-pub use module::ModuleData;
 pub use outputs::*;
 
 use zoe::prelude::Nucleotides;

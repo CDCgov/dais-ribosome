@@ -1,9 +1,6 @@
 use crate::{
-    data::{
-        ComputedProduct,
-        products::{ProductSpec, incremental_products::ComputedIncrementalProducts},
-        ranges::CdsStateRange,
-    },
+    config::product_spec::ProductSpec,
+    data::{ComputedProduct, products::incremental_products::ComputedIncrementalProducts, ranges::CdsStateRange},
     hashing::{nt_id, variant_hash},
 };
 use std::ops::Range;

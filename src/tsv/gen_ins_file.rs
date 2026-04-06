@@ -117,7 +117,7 @@ impl GenInsFileParser<File> {
     /// Any IO errors while opening the file are propagated with context.
     pub fn from_file(path: impl AsRef<Path>) -> std::io::Result<Self> {
         Ok(Self::from_readable(
-            File::open(&path).with_file_context("Failed to open genome ins file:", path)?,
+            File::open(&path).with_path_context("Failed to open genome ins file:", path)?,
         ))
     }
 }

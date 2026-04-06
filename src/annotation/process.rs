@@ -1,6 +1,6 @@
 use crate::{
     AlignmentStatesExt,
-    annotation::AnnotationModule,
+    config::annotation_module::AnnotationModule,
     data::{
         GenomeAndProductStates, QueryRecord, RibosomeOutput,
         ctype::ReferenceGroup,

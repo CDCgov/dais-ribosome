@@ -1,4 +1,4 @@
-use dais_ribosome::annotation::AnnotationModule;
+use dais_ribosome::config::annotation_module::AnnotationModule;
 use jiff::Timestamp;
 use std::collections::HashSet;
 

@@ -1,8 +1,7 @@
 //! Module data loading.
 
 use crate::{
-    annotation::AnnotationModule,
-    config::{AlignmentWeights, Formatting, Rules, TomlConfig},
+    config::{AlignmentWeights, Formatting, Rules, TomlConfig, annotation_module::AnnotationModule},
     data::{
         ctype::build_ctype_map,
         refs::{ReferenceMap, load_references},

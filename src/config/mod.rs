@@ -5,6 +5,9 @@
 //! - Parsing module configurations from TOML
 //! - Resolving paths to module resources
 
+pub mod annotation_module;
+pub mod module_data;
+pub(crate) mod product_spec;
 mod toml;
 pub use toml::*;
 

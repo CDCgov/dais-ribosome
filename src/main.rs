@@ -9,9 +9,7 @@ use app::{
 };
 use clap::Parser;
 use dais_ribosome::{
-    annotation::AnnotationModule,
-    config::{TomlConfig, find_modules_toml},
-    data::ModuleData,
+    config::{TomlConfig, annotation_module::AnnotationModule, find_modules_toml, module_data::ModuleData},
     error::{RibosomeError, UnimplementedCtype},
     tsv::{Writers, write_genome_output, write_product_output},
 };
