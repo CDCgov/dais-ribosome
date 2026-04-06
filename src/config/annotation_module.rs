@@ -16,7 +16,7 @@ use crate::{
         keys::{RefKey, SpecKey},
         weights::CodonWeightMatrix,
     },
-    toml::AlignmentParams,
+    toml::{AlignmentMethod, AlignmentParams},
 };
 use std::collections::HashMap;
 use zoe::{
@@ -66,6 +66,40 @@ impl<'a> AnnotationModule<'a> {
             data: module_data,
             ctype_map,
         })
+    }
+
+    /// Finds the best local Smith-Waterman alignment for a query sequence
+    /// against all profiles in this group.
+    ///
+    /// The alignment with the highest score is considered best, or `None` is
+    /// returned if no alignment was found. The `states` in the alignment will
+    /// only include `M`, `I`, `D`, and `S`. Furthermore, any alignments are
+    /// guaranteed to start and end with `M` states, excluding soft clipping.
+    pub(crate) fn best_alignment<T: AsRef<[u8]> + ?Sized>(
+        &self, refs: &ReferenceGroup, query: &T,
+    ) -> Option<Alignment<u32>> {
+        // TODO: The use of get feels questionable. Even if it is
+        // unlikely to ever happen, it feels like it should be an error/warning.
+        let mut alignments = refs.profiles.iter().filter_map(|p| {
+            let alignment = match self.data.alignment_method {
+                AlignmentMethod::OnePass => p.sw_align_from_i16(query.as_query_src()),
+                AlignmentMethod::ThreePass => p.sw_align_from_i16_3pass(query.as_query_src()),
+            };
+
+            alignment.get()
+        });
+
+        let mut best_alignment = alignments.next()?;
+
+        for alignment in alignments {
+            // Instead of using max_by_key, we use manual comparison to ensure
+            // the first maximum is returned (not the last)
+            if alignment > best_alignment {
+                best_alignment = alignment;
+            }
+        }
+
+        Some(best_alignment)
     }
 
     /// Attempts to return the module name of a different module containing the
@@ -169,33 +203,5 @@ impl<'a> ReferenceGroup<'a> {
         profiles.process_results(|iter| self.profiles.extend(iter))?;
 
         Ok(())
-    }
-
-    /// Finds the best local Smith-Waterman alignment for a query sequence
-    /// against all profiles in this group.
-    ///
-    /// The alignment with the highest score is considered best, or `None` is
-    /// returned if no alignment was found. The `states` in the alignment will
-    /// only include `M`, `I`, `D`, and `S`. Furthermore, any alignments are
-    /// guaranteed to start and end with `M` states, excluding soft clipping.
-    pub fn best_alignment<T: AsRef<[u8]> + ?Sized>(&self, query: &T) -> Option<Alignment<u32>> {
-        // TODO: The use of get feels questionable. Even if it is
-        // unlikely to ever happen, it feels like it should be an error/warning.
-        let mut alignments = self
-            .profiles
-            .iter()
-            .filter_map(|p| p.sw_align_from_i16(query.as_query_src()).get());
-
-        let mut best_alignment = alignments.next()?;
-
-        for alignment in alignments {
-            // Instead of using max_by_key, we use manual comparison to ensure
-            // the first maximum is returned (not the last)
-            if alignment > best_alignment {
-                best_alignment = alignment;
-            }
-        }
-
-        Some(best_alignment)
     }
 }

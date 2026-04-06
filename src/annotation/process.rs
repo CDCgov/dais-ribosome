@@ -37,7 +37,7 @@ impl<'a> AnnotationModule<'a> {
             // TODO: Do we ever do revcomp alignment?
 
             // Get the alignment to the best reference
-            let Some(mut genome_aln) = ref_id_data.best_alignment(&chewed_query) else {
+            let Some(mut genome_aln) = self.best_alignment(ref_id_data, &chewed_query) else {
                 return Err(format!("Query '{}' could not be aligned to any reference", query.id).into());
             };
 

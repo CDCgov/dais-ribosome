@@ -11,6 +11,7 @@ use crate::{
         ranges::RangeExt,
         weights::{CodonWeightMatrix, load_codon_weights},
     },
+    toml::AlignmentMethod,
 };
 use std::{
     cmp::Ordering,
@@ -36,6 +37,8 @@ pub struct ModuleData {
     pub name:                     String,
     /// An optional version for the module (e.g., `2.0-alpha`).
     pub version:                  String,
+    /// The method to use for performing sequence alignment.
+    pub(crate) alignment_method:  AlignmentMethod,
     pub(crate) formatting:        Formatting,
     pub(crate) rules:             Rules,
     /// Alignments weights for the module.
@@ -99,6 +102,7 @@ impl ModuleData {
         Ok(Self {
             name: module.name,
             version: module.version.unwrap_or_else(|| "unknown".to_string()),
+            alignment_method: module.alignment_method,
             formatting: module.formatting,
             rules: module.rules,
             alignment_weights,

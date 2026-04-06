@@ -63,22 +63,38 @@ impl TomlConfig {
 pub struct ConfiguredModule {
     /// The name of the module (e.g., `flu`, `cov`, or `rsv`). This must
     /// correspond to a folder in `ribosome_res`.
-    pub name:       String,
+    pub name:             String,
     /// An optional version for the module (e.g., `2.0-alpha`).
-    pub version:    Option<String>,
+    pub version:          Option<String>,
     /// The file name for the FASTA file containing the references. This should
     /// be a relative path within the module folder.
-    pub references: PathBuf,
+    pub references:       PathBuf,
     // TODO: What is this?
-    pub weights:    PathBuf,
+    pub weights:          PathBuf,
     /// The file name for the TSV file containing the coding sequence (CDS)
     /// specifications. This should be a relative path within the module folder.
-    pub cds_spec:   PathBuf,
+    pub cds_spec:         PathBuf,
+    /// The alignment method to use.
+    #[serde(default)]
+    pub alignment_method: AlignmentMethod,
     // TODO: What is this?
-    pub formatting: Formatting,
+    pub formatting:       Formatting,
     // TODO: What is this?
-    pub rules:      Rules,
-    pub alignment:  AlignmentWeights,
+    pub rules:            Rules,
+    pub alignment:        AlignmentWeights,
+}
+
+/// The supported alignment methods in DAIS-ribosome.
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Deserialize)]
+pub enum AlignmentMethod {
+    /// The 1-pass algorithm, which is faster for smaller sequences (e.g., flu).
+    #[serde(rename = "one-pass")]
+    OnePass,
+    /// The 3-pass algorithm, which is more memory efficient for larger
+    /// sequences (e.g., covid).
+    #[default]
+    #[serde(rename = "three-pass")]
+    ThreePass,
 }
 
 /// Collection of alignment weights for a module.
