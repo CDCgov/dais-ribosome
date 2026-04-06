@@ -3,13 +3,16 @@
 use crate::{
     config::{AlignmentWeights, Formatting, Rules, TomlConfig, annotation_module::AnnotationModule},
     data::{
-        ctype::build_ctype_map,
+        ctype::ReferenceGroup,
         refs::{ReferenceMap, load_references},
         spec::{CdsSpecMap, load_cds_spec},
         weights::{CodonWeightMatrix, load_codon_weights},
     },
 };
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 use zoe::data::err::ResultWithErrorContext;
 
 /// Owned data backing an annotation module.
@@ -33,14 +36,13 @@ pub struct ModuleData {
     /// [`RefKey`]: crate::data::keys::RefKey
     pub references:        ReferenceMap,
 
-    // Consumed during build_annotation_module:
     /// A hash map from [`RefKey`] values to a vector of the protein product
     /// names (e.g., `HA`, `HA-signal`) and their [`Exons`].
     ///
     /// [`RefKey`]: crate::data::keys::RefKey
     /// [`Exons`]: crate::data::exons::Exons
-    cds_spec:      Option<CdsSpecMap>,
-    codon_weights: Option<CodonWeightMatrix>,
+    cds_spec:      CdsSpecMap,
+    codon_weights: CodonWeightMatrix,
 }
 
 impl ModuleData {
@@ -89,8 +91,8 @@ impl ModuleData {
             alignment_weights,
             other_modules,
             references,
-            cds_spec: Some(cds_spec),
-            codon_weights: Some(codon_weights),
+            cds_spec,
+            codon_weights,
         })
     }
 
@@ -99,15 +101,32 @@ impl ModuleData {
     /// Builds an [`AnnotationModule`] that borrows from this [`ModuleData`].
     /// This consumes `cds_spec` and `codon_weights`, so it can only be called
     /// once.
-    pub fn build_annotation_module(&mut self) -> std::io::Result<AnnotationModule<'_>> {
-        let cds_spec = self.cds_spec.take().expect("build_annotation_module can only be called once");
+    pub fn build_annotation_module(&self) -> std::io::Result<AnnotationModule<'_>> {
+        let mut ctype_map: HashMap<String, Vec<ReferenceGroup>> = HashMap::new();
 
-        let codon_weights = self
-            .codon_weights
-            .take()
-            .expect("build_annotation_module can only be called once");
+        for (ref_key, seqs) in &self.references {
+            let params = self.alignment_weights.get(&ref_key.compound_type);
 
-        let ctype_map = build_ctype_map(&self.references, cds_spec, codon_weights, &self.alignment_weights)?;
+            // Get the list of groups for the given compound type
+            let groups = ctype_map.entry(ref_key.compound_type.to_string()).or_default();
+
+            // See if there is an existing entry in the list of groups for the given
+            // reference ID
+            if let Some(group) = groups.iter_mut().find(|group| group.reference_id == ref_key.reference_id) {
+                // Update that reference group
+                group.extend(seqs, ref_key, params)?;
+            } else {
+                // Add a new reference group
+                groups.push(ReferenceGroup::new(
+                    ref_key,
+                    seqs,
+                    params,
+                    &self.cds_spec,
+                    &self.codon_weights,
+                )?);
+            }
+        }
+
         Ok(AnnotationModule { data: self, ctype_map })
     }
 }

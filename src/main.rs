@@ -33,7 +33,7 @@ fn main() {
     let parsed_toml = TomlConfig::from_file(&toml_path).unwrap_or_fail();
 
     // Convert the TOML data into ModuleData
-    let mut module_data = ModuleData::new(parsed_toml, &toml_path, &args.module)
+    let module_data = ModuleData::new(parsed_toml, &toml_path, &args.module)
         .unwrap_or_die(&format!("Failed to prepare module '{}'", args.module));
 
     let annotation_module = module_data

@@ -21,7 +21,7 @@ use zoe::prelude::*;
 pub(crate) struct Product<'a> {
     /// The information for the protein product being aligned against, including
     /// the name and exons.
-    pub(crate) product_spec: &'a ProductSpec,
+    pub(crate) product_spec: ProductSpec<'a>,
 
     /// The ranges within the exons that the query covers. This is initially
     /// formed by intersecting the query ranges with the exon ranges, then is
@@ -106,7 +106,7 @@ impl<'a> Product<'a> {
         let variant_hash = variant_hash(&aa_seq);
 
         ComputedProduct {
-            product_name: &self.product_spec.name,
+            product_name: self.product_spec.name,
             cds_seq,
             cds_aln,
             cds_id,

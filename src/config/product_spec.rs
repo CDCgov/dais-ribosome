@@ -8,17 +8,17 @@ use crate::data::{
 };
 
 /// The specifications for a single protein product (e.g., `HA`, `HA-signal`).
-#[derive(Debug)]
-pub(crate) struct ProductSpec {
+#[derive(Copy, Clone, Debug)]
+pub(crate) struct ProductSpec<'a> {
     /// The protein/peptide product name
-    pub(crate) name:          String,
+    pub(crate) name:          &'a str,
     /// The exon coordinates, as well as translation rules specific to the exons
-    pub(crate) exons:         Exons,
+    pub(crate) exons:         &'a Exons,
     /// The codon position weight matrix for the protein product
-    pub(crate) codon_weights: Option<CodonPositionWeights>,
+    pub(crate) codon_weights: Option<&'a CodonPositionWeights>,
 }
 
-impl ProductSpec {
+impl<'a> ProductSpec<'a> {
     /// Intersects the ranges for an alignment ([`StateRange`]) with the ranges
     /// for the exons ([`Exons`]) to form the ranges in the product.
     ///
@@ -30,7 +30,7 @@ impl ProductSpec {
     /// The `state_ranges` must contain ordered non-overlapping ranges that
     /// fully partition the query and reference ranges included in the
     /// alignment. It also must begin and end with [`StateRange::M`].
-    pub(crate) fn make_product_ranges<'a>(&'a self, state_ranges: &[StateRange]) -> Product<'a> {
+    pub(crate) fn make_product_ranges(self, state_ranges: &[StateRange]) -> Product<'a> {
         // TODO: Is this a good enough capacity? We could end up exceeding it.
         let mut product_ranges = Vec::with_capacity(state_ranges.len());
 

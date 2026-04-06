@@ -1,11 +1,9 @@
 //! Compound type hierarchy: ctype → reference_id → protein_product.
 use crate::{
-    config::{AlignmentParams, AlignmentWeights, product_spec::ProductSpec},
+    config::{AlignmentParams, product_spec::ProductSpec},
     data::{
         exons::Exons,
         keys::{RefKey, SpecKey},
-        refs::ReferenceMap,
-        spec::CdsSpecMap,
         weights::CodonWeightMatrix,
     },
 };
@@ -35,13 +33,13 @@ pub(crate) struct ReferenceGroup<'a> {
     pub(crate) length:       usize,
     /// The alignment profiles corresponding to the sequences.
     pub(crate) profiles:     Vec<AlignmentProfiles<'a>>,
-    pub(crate) proteins:     Vec<ProductSpec>,
+    pub(crate) proteins:     Vec<ProductSpec<'a>>,
 }
 
 impl<'a> ReferenceGroup<'a> {
     pub fn new(
         ref_key: &RefKey, seqs: &'a [Nucleotides], params: &'a AlignmentParams,
-        cds_spec: &mut HashMap<RefKey, Vec<(String, Exons)>>, codon_weights: &mut CodonWeightMatrix,
+        cds_spec: &'a HashMap<RefKey, Vec<(String, Exons)>>, codon_weights: &'a CodonWeightMatrix,
     ) -> std::io::Result<Self> {
         let length = seqs.first().map_or(0, Nucleotides::len);
         for seq in seqs {
@@ -63,15 +61,15 @@ impl<'a> ReferenceGroup<'a> {
             .collect::<Result<Vec<_>, _>>()?;
 
         let proteins = cds_spec
-            .remove(ref_key)
-            .unwrap_or_default()
+            .get(ref_key)
             .into_iter()
+            .flatten()
             .map(|(protein_name, exons)| {
-                let spec_key = SpecKey::new(&ref_key.reference_id, &protein_name);
+                let spec_key = SpecKey::new(&ref_key.reference_id, protein_name);
                 ProductSpec {
                     name: protein_name,
                     exons,
-                    codon_weights: codon_weights.remove(&spec_key),
+                    codon_weights: codon_weights.get(&spec_key),
                 }
             })
             .collect();
@@ -131,31 +129,4 @@ impl<'a> ReferenceGroup<'a> {
 
         Some(best_alignment)
     }
-}
-
-/// Builds the compound type map from raw loaded data.
-pub(crate) fn build_ctype_map<'a>(
-    references: &'a ReferenceMap, mut cds_spec: CdsSpecMap, mut codon_weights: CodonWeightMatrix,
-    alignment_weights: &'a AlignmentWeights,
-) -> std::io::Result<CompoundTypeMap<'a>> {
-    let mut ctype_map: HashMap<String, Vec<ReferenceGroup<'a>>> = HashMap::new();
-
-    for (ref_key, seqs) in references {
-        let params = alignment_weights.get(&ref_key.compound_type);
-
-        // Get the list of groups for the given compound type
-        let groups = ctype_map.entry(ref_key.compound_type.to_string()).or_default();
-
-        // See if there is an existing entry in the list of groups for the given
-        // reference ID
-        if let Some(group) = groups.iter_mut().find(|group| group.reference_id == ref_key.reference_id) {
-            // Update that reference group
-            group.extend(seqs, ref_key, params)?;
-        } else {
-            // Add a new reference group
-            groups.push(ReferenceGroup::new(ref_key, seqs, params, &mut cds_spec, &mut codon_weights)?);
-        }
-    }
-
-    Ok(ctype_map)
 }
