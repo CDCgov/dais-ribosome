@@ -100,7 +100,7 @@ impl<'a> ProductSpec<'a> {
     /// ## Validity
     ///
     /// The `left` and `right` codons must contain unaligned, uppercase IUPAC
-    /// bases.
+    /// bases. `T` must be used instead of `U`.
     pub(crate) fn codon_left_ge_right(&self, left: [u8; 3], right: [u8; 3], codon_position: u32) -> bool {
         // Validity: both codons are in uppercase
         if let Some(w) = &self.codon_weights
@@ -148,7 +148,8 @@ impl<'a> ProductSpec<'a> {
     ///
     /// ## Validity
     ///
-    /// The `codon` must contain unaligned, uppercase IUPAC bases.
+    /// The `codon` must contain unaligned, uppercase IUPAC bases. `T` must be
+    /// used instead of `U`.
     pub(crate) fn compare_codon_positions(&self, pos_left: u32, pos_right: u32, codon: [u8; 3]) -> Option<Ordering> {
         self.codon_weights
             .as_ref()

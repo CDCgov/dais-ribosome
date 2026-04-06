@@ -12,9 +12,11 @@ use zoe::prelude::Nucleotides;
 /// data.
 #[derive(Debug)]
 pub struct QueryRecord {
+    /// The ID of the query.
     pub id:          String,
-    /// The nucleotides sequence, containing unaligned, uppercase IUPAC (with `T`
-    /// instead of `U`).
+    /// The nucleotides sequence, containing unaligned, uppercase IUPAC. `U` is
+    /// preserved in addition to `T`.
     pub nucleotides: Nucleotides,
+    /// The compound type of the query.
     pub ctype:       String,
 }

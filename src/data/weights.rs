@@ -23,7 +23,8 @@ pub type CodonWeightMatrix = HashMap<SpecKey, CodonPositionWeights>;
 /// uncommon (to handle individual insertions or deletions), as compared to
 /// looking up statistics for each position consecutively, this is sufficient.
 ///
-/// This map assumes that all codons are in uppercase.
+/// This map assumes that all codons are in uppercase. Any `U` bases in the
+/// codons are automatically converted to `T`.
 #[derive(Debug, Default)]
 pub struct CodonPositionWeights {
     map: HashMap<CodonKey, u32>,
@@ -45,7 +46,8 @@ impl CodonPositionWeights {
     ///
     /// ## Validity
     ///
-    /// The `codon` should be in uppercase.
+    /// The `codon` must contain unaligned, uppercase IUPAC bases. `T` must be
+    /// used instead of `U`.
     pub fn get(&self, position: u32, codon: [u8; 3]) -> u32 {
         self.map.get(&CodonKey { position, codon }).copied().unwrap_or(0)
     }
@@ -55,7 +57,8 @@ impl CodonPositionWeights {
     ///
     /// ## Validity
     ///
-    /// The `codon` should be in uppercase.
+    /// The `codon` must contain unaligned, uppercase IUPAC bases. `T` must be
+    /// used instead of `U`.
     pub fn insert(&mut self, position: u32, codon: [u8; 3], count: u32) -> Option<u32> {
         self.map.insert(CodonKey { position, codon }, count)
     }
@@ -65,7 +68,8 @@ impl CodonPositionWeights {
     ///
     /// ## Validity
     ///
-    /// Both codons should be in uppercase.
+    /// The `codon` must contain unaligned, uppercase IUPAC bases. `T` must be
+    /// used instead of `U`.
     pub fn compare_codons(&self, left: [u8; 3], right: [u8; 3], position: u32) -> Option<Ordering> {
         let left_count = self.get(position, left);
         let right_count = self.get(position, right);
@@ -81,7 +85,8 @@ impl CodonPositionWeights {
     ///
     /// ## Validity
     ///
-    /// The codon should be in uppercase.
+    /// The `codon` must contain unaligned, uppercase IUPAC bases. `T` must be
+    /// used instead of `U`.
     pub fn compare_positions(&self, pos_left: u32, pos_right: u32, codon: [u8; 3]) -> Option<Ordering> {
         let left_count = self.get(pos_left, codon);
         let right_count = self.get(pos_right, codon);
@@ -98,7 +103,7 @@ impl CodonPositionWeights {
 struct CodonKey {
     /// The 1-based position of the codon within the coding sequence.
     position: u32,
-    /// The uppercase codon.
+    /// The uppercase codon, containing `T` instead of `U`.
     codon:    [u8; 3],
 }
 
@@ -189,7 +194,8 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
             .parse::<TsvRow>()
             .with_context(format!("Failed to parse line {line_num}: {line}", line_num = line_idx + 1))?;
 
-        // Validity: the codon is uppercase per TsvRow guarantees
+        // TODO: Validity not quite met Validity: the codon is uppercase with
+        // T instead of U per TsvRow guarantees
         current_weights.insert(row.position, row.codon, row.count);
     }
 
@@ -208,7 +214,8 @@ pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Err
 struct TsvRow {
     /// The 1-based position of the codon.
     position: u32,
-    /// The codon, in uppercase.
+    // TODO: DOES NOT MEET IUPAC VALIDITY REQUIREMENT!
+    /// The codon, in uppercase, with `U` substituted for `T`.
     codon:    [u8; 3],
     /// The count of the codon at the specified position.
     count:    u32,
@@ -224,7 +231,7 @@ impl FromStr for TsvRow {
     /// Parses a string `line` to a [`TsvRow`]. The string must be trimmed and
     /// non-empty, and should not be a header row.
     ///
-    /// The codons are converted to uppercase.
+    /// The codons are converted to uppercase, and `U` is substituted for `T`.
     fn from_str(line: &str) -> Result<Self, Self::Err> {
         // End the iterator on empty fields, so that missing field errors appear
         let mut parts = line.split('\t').map(str::trim_ascii).take_while(|s| !s.is_empty());
@@ -252,6 +259,11 @@ impl FromStr for TsvRow {
         })?;
 
         codon.make_ascii_uppercase();
+        for base in &mut codon {
+            if *base == b'U' {
+                *base = b'T';
+            }
+        }
 
         let count = count
             .parse::<u32>()

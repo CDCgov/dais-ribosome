@@ -9,7 +9,7 @@ use std::{
     path::Path,
 };
 use zoe::{
-    data::{err::ResultWithErrorContext, fasta::FastaSeq, nucleotides::ToDNA},
+    data::{ByteMap, RetainSequence, err::ResultWithErrorContext, fasta::FastaSeq},
     define_whichever,
     prelude::*,
 };
@@ -19,7 +19,9 @@ use crate::app::log::time_stamp;
 /// A reader for a FASTA file containing query data, parsing it into
 /// [`QueryRecord`].
 ///
-/// This uses *Zoe*'s [`FastaReader`].
+/// This uses *Zoe*'s [`FastaReader`]. All non-IUPAC bases and gap characters
+/// are filtered, and bases are converted to uppercase. `U` is preserved in
+/// addition to `T`.
 pub struct FastaQueryIter {
     reader: FastaReader<File>,
 }
@@ -75,14 +77,18 @@ impl From<String> for QueryInputError {
 
 /// Parses a [`FastaSeq`] into a [`QueryRecord`] for use in DAIS-ribosome.
 ///
+///
+/// This filters all non-IUPAC bases and gap characters, and converts to
+/// uppercase. `U` is preserved in addition to `T`.
+///
 /// ## Errors
 ///
-/// - The sequence must be non-empty after filtering for valid nucleotides.
+/// - The sequence must be non-empty after filtering.
 /// - The header must be successfully parsed.
 fn parse_fasta_seq(record: FastaSeq) -> Result<QueryRecord, QueryInputError> {
     let FastaSeq { name, sequence } = record;
     // BREAKING: we previously only removed: '*: .~-'
-    let nucleotides = sequence.filter_to_dna_unaligned();
+    let nucleotides = sanitize_seq(sequence);
 
     if nucleotides.is_empty() {
         return Err(QueryInputError::NoNucleotides(name, ReaderType::Fasta));
@@ -113,6 +119,9 @@ fn parse_fasta_seq(record: FastaSeq) -> Result<QueryRecord, QueryInputError> {
 ///
 /// Supports 3-column annotated (`ID<TAB>ctype<TAB>sequence`) and 2-column
 /// unannotated (`ID\<TAB>sequence`, currently stubbed) input.
+///
+/// All non-IUPAC bases and gap characters are filtered, and bases are converted
+/// to uppercase. `U` is preserved in addition to `T`.
 pub struct TsvQueryIter {
     reader: Lines<BufReader<File>>,
 }
@@ -124,6 +133,9 @@ impl TsvQueryIter {
     }
 
     /// Parses a single TSV line into a [`QueryRecord`].
+    ///
+    /// This filters all non-IUPAC bases and gap characters, and converts to
+    /// uppercase. `U` is preserved in addition to `T`.
     ///
     /// ## Validity
     ///
@@ -152,7 +164,7 @@ impl TsvQueryIter {
                     return Err("Invalid TSV format: the second field was empty".into());
                 }
 
-                let nucleotides = seq_field.as_bytes().to_vec().filter_to_dna_unaligned();
+                let nucleotides = sanitize_seq(seq_field.as_bytes().to_vec());
 
                 if nucleotides.is_empty() {
                     return Err(QueryInputError::NoNucleotides(id.to_string(), ReaderType::Tsv));
@@ -166,7 +178,7 @@ impl TsvQueryIter {
             }
             // Two columns: ID  sequence  (unannotated — stub)
             None => {
-                let nucleotides = second.as_bytes().to_vec().filter_to_dna_unaligned();
+                let nucleotides = sanitize_seq(second.as_bytes().to_vec());
 
                 if nucleotides.is_empty() {
                     return Err(QueryInputError::NoNucleotides(id.to_string(), ReaderType::Tsv));
@@ -203,7 +215,11 @@ impl Iterator for TsvQueryIter {
 }
 
 define_whichever! {
-    /// Unified query iterator over FASTA or TSV input.
+    /// Unified query iterator over FASTA or TSV input, returning queries as
+    /// [`QueryRecord`].
+    ///
+    /// Both iterators filter all non-IUPAC bases and gap characters, and bases
+    /// are converted to uppercase. `U` is preserved in addition to `T`.
     pub enum QueryInput {
         /// Backed by a FASTA reader.
         Fasta(FastaQueryIter),
@@ -264,4 +280,40 @@ where
             }
         })
     }
+}
+
+/// Sanitizes an incoming sequence so that it meets the validity requirements of
+/// [`QueryRecord`].
+///
+/// This converts to uppercase, preserves IUPAC characters, preserves `U` in
+/// addition to `T`, and preserves `X`. All other bytes are removed.
+#[must_use]
+#[cfg(feature = "regression-testing")]
+fn sanitize_seq(mut seq: Vec<u8>) -> Nucleotides {
+    const SANITIZE: ByteMap = ByteMap::all(0)
+        .preserve_range(b'A'..=b'Z')
+        .preserve_range(b'a'..=b'z')
+        .map(b"acgturyswkmbdhvn", b"ACGTURYSWKMBDHVN")
+        .map(b"ux", b"UX");
+
+    seq.retain_by_recoding(&SANITIZE);
+    Nucleotides::from(seq)
+}
+
+/// Sanitizes an incoming sequence so that it meets the validity requirements of
+/// [`QueryRecord`].
+///
+/// This converts to uppercase, preserves IUPAC characters, preserves `U` in
+/// addition to `T`, and maps `X` to `N`. All other bytes are removed.
+#[must_use]
+#[cfg(not(feature = "regression-testing"))]
+fn sanitize_seq(mut seq: Vec<u8>) -> Nucleotides {
+    const SANITIZE: ByteMap = ByteMap::all(0)
+        .preserve_range(b'A'..=b'Z')
+        .preserve_range(b'a'..=b'z')
+        .map(b"acgturyswkmbdhvn", b"ACGTURYSWKMBDHVN")
+        .map(b"uxX", b"UNN");
+
+    seq.retain_by_recoding(&SANITIZE);
+    Nucleotides::from(seq)
 }

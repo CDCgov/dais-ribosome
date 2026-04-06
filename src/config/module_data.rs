@@ -23,8 +23,8 @@ use std::{
     str::FromStr,
 };
 use zoe::{
-    data::{err::ResultWithErrorContext, fasta::FastaSeq, nucleotides::ToDNA},
-    prelude::{FastaReader, Nucleotides},
+    data::{SanitizeBase, err::ResultWithErrorContext, fasta::FastaSeq, nucleotides::ToDNA},
+    prelude::{FastaReader, Nucleotides, RefineDNAStrat},
     unwrap_or_return_some_err,
 };
 
@@ -139,8 +139,8 @@ pub(crate) type CdsSpecMap = HashMap<RefKey, Vec<(String, Exons)>>;
 /// Returns an error (without path context) if:
 ///
 /// - The file cannot be read
-/// - A parsing error occurs on one of the lines (e.g., missing required field
-///   or invalid range)
+/// - A parsing error occurs on one of the lines (e.g., missing required field,
+///   invalid range, invalid residues in required beginning field, etc.)
 pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
     let reader = TsvReader::new(path)?;
 
@@ -152,8 +152,21 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
             protein,
             ctype,
             coords,
-            required_start,
+            mut required_start,
         } = row?;
+
+        // Standardize the required start
+        if let Some(codon) = &mut required_start {
+            for residue in codon {
+                let Some(new_residue) = residue.refine_base(RefineDNAStrat::AcgtNoGapsUc) else {
+                    return Err(std::io::Error::other(format!(
+                        "An invalid residue ({residue}) was found in the required beginning field. Expected any of ACGTUacgtu",
+                        residue = *residue as char
+                    )));
+                };
+                *residue = new_residue;
+            }
+        }
 
         let total_cds_length: usize = coords.iter().map(|r| r.ref_range.len()).sum();
 

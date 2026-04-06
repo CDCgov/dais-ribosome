@@ -12,10 +12,16 @@ use crate::{
     outputs::{GenomeAndProductStates, Product, RibosomeOutput},
 };
 use std::{cmp::Ordering, ops::Range};
-use zoe::{alignment::Alignment, data::types::nucleotides::CodonExtension, prelude::*};
+use zoe::{
+    alignment::Alignment,
+    data::{SanitizeBase, types::nucleotides::CodonExtension},
+    prelude::*,
+};
 
 impl<'a> AnnotationModule<'a> {
-    /// Processes a single query TODO: what does it return?
+    /// Processes a single query, returning [`RibosomeOutput`] containing all
+    /// the genome alignments against the relevant references, as well as the
+    /// protein products formed for each reference.  
     pub fn process(&self, query: QueryRecord) -> Result<RibosomeOutput<'_>, RibosomeError> {
         // Get the corresponding reference information for the compound type of
         // the query
@@ -43,7 +49,7 @@ impl<'a> AnnotationModule<'a> {
             self.rule_repairable_ends(&mut genome_aln);
 
             // Compute the stop extension
-            let stop_extension = self.rule_stop_extension(&query.nucleotides, &genome_aln);
+            let stop_extension = self.rule_stop_extension(&query, &genome_aln);
 
             // Validity: requirements met based on best_alignment guarantees
             let genome_aln_states = StateRange::state_ranges_from_aligment(&genome_aln);
@@ -57,15 +63,12 @@ impl<'a> AnnotationModule<'a> {
 
                 // Validity: the same `query_seq` is passed as was used to form
                 // `genome_aln_states`
-                if product_ranges.missing_required_start(&query.nucleotides) {
+                if product_ranges.missing_required_start(&query) {
                     continue;
                 }
 
                 product_ranges.condense_deletions();
-                // Validity: QueryRecord contains unaligned, uppercase IUPAC
-                // bases
-                product_ranges.fix_frames(&query.nucleotides);
-                // product_ranges.add_query_coords(query_ori_offset);
+                product_ranges.fix_frames(&query);
 
                 products.push(product_ranges);
             }
@@ -130,7 +133,10 @@ impl<'a> AnnotationModule<'a> {
     ///
     /// This insertion is called the stop extension. The stop codon that is
     /// searched for must be in-frame.
-    fn rule_stop_extension(&self, query_seq: &Nucleotides, genome_aln: &Alignment<u32>) -> Option<InsertionRange> {
+    fn rule_stop_extension(&self, query: &QueryRecord, genome_aln: &Alignment<u32>) -> Option<InsertionRange> {
+        // Note: This contains uppercase IUPAC, possibly with either U or T
+        let query_seq = &query.nucleotides;
+
         if self.data.rules.list_contig_stop_extension
             && genome_aln.uanligned_ref_tail() == 0
             && genome_aln.unaligned_query_tail() >= 3
@@ -172,15 +178,12 @@ impl<'a> AnnotationModule<'a> {
     ///
     /// If any of these conditions fail to hold, no shrinking occurs, and the
     /// starting position of the returned slice is 0.
-    ///
     fn rule_chew_to_start<'b>(
         &self, query: &'b QueryRecord, ref_id_data: &ReferenceGroup<'_>,
     ) -> (usize, NucleotidesView<'b>) {
-        // Validity: QueryRecord guarantees U has been replaced with T (and
-        // guarantees uppercase), so ATG is the only possible start codon
-
         if self.data.rules.chew_to_start
             && query.nucleotides.len() > ref_id_data.length
+            // Validity: QueryRecord contains uppercase bases
             && let Some(r) = query.nucleotides.find_substring(b"ATG")
             && query.nucleotides.len() - r.start >= ref_id_data.length
         {
@@ -277,12 +280,13 @@ impl<'a> Product<'a> {
     ///
     /// If any of these conditions are not true, then `false` is returned.
     ///
+    /// `T` and `U` are treated equivalently for the purposes of this check.
+    ///
     /// ## Validity
     ///
-    /// The `query` should contain unaligned, uppercase IUPAC bases. It should
-    /// be the same query which the alignment used to create `self` was formed
-    /// from.
-    pub(crate) fn missing_required_start(&self, query: &Nucleotides) -> bool {
+    /// The `query` should be the same query which the alignment used to create
+    /// `self` was formed from.
+    pub(crate) fn missing_required_start(&self, query: &QueryRecord) -> bool {
         if let Some(required) = self.product_spec.exons.required_start
             // Note that the first product range is either a match or deletion
             && let Some(CdsStateRange::M(m)) = self.product_ranges.first()
@@ -291,7 +295,11 @@ impl<'a> Product<'a> {
             // Validity: query_range always refers to valid indices in query. At
             // least 3 residues exist since cds_range and query_range are the
             // same length
-            let first: [u8; 3] = *query[m.query_range.start..].first_chunk().expect("The length of the query_range should be at least 3, and the query_range should not refer to out of bounds indices");
+            let mut first: [u8; 3] = *query.nucleotides[m.query_range.start..].first_chunk().expect("The length of the query_range should be at least 3, and the query_range should not refer to out of bounds indices");
+
+            // Convert U to T for the purpose of identifying the required start
+            first = first.map(|b| b.recode_base(RecodeDNAStrat::AnyToAcgtnNoGapsUpper));
+
             first != required
         } else {
             false
@@ -332,13 +340,8 @@ impl<'a> Product<'a> {
     /// out-of-frame positions by shifting them left or right based on codon
     /// usage statistics. The algorithm mirrors the logic in
     /// `codonCorrectStats.pl`, albeit for coordinate math instead of strings.
-    ///
-    /// ## Validity
-    ///
-    /// The `query` should contain unaligned, uppercase IUPAC bases.
-    pub(crate) fn fix_frames(&mut self, query: impl AsRef<[u8]>) {
+    pub(crate) fn fix_frames(&mut self, query: &QueryRecord) {
         let len = self.product_ranges.len();
-        let query = query.as_ref();
 
         // We iterate by index because we need to access neighbors
         let mut i = 0;
@@ -349,8 +352,6 @@ impl<'a> Product<'a> {
 
                     // Only correct in-frame insertions at out-of-frame positions
                     if codon_shift != 0 && ins.len() % 3 == 0 {
-                        // Validity: this function requires the same
-                        // requirements on query
                         self.fix_insertion_frame(i, query);
                     }
                 }
@@ -360,8 +361,6 @@ impl<'a> Product<'a> {
 
                     // Only correct in-frame deletions at out-of-frame positions
                     if frame != 0 && del.len() % 3 == 0 {
-                        // Validity: this function requires the same
-                        // requirements on query
                         self.fix_deletion_frame(i, query);
                     }
                 }
@@ -384,16 +383,13 @@ impl<'a> Product<'a> {
     /// - A2 (frame 2): Compare codons formed by:
     ///   - 2 preceding bases + first 1 insert base
     ///   - last 2 insert bases + 1 following
-    ///
-    /// ## Validity
-    ///
-    /// The `query` should contain unaligned, uppercase IUPAC bases.
-    fn fix_insertion_frame(&mut self, idx: usize, query: &[u8]) -> Option<()> {
+    fn fix_insertion_frame(&mut self, idx: usize, query: &QueryRecord) -> Option<()> {
         let Product {
             product_ranges,
             product_spec,
             ..
         } = self;
+        let query = &query.nucleotides;
 
         // Insertions cannot be split over exons, and in practice many scoring
         // schemes tend to avoid adjacent insertions and deletions, so in
@@ -422,8 +418,8 @@ impl<'a> Product<'a> {
             let cp2 = *query.get(left_match.query_range.end - 1)?;
             let cp3 = *query.get(right_match.query_range.start)?;
 
-            let a2l2 = [insert_seq[insert_len - 2], insert_seq[insert_len - 1], cp3];
-            let a2r1 = [cp1, cp2, insert_seq[0]];
+            let a2l2 = build_discontiguous_codon(insert_seq[insert_len - 2], insert_seq[insert_len - 1], cp3);
+            let a2r1 = build_discontiguous_codon(cp1, cp2, insert_seq[0]);
 
             // Validity: The codons are uppercase because they are derived from
             // bases in query
@@ -451,11 +447,11 @@ impl<'a> Product<'a> {
             let cp2 = *query.get(right_match.query_range.start)?;
             let cp3 = *query.get(right_match.query_range.start + 1)?;
 
-            let a1l1 = [insert_seq[insert_len - 1], cp2, cp3];
-            let a1r2 = [cp1, insert_seq[0], insert_seq[1]];
+            let a1l1 = build_discontiguous_codon(insert_seq[insert_len - 1], cp2, cp3);
+            let a1r2 = build_discontiguous_codon(cp1, insert_seq[0], insert_seq[1]);
 
-            // Validity: The codons are uppercase because they are derived from
-            // bases in query
+            // Validity: build_discontiguous_codon ensures validity requirements
+            // are met
             if product_spec.codon_left_ge_right(a1l1, a1r2, codon_position as u32) {
                 // Insertion shifts left 1 for frame 1 split codon
                 left_match.cut_end(1);
@@ -473,16 +469,13 @@ impl<'a> Product<'a> {
     }
 
     /// Fix a deletion at index `i` by shifting it to an in-frame position.
-    ///
-    /// ## Validity
-    ///
-    /// The `query` should contain unaligned, uppercase IUPAC bases.
-    fn fix_deletion_frame(&mut self, idx: usize, query: &[u8]) -> Option<()> {
+    fn fix_deletion_frame(&mut self, idx: usize, query: &QueryRecord) -> Option<()> {
         let Product {
             product_ranges,
             product_spec,
             ..
         } = self;
+        let query = &query.nucleotides;
 
         let Some((left_match, CdsStateRange::D(del), right_match)) = Self::partition_states(product_ranges, idx) else {
             return None;
@@ -499,11 +492,11 @@ impl<'a> Product<'a> {
         if frame == 1 {
             // Frame 1 pivot codon: is last 1 base before gap + first 2 bases
             // after gap
-            let cp1 = query.get(left_match.query_range.end - 1)?;
-            let cp2 = query.get(right_match.query_range.start)?;
-            let cp3 = query.get(right_match.query_range.start + 1)?;
-
-            let pivot = [*cp1, *cp2, *cp3];
+            let pivot = build_discontiguous_codon(
+                *query.get(left_match.query_range.end - 1)?,
+                *query.get(right_match.query_range.start)?,
+                *query.get(right_match.query_range.start + 1)?,
+            );
 
             // TODO: Likely want to compare with Ordering::is_gt instead, so
             // that ties resolve as right shift.
@@ -532,11 +525,11 @@ impl<'a> Product<'a> {
         } else if frame == 2 {
             // Frame2 pivot codon is last 2 bases before gap + first 1 base
             // after gap.
-            let cp1 = query.get(left_match.query_range.end - 2)?;
-            let cp2 = query.get(left_match.query_range.end - 1)?;
-            let cp3 = query.get(right_match.query_range.start)?;
-
-            let pivot = [*cp1, *cp2, *cp3];
+            let pivot = build_discontiguous_codon(
+                *query.get(left_match.query_range.end - 2)?,
+                *query.get(left_match.query_range.end - 1)?,
+                *query.get(right_match.query_range.start)?,
+            );
 
             // By default, we shift the deletion right for frame 2 (causing 1
             // match to shift left, rather than 2). Only if there is evidence
@@ -575,6 +568,14 @@ impl<'a> Product<'a> {
 
         Some((l, mid, r))
     }
+}
+
+/// Combines three discontinuous bases into a codon, automatically converting
+/// `U` to `T`.
+///
+/// No other bytes are altered, and case is not changed.
+fn build_discontiguous_codon(b1: u8, b2: u8, b3: u8) -> [u8; 3] {
+    [b1, b2, b3].map(|base| if base == b'U' { b'T' } else { base })
 }
 
 /// An extension trait for slices, providing functionality specific to

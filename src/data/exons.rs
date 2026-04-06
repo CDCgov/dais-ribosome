@@ -3,6 +3,10 @@ use std::ops::Range;
 /// Exon specification for a protein product (ctype stripped).
 #[derive(Debug, Clone)]
 pub(crate) struct Exons {
+    /// The optionally required codon which must be present at the start of the
+    /// alignment in order for the product to be included.
+    ///
+    /// This contains solely `ACGT`.
     pub(crate) required_start:   Option<[u8; 3]>,
     /// The coordinates of the exons (coding sequences) within the reference
     /// and coding sequence.
