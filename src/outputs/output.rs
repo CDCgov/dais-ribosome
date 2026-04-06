@@ -117,13 +117,14 @@ pub struct Product<'a> {
 
     /// The ranges within the exons that the query covers. This is initially
     /// formed by intersecting the query ranges with the exon ranges, then is
-    /// tweaked.
+    /// edited.
     ///
-    /// This is guaranteed to contain ordered and non-overlapping ranges. It
-    /// does not begin or end with [`CdsStateRange::I`]. Within the aligned
-    /// portion of the coding sequence (the exons), the ranges will be adjacent
-    /// (forming a partition). However, there may be exons at the beginning or
-    /// end which are not aligned against (or partially aligned against).
+    /// The [`CdsStateRange`] values are ordered and partition the
+    /// aligned-against range of the coding sequence. Overlapping exons can
+    /// cause the query ranges to have repeated indices and not be in order, so
+    /// no guarantees can be made for those fields.
+    ///
+    /// This field does not begin or end with [`CdsStateRange::I`].
     pub product_ranges: Vec<CdsStateRange>,
 
     /// The number of bases in the coding sequence that were not aligned against

@@ -361,7 +361,9 @@ impl InsertionRange {
 }
 
 impl StateRange {
-    /// Intersect with an exon and convert to CDS coordinates.
+    /// Intersects a [`StateRange`] with an exon in reference coordinates,
+    /// returning the resulting query coordinates and coding sequence
+    /// coordinates.
     pub(crate) fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsStateRange> {
         match self {
             Self::M(m) => m.intersect_exon(exon).map(CdsStateRange::M),
@@ -383,7 +385,7 @@ impl StateRange {
     ///
     /// Furthermore, excluding soft clipping, the first/last `states` must be
     /// `M`, so that the output also has the first and last states as
-    /// [`StateRange::M`]. [`StateRange::M`].
+    /// [`StateRange::M`].
     pub(crate) fn state_ranges_from_aligment<T>(alignment: &Alignment<T>) -> Vec<Self> {
         // This will be a slight overestimate due to the possible presence of
         // clipping.
@@ -420,11 +422,14 @@ impl StateRange {
                     ref_start += inc;
                 }
                 b'N' => {
+                    // TODO: It would be good not to support N
                     ref_start += inc;
                 }
                 // Soft clipping is included in the ranges, so no need to handle
                 // S
-                _ => {}
+                _ => {
+                    // TODO: Add warning?
+                }
             }
         }
 

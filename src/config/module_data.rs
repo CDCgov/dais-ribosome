@@ -203,16 +203,24 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
 #[derive(Clone, Debug)]
 struct TsvRow {
     /// The reference ID in column 1 (e.g., `ANHUI01`, `PHUKET3073`).
-    reference_id:   String,
+    reference_id: String,
+
     /// The compound type in column 2 (e.g., `A_HA_H7`, `B_HA`).
-    ctype:          String,
+    ctype: String,
+
     /// The protein product name in column 3 (e.g., `HA`, `HA-signal`).
-    protein:        String,
+    protein: String,
+
     /// A list of the exon coordinates in column 4 (e.g., `55..1683`,
     /// `1..33;689..1024`).
     ///
-    /// These are guaranteed to be in order.
-    coords:         Vec<ExonCoords>,
+    /// The exons are ordered by `cds_range`, which form a partition of
+    /// `0..cds_len` where `cds_len` is the total length of the coding sequence.
+    /// The `ref_range` fields are in order, although up to 2 nucleotides
+    /// overlap is allowed between ranges. Note that any repeated indices are
+    /// represented twice with distinct coordinates in the coding sequence.
+    coords: Vec<ExonCoords>,
+
     /// An optional required codon at the start in column 5 (e.g., `ATG`).
     required_start: Option<[u8; 3]>,
 }
@@ -321,16 +329,22 @@ impl Iterator for TsvReader {
     }
 }
 
-/// Parses a semicolon-delimited list of 1-based end-inclusive ranges,
+/// Parses a semicolon-delimited list of 1-based end-inclusive reference ranges,
 /// converting them to 0-based [`ExonCoords`] ranges.
+///
+/// The length of the coding sequence is the sum of the lengths of all the
+/// reference ranges. The `cds_range` fields of the resulting [`ExonCoords`]
+/// partition this length, starting from 0.
 ///
 /// ## Errors
 ///
 /// - Each range must successfully parse
 /// - The ranges must be in order, with at most 2 nt of overlap
 fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
-    // SARS-CoV-2 requires -1 exon-to-exon frameshift with other viruses
-    // reported up to -2
+    /// The maximum amount of overlap allowed between exons.
+    ///
+    /// SARS-CoV-2 requires -1 exon-to-exon frameshift with other viruses
+    /// reported up to -2.
     const MAX_DUPLICATED_OVERLAP_NT: usize = 2;
 
     let mut exon_ranges: Vec<ExonCoords> = Vec::new();

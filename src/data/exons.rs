@@ -7,15 +7,19 @@ pub(crate) struct Exons {
     /// alignment in order for the product to be included.
     ///
     /// This contains solely `ACGT`.
-    pub(crate) required_start:   Option<[u8; 3]>,
-    /// The coordinates of the exons (coding sequences) within the reference
-    /// and coding sequence.
+    pub(crate) required_start: Option<[u8; 3]>,
+
+    /// The coordinates of the exons within the reference and coding sequence.
     ///
-    /// These are guaranteed to be in order. Reference overlaps of up to two
-    /// nucleotides are allowed and are duplicated in CDS order.
-    pub(crate) coords:           Vec<ExonCoords>,
-    /// The total length of all the exons for this entry in
-    /// the `cds-spec.tsv` file.
+    /// The exons are ordered by `cds_range`, which form a partition of
+    /// `0..cds_len` where `cds_len` is the total length of the coding sequence.
+    /// The `ref_range` fields are in order, although up to 2 nucleotides
+    /// overlap is allowed between ranges. Note that any repeated indices are
+    /// represented twice with distinct coordinates in the coding sequence.
+    pub(crate) coords: Vec<ExonCoords>,
+
+    /// The total length of all the exons for this entry in the `cds-spec.tsv`
+    /// file.
     pub(crate) total_cds_length: usize,
 }
 

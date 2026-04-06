@@ -339,14 +339,14 @@ impl<'a> Product<'a> {
             if let CdsStateRange::D(del1) = range1
                 && let CdsStateRange::D(del2) = range2
             {
-                // Ensure the deletions are adjacent in the coding sequence.
-                // Validity: product_ranges forms an ordered partition over the
-                // portion of the coding sequence which is aligned against.
-                // Hence, adjacent deletions in product_ranges are guaranteed to
-                // also be adjacent in the coding sequence.
+                // Validity: product_ranges partitions the aligned-against
+                // coding sequence, so adjacent deletions in product_ranges are
+                // also adjacent in the coding sequence
                 debug_assert_eq!(del1.cds_range.end, del2.cds_range.start);
+
                 // Extend del1 (the kept element) to encompass del2
                 del1.cds_range.end = del2.cds_range.end;
+
                 // Return true to signal that deduplication is needed
                 true
             } else {
