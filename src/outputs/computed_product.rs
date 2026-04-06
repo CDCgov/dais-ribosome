@@ -96,7 +96,7 @@ impl ComputedInsertion {
             // in the unaligned amino acid sequence output
             (AminoAcids::from(Vec::new()), true)
         } else {
-            (inserted_nucleotides.translate_to_stop(), false)
+            (inserted_nucleotides.translate(), false)
         };
 
         (
