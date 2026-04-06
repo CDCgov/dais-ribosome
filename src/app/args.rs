@@ -53,6 +53,12 @@ pub struct Args {
     /// specified size.
     #[arg(short = 'S', long, conflicts_with_all = ["threads", "is_grid_task"])]
     pub submit_grid_job: Option<usize>,
+
+    // TODO: Bikeshed on name
+    /// Prints warning messages to stderr if any input sequences contain no
+    /// valid nucleotides.
+    #[arg(long)]
+    pub warn_no_nucleotides: bool,
 }
 
 impl Args {

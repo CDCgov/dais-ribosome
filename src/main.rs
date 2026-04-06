@@ -1,6 +1,6 @@
 #![feature(string_from_utf8_lossy_owned, bufreader_peek, try_trait_v2)]
 
-use crate::app::{num_cpus::init_thread_pool, paths::find_modules_toml};
+use crate::app::{input::HandleNoNucleotidesExt, num_cpus::init_thread_pool, paths::find_modules_toml};
 use app::{
     args::Args,
     grid::{self, Grid},
@@ -54,8 +54,15 @@ fn main() {
         let writers = args.get_grid_writers(g.task_id).unwrap_or_fail();
         let gen_writers = args.get_optional_writers().unwrap_or_fail();
 
-        process_queries_grid(&args.data_file, &annotation_module, writers, gen_writers, &g)
-            .unwrap_or_die(&format!("Grid task {id} processing failed", id = g.task_id));
+        process_queries_grid(
+            &args.data_file,
+            &annotation_module,
+            writers,
+            gen_writers,
+            &g,
+            args.warn_no_nucleotides,
+        )
+        .unwrap_or_die(&format!("Grid task {id} processing failed", id = g.task_id));
         return;
     }
 
@@ -66,20 +73,37 @@ fn main() {
     let num_threads = init_thread_pool(args.threads);
 
     if num_threads > 1 {
-        process_queries_parallel(&args.data_file, &annotation_module, writers, gen_writers)
-            .unwrap_or_die("Query processing failed");
+        process_queries_parallel(
+            &args.data_file,
+            &annotation_module,
+            writers,
+            gen_writers,
+            args.warn_no_nucleotides,
+        )
+        .unwrap_or_die("Query processing failed");
     } else {
         // Single-threaded, do not use a pool
-        process_queries(&args.data_file, &annotation_module, writers, gen_writers).unwrap_or_die("Query processing failed");
+        process_queries(
+            &args.data_file,
+            &annotation_module,
+            writers,
+            gen_writers,
+            args.warn_no_nucleotides,
+        )
+        .unwrap_or_die("Query processing failed");
     }
 }
 
 /// Processes queries sequentially (single-threaded).
 fn process_queries<W: Write>(
     path: &Path, annotation_module: &AnnotationModule, mut writers: Writers<W>, mut gen_writers: Option<Writers<W>>,
+    warn_no_nucleotides: bool,
 ) -> Result<(), RibosomeError> {
     log::ts("started, processing data");
-    let queries = QueryInput::open(path)?;
+
+    // Open the iterator of queries, and then remove any with an empty sequence
+    // post-filtering, possibly issuing a warning
+    let queries = QueryInput::open(path)?.handle_no_nucleotides(warn_no_nucleotides);
 
     let mut unimplemented_ctypes = HashSet::new();
 
@@ -109,9 +133,14 @@ fn process_queries<W: Write>(
 /// Process queries in parallel using Rayon then write results sequentially.
 fn process_queries_parallel<W: Write>(
     path: &Path, annotation_module: &AnnotationModule, mut writers: Writers<W>, mut gen_writers: Option<Writers<W>>,
+    warn_no_nucleotides: bool,
 ) -> Result<(), RibosomeError> {
     log::ts("started, processing data (parallel)");
-    let queries = QueryInput::open(path)?;
+
+    // Open the iterator of queries, and then remove any with an empty sequence
+    // post-filtering, possibly issuing a warning. This is performed before
+    // parallelization to avoid interleaved writes.
+    let queries = QueryInput::open(path)?.handle_no_nucleotides(warn_no_nucleotides);
 
     // Use process_results to properly propagate catch errors that occur in the
     // input iterator. Collect into a result that propagates all errors instead
@@ -158,9 +187,13 @@ fn process_queries_parallel<W: Write>(
 /// compound types.
 fn process_queries_grid<W: Write>(
     path: &Path, annotation_module: &AnnotationModule, mut writers: Writers<W>, mut gen_writers: Option<Writers<W>>,
-    g: &Grid,
+    g: &Grid, warn_no_nucleotides: bool,
 ) -> Result<(), RibosomeError> {
-    let queries = QueryInput::open(path)?;
+    // Open the iterator of queries, and then remove any with an empty sequence
+    // post-filtering, possibly issuing a warning. This happens before
+    // partitioning, so it may cause an offset between the n-th record in the
+    // input file and the n-th record that gets partitioned.
+    let queries = QueryInput::open(path)?.handle_no_nucleotides(warn_no_nucleotides);
 
     // 0-based offset so we start on our partition
     let offset = (g.task_id - g.task_first) / g.task_stepsize;

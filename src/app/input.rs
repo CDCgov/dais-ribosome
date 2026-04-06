@@ -12,8 +12,9 @@ use zoe::{
     data::{err::ResultWithErrorContext, fasta::FastaSeq, nucleotides::ToDNA},
     define_whichever,
     prelude::*,
-    unwrap_or_return_some_err,
 };
+
+use crate::app::log::time_stamp;
 
 /// A reader for a FASTA file containing query data, parsing it into
 /// [`QueryRecord`].
@@ -31,23 +32,60 @@ impl FastaQueryIter {
 }
 
 impl Iterator for FastaQueryIter {
-    type Item = std::io::Result<QueryRecord>;
+    type Item = Result<QueryRecord, QueryInputError>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        Some(self.reader.next()?.and_then(parse_fasta_seq))
+        let record = match self.reader.next()? {
+            Ok(record) => record,
+            Err(e) => return Some(Err(e.into())),
+        };
+
+        Some(parse_fasta_seq(record))
     }
 }
 
-fn parse_fasta_seq(record: FastaSeq) -> std::io::Result<QueryRecord> {
+pub enum QueryInputError {
+    Io(std::io::Error),
+    NoNucleotides(String, ReaderType),
+}
+
+pub enum ReaderType {
+    Fasta,
+    Tsv,
+}
+
+impl From<std::io::Error> for QueryInputError {
+    fn from(value: std::io::Error) -> Self {
+        QueryInputError::Io(value)
+    }
+}
+
+impl From<&str> for QueryInputError {
+    fn from(value: &str) -> Self {
+        QueryInputError::Io(std::io::Error::other(value))
+    }
+}
+
+impl From<String> for QueryInputError {
+    fn from(value: String) -> Self {
+        QueryInputError::Io(std::io::Error::other(value))
+    }
+}
+
+/// Parses a [`FastaSeq`] into a [`QueryRecord`] for use in DAIS-ribosome.
+///
+/// ## Errors
+///
+/// - The sequence must be non-empty after filtering for valid nucleotides.
+/// - The header must be successfully parsed.
+fn parse_fasta_seq(record: FastaSeq) -> Result<QueryRecord, QueryInputError> {
     let FastaSeq { name, sequence } = record;
     // BREAKING: we previously only removed: '*: .~-'
     let nucleotides = sequence.filter_to_dna_unaligned();
 
     if nucleotides.is_empty() {
-        return Err(std::io::Error::other(format!(
-            "A sequence contained no unaligned DNA data. See header: {name}"
-        )));
+        return Err(QueryInputError::NoNucleotides(name, ReaderType::Fasta));
     }
 
     if name.contains('|') {
@@ -58,9 +96,7 @@ fn parse_fasta_seq(record: FastaSeq) -> std::io::Result<QueryRecord> {
         {
             Ok(QueryRecord { id, nucleotides, ctype })
         } else {
-            Err(std::io::Error::other(format!(
-                "Invalid FASTA header found. Expected ID or ID|ctype, found {name}"
-            )))
+            Err(format!("Invalid FASTA header found. Expected ID or ID|ctype, found {name}").into())
         }
     } else {
         // TODO : handle unclassified queries
@@ -98,15 +134,13 @@ impl TsvQueryIter {
     ///
     /// If the line is missing fields, or if the sequence contained no unaligned
     /// DNA data, a [`RibosomeError::Io`] error is returned.
-    fn parse_line(line: &str) -> std::io::Result<QueryRecord> {
+    fn parse_line(line: &str) -> Result<QueryRecord, QueryInputError> {
         let mut columns = line.split('\t');
 
         // Validity: this will always exist since split is never empty
         let id = columns.next().unwrap_or_default();
         let Some(second) = columns.next() else {
-            return Err(std::io::Error::other(
-                "Invalid TSV format: expected 2 or 3 tab-separated columns, but found 1",
-            ));
+            return Err("Invalid TSV format: expected 2 or 3 tab-separated columns, but found 1".into());
         };
         let third = columns.next();
 
@@ -115,15 +149,13 @@ impl TsvQueryIter {
             Some(seq_field) => {
                 let ctype = second.trim_ascii().to_string();
                 if ctype.is_empty() {
-                    return Err(std::io::Error::other("Invalid TSV format: the second field was empty"));
+                    return Err("Invalid TSV format: the second field was empty".into());
                 }
 
                 let nucleotides = seq_field.as_bytes().to_vec().filter_to_dna_unaligned();
 
                 if nucleotides.is_empty() {
-                    return Err(std::io::Error::other(format!(
-                        "A sequence contained no unaligned DNA data. See ID: {id}"
-                    )));
+                    return Err(QueryInputError::NoNucleotides(id.to_string(), ReaderType::Tsv));
                 }
 
                 Ok(QueryRecord {
@@ -137,9 +169,7 @@ impl TsvQueryIter {
                 let nucleotides = second.as_bytes().to_vec().filter_to_dna_unaligned();
 
                 if nucleotides.is_empty() {
-                    return Err(std::io::Error::other(format!(
-                        "A sequence contained no unaligned DNA data. See ID: {id}"
-                    )));
+                    return Err(QueryInputError::NoNucleotides(id.to_string(), ReaderType::Tsv));
                 }
 
                 // TODO: handle unclassified TSV queries (feature-gated)
@@ -154,11 +184,14 @@ impl TsvQueryIter {
 }
 
 impl Iterator for TsvQueryIter {
-    type Item = std::io::Result<QueryRecord>;
+    type Item = Result<QueryRecord, QueryInputError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let line = unwrap_or_return_some_err!(self.reader.next()?);
+            let line = match self.reader.next()? {
+                Ok(line) => line,
+                Err(e) => return Some(Err(e.into())),
+            };
 
             if !line.trim().is_empty() {
                 // Validity: Lines removes trailing line breaks, and we
@@ -179,7 +212,7 @@ define_whichever! {
     }
 
     impl Iterator for QueryInput {
-        type Item = std::io::Result<QueryRecord>;
+        type Item = Result<QueryRecord, QueryInputError>;
     }
 }
 
@@ -196,5 +229,39 @@ impl QueryInput {
             [b'>', ..] => Ok(QueryInput::Fasta(FastaQueryIter::from_bufreader(buffer)?)),
             _ => Ok(QueryInput::Tsv(TsvQueryIter::from_bufreader(buffer))),
         }
+    }
+}
+
+/// An extension trait for handling [`QueryInputError::NoNucleotides`] in an
+/// iterator.
+pub trait HandleNoNucleotidesExt {
+    /// Filters any records with empty sequences post-filtering, issuing a
+    /// warning to `stderr` if `warn_no_nucleotides` is set.
+    fn handle_no_nucleotides(self, warn_no_nucleotides: bool) -> impl Iterator<Item = std::io::Result<QueryRecord>>;
+}
+
+impl<I> HandleNoNucleotidesExt for I
+where
+    I: Iterator<Item = Result<QueryRecord, QueryInputError>>,
+{
+    fn handle_no_nucleotides(self, warn_no_nucleotides: bool) -> impl Iterator<Item = std::io::Result<QueryRecord>> {
+        self.filter_map(move |res| match res {
+            Ok(record) => Some(Ok(record)),
+            Err(QueryInputError::Io(e)) => Some(Err(e)),
+            Err(QueryInputError::NoNucleotides(header, reader_type)) => {
+                if warn_no_nucleotides {
+                    let field = match reader_type {
+                        ReaderType::Fasta => "header",
+                        ReaderType::Tsv => "ID",
+                    };
+
+                    time_stamp(
+                        &format!("A sequence contained no unaligned DNA data. See {field}: {header}"),
+                        true,
+                    );
+                }
+                None
+            }
+        })
     }
 }
