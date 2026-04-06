@@ -1,3 +1,4 @@
+pub(crate) mod coords;
 pub(crate) mod ctype;
 pub(crate) mod exons;
 pub(crate) mod keys;

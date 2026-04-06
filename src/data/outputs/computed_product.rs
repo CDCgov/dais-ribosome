@@ -1,4 +1,4 @@
-use crate::data::{products::incremental_products::Coords, ranges::InsertionIdx};
+use crate::data::{coords::Coords, ranges::InsertionIdx};
 use zoe::prelude::*;
 
 /// Pre-computed product data ready for output.
