@@ -1,13 +1,15 @@
+//! The core process of DAIS-ribosome for creating a range-based
+//! [`RibosomeOutput`] annotation result from an input [`QueryRecord`].
+
 use crate::{
     AlignmentStatesExt,
-    config::annotation_module::AnnotationModule,
+    config::annotation_module::{AnnotationModule, ReferenceGroup},
     data::{
-        GenomeAndProductStates, QueryRecord, RibosomeOutput,
-        ctype::ReferenceGroup,
-        products::Product,
+        QueryRecord,
         ranges::{CdsMatchRange, CdsStateRange, InsertionIdx, InsertionRange, RangeExt, StateRange},
     },
     error::RibosomeError,
+    outputs::{GenomeAndProductStates, Product, RibosomeOutput},
 };
 use std::{cmp::Ordering, ops::Range};
 use zoe::{alignment::Alignment, data::types::nucleotides::CodonExtension, prelude::*};
@@ -577,7 +579,7 @@ impl<'a> Product<'a> {
 
 /// An extension trait for slices, providing functionality specific to
 /// DAIS-ribosome.
-pub(crate) trait SliceExt<T> {
+trait SliceExt<T> {
     /// Extracts a mutable index from a slice, along with the slice before it
     /// and the slice after it.
     fn split_around_mut(&mut self, index: usize) -> Option<(&mut [T], &mut T, &mut [T])>;

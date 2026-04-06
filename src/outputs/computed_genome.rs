@@ -1,5 +1,5 @@
 use crate::data::ranges::InsertionIdx;
-use zoe::prelude::*;
+use zoe::prelude::Nucleotides;
 
 /// Pre-computed genome data for `.gen` output.
 ///
@@ -33,7 +33,7 @@ pub struct ComputedGenomeInsertion {
 }
 
 impl ComputedGenomeInsertion {
-    pub fn new(nt_insertion_idx: InsertionIdx, slice: &[u8]) -> Self {
+    pub(crate) fn new(nt_insertion_idx: InsertionIdx, slice: &[u8]) -> Self {
         ComputedGenomeInsertion {
             upstream_nt_pos:      nt_insertion_idx.left_pos(),
             inserted_nucleotides: Nucleotides::from(slice),

@@ -1,3 +1,5 @@
+//! The data structures and parsing for the TOML configuration file.
+
 use serde::{
     Deserialize, Deserializer,
     de::{Error, Unexpected},
@@ -36,10 +38,9 @@ impl TomlConfig {
     ///
     /// This is used when forming [`ModuleData`]. The second return value is a
     /// vector containing tuples with the module names and the paths to the
-    /// reference sequences. These are used to populate `other_modules`, which
-    /// is used in warning messages in [`print_unimplemented_ctypes`].
+    /// reference sequences. These are used to populate `other_modules`.
     ///
-    /// [`ModuleData`]: crate::data::module::ModuleData
+    /// [`ModuleData`]: crate::config::module_data::ModuleData
     pub fn find_module(self, name: &str, modules_dir: &Path) -> Option<(ConfiguredModule, Vec<(String, PathBuf)>)> {
         let mut selected = None;
         let mut others = Vec::new();

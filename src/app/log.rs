@@ -1,6 +1,6 @@
-use dais_ribosome::config::annotation_module::AnnotationModule;
+use dais_ribosome::AnnotationModule;
 use jiff::Timestamp;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const PROG: &str = "RIBOSOME";
 
@@ -33,20 +33,29 @@ pub fn print_unimplemented_ctypes(set: HashSet<String>, module: &AnnotationModul
         return;
     }
 
+    // Get unimplemented ctypes in alphabetical order
+
     let mut unimplemented_ctypes: Vec<String> = set.clone().into_iter().collect();
     unimplemented_ctypes.sort();
 
     let mut msg = "no specification yet for:".to_owned();
-    for ctype in unimplemented_ctypes {
+    for ctype in &unimplemented_ctypes {
         msg.push(' ');
-        msg.push_str(&ctype);
+        msg.push_str(ctype);
     }
     ts(&msg);
 
-    let found = module.suggest_modules_for_compound_types(set);
+    // Get unimplemented ctypes grouped by module, in arbitrary order
 
-    if !found.is_empty() {
-        for (module, ctypes) in found {
+    let mut ctype_by_module: HashMap<_, Vec<_>> = HashMap::new();
+    for ctype in unimplemented_ctypes {
+        if let Some(other_module) = module.find_in_other_module(&ctype) {
+            ctype_by_module.entry(other_module).or_default().push(ctype);
+        }
+    }
+
+    if !ctype_by_module.is_empty() {
+        for (module, ctypes) in ctype_by_module {
             let mut msg = format!("NOTE, you can use module '{module}' for:");
             for ctype in ctypes {
                 msg.push(' ');

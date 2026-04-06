@@ -2,8 +2,9 @@
 //! from DAIS-ribosome output.
 
 use crate::{
-    data::{RibosomeOutput, ranges::StateRange},
+    data::ranges::StateRange,
     error::RibosomeError,
+    outputs::RibosomeOutput,
     tsv::{DelRowView, GenDelRowView, GenInsRowView, GenSeqRowView, InsRowView, SeqRowView},
 };
 use std::io::Write;

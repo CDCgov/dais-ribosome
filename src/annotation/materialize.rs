@@ -1,14 +1,91 @@
+//! Procedures for converting range-based [`Product`] outputs into materialized
+//! [`ComputedProduct`].
+
 use crate::{
     IteratorExt,
     data::{
-        ComputedDeletion, ComputedInsertion,
         coords::Coords,
-        products::Product,
         ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, CdsStateRange, InsertionIdx},
     },
+    hashing::{nt_id, variant_hash},
+    outputs::{ComputedDeletion, ComputedInsertion, ComputedProduct, Product},
 };
 use std::ops::Range;
 use zoe::prelude::{AminoAcids, Len, Nucleotides, Slice, Translate};
+
+impl<'a> Product<'a> {
+    /// Computes the output data for this product, materializing all ranges into
+    /// sequences using `query`.
+    ///
+    /// ## Validity
+    ///
+    /// The `query` should contain unaligned, uppercase IUPAC bases.
+    pub fn materialize(&self, query: &Nucleotides) -> ComputedProduct<'a> {
+        // Compute all the fields that rely on incremental updates until the
+        // first stop codon
+        let incremental = ComputedIncrementalProducts::new(query, self);
+
+        let ComputedIncrementalProducts {
+            cds_aln,
+            aa_aln,
+            cds_seq,
+            has_insertion,
+            has_shift_indel,
+            query_coords,
+            cds_coords,
+            insertions,
+            deletions,
+            trailing_cds_unaligned,
+        } = incremental;
+
+        // Form aa_seq by splicing insertions into aa_aln (and removing
+        // deletions)
+        let aa_seq = {
+            let mut out = AminoAcids::new();
+
+            let mut aa_aln_without_deletions = aa_aln.iter().filter(|&&b| b != b'-' && b != b'.').copied();
+
+            // The number of amino acids consumed from aa_aln so far
+            let mut num_consumed = 0;
+            for insertion in &insertions {
+                // 1-based index after which insertion occurs is equivalently
+                // the count of the number of amino acids before the insertion.
+                let num_to_consume = insertion.upstream_aa_pos - num_consumed;
+
+                out.extend(aa_aln_without_deletions.by_ref().take(num_to_consume));
+                out.extend_from_slice(&insertion.inserted_residues);
+
+                num_consumed += num_to_consume;
+            }
+
+            // Consume the rest of the amino acids after the last insertion
+            out.extend(aa_aln_without_deletions);
+
+            out
+        };
+
+        // Get hashes
+        let cds_id = nt_id(&cds_seq);
+        let variant_hash = variant_hash(&aa_seq);
+
+        ComputedProduct {
+            product_name: self.product_spec.name,
+            cds_seq,
+            cds_aln,
+            cds_id,
+            aa_seq,
+            aa_aln,
+            variant_hash,
+            has_insertion,
+            has_shift_indel,
+            query_coords,
+            cds_coords,
+            insertions,
+            deletions,
+            trailing_cds_unaligned,
+        }
+    }
+}
 
 /// All fields of [`ComputedProduct`] that are populated incrementally via
 /// iterating over the `product_ranges`.
@@ -18,36 +95,36 @@ use zoe::prelude::{AminoAcids, Len, Nucleotides, Slice, Translate};
 /// can be computed.
 ///
 /// [`ComputedProduct`]: crate::data::products::ComputedProduct
-pub struct ComputedIncrementalProducts {
+struct ComputedIncrementalProducts {
     /// CDS alignment (with `-` for deletions, no insertions)
-    pub cds_aln:                Nucleotides,
+    cds_aln:                Nucleotides,
     /// Amino acid alignment (with `-` for deletions)
-    pub aa_aln:                 AminoAcids,
+    aa_aln:                 AminoAcids,
     /// CDS sequence (without deletions, includes insertions)
-    pub cds_seq:                Nucleotides,
+    cds_seq:                Nucleotides,
     /// Whether any insertion exists in this product
-    pub has_insertion:          bool,
+    has_insertion:          bool,
     /// Whether any insertion or deletion causes a frameshift (length % 3 != 0)
-    pub has_shift_indel:        bool,
+    has_shift_indel:        bool,
     /// Query nucleotide coordinates (e.g., "1..45;48..90")
-    pub query_coords:           Coords,
+    query_coords:           Coords,
     /// CDS nucleotide coordinates (e.g., "1..45")
-    pub cds_coords:             Coords,
+    cds_coords:             Coords,
     /// Computed non-filtered insertions for this product
-    pub insertions:             Vec<ComputedInsertion>,
+    insertions:             Vec<ComputedInsertion>,
     /// Computed deletions for this product
-    pub deletions:              Vec<ComputedDeletion>,
+    deletions:              Vec<ComputedDeletion>,
     /// The number of unaligned bases at the end of the coding sequence that
     /// were soft clipped or appeared after the first stop codon.
     ///
     /// This does not include trailing deletions, so that this field can be used
     /// to render right padding without double counting deletions.
-    pub trailing_cds_unaligned: usize,
+    trailing_cds_unaligned: usize,
 }
 
 impl ComputedIncrementalProducts {
     /// Computes the incremental products from a `query` and `product`.
-    pub fn new(query: &Nucleotides, product: &Product) -> Self {
+    fn new(query: &Nucleotides, product: &Product) -> Self {
         let range_capacity = product.product_ranges.len();
 
         let mut out = IncrementalAccumulator::new(product.leading_cds_unaligned, range_capacity);

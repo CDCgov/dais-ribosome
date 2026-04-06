@@ -1,6 +1,7 @@
 //! Row structs, parsers, and display implementations for the product insertion
 //! file.
 
+use crate::outputs::{ComputedInsertion, ComputedProduct};
 use csv::{Reader, ReaderBuilder};
 use serde::Deserialize;
 use serde_derive::Deserialize;
@@ -9,8 +10,6 @@ use zoe::{
     data::err::ResultWithErrorContext,
     prelude::{AminoAcids, AminoAcidsView, DataOwned, Nucleotides, NucleotidesView},
 };
-
-use crate::data::{ComputedInsertion, ComputedProduct};
 
 /// The data in a single row of the product insertion file.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]

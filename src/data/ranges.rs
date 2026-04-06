@@ -1,3 +1,6 @@
+//! Structs and enums for representing product and genome alignments,
+//! specifically the ranges where matches, insertions, and deletions apply.
+
 use crate::data::exons::ExonCoords;
 use std::{
     cmp::Ordering,
@@ -109,7 +112,7 @@ impl InsertionIdx {
 ///
 /// This is a helper type for protein annotation and coordinate manipulation.
 #[derive(Clone, Debug)]
-pub(crate) enum StateRange {
+pub enum StateRange {
     M(MatchRange),
     D(DeletionRange),
     I(InsertionRange),
@@ -122,34 +125,34 @@ pub(crate) enum StateRange {
 ///
 /// The two ranges should be the same length.
 #[derive(Clone, Debug)]
-pub(crate) struct MatchRange {
+pub struct MatchRange {
     /// The 0-based end-exclusive range of the match within the query.
-    pub(crate) query_range: Range<usize>,
+    pub query_range: Range<usize>,
     /// The 0-based end-exclusive range of the match within the reference.
-    pub(crate) ref_range:   Range<usize>,
+    pub ref_range:   Range<usize>,
 }
 
 /// The range within the reference where a deletion occurs.
 #[derive(Clone, Debug)]
-pub(crate) struct DeletionRange {
+pub struct DeletionRange {
     /// The 0-based end-exclusive range of the deletion within the reference.
-    pub(crate) ref_range: Range<usize>,
+    pub ref_range: Range<usize>,
 }
 
 /// The range within the query where an insertion occurs, as well as the
 /// corresponding index in the reference where it occurs.
 #[derive(Clone, Debug)]
-pub(crate) struct InsertionRange {
+pub struct InsertionRange {
     /// The 0-based index of the insertion in the reference.
-    pub(crate) ref_index:   InsertionIdx,
+    pub ref_index:   InsertionIdx,
     /// The 0-based end-exclusive range of the insertion within the query.
-    pub(crate) query_range: Range<usize>,
+    pub query_range: Range<usize>,
 }
 
 /// Alignment state ranges converted to coding sequence coordinates by
 /// intersecting them with the exon ranges.
 #[derive(Clone, Debug)]
-pub(crate) enum CdsStateRange {
+pub enum CdsStateRange {
     M(CdsMatchRange),
     D(CdsDeletionRange),
     I(CdsInsertionRange),
@@ -173,11 +176,11 @@ impl CdsStateRange {
 ///
 /// The two ranges should be the same length.
 #[derive(Clone, Debug)]
-pub(crate) struct CdsMatchRange {
+pub struct CdsMatchRange {
     /// The 0-based end-exclusive range of the match within the query.
-    pub(crate) query_range: Range<usize>,
+    pub query_range: Range<usize>,
     /// The 0-based end-exclusive range of the match within the coding sequence.
-    pub(crate) cds_range:   Range<usize>,
+    pub cds_range:   Range<usize>,
 }
 
 impl CdsMatchRange {
@@ -230,10 +233,10 @@ impl CdsMatchRange {
 
 /// The range within the coding sequence where a deletion occurs.
 #[derive(Clone, Debug)]
-pub(crate) struct CdsDeletionRange {
+pub struct CdsDeletionRange {
     /// The range of the deletion within the coding sequence (non-empty,
     /// 0-based, end-exclusive).
-    pub(crate) cds_range: Range<usize>,
+    pub cds_range: Range<usize>,
 }
 
 impl CdsDeletionRange {
@@ -260,11 +263,11 @@ impl CdsDeletionRange {
 /// The range within the query where an insertion occurs, as well as the
 /// corresponding index in the coding sequence where it occurs.
 #[derive(Clone, Debug)]
-pub(crate) struct CdsInsertionRange {
+pub struct CdsInsertionRange {
     /// The 0-based index of the insertion in the coding sequence.
-    pub(crate) cds_index:   InsertionIdx,
+    pub cds_index:   InsertionIdx,
     /// The 0-based end-exclusive range of the insertion within the query.
-    pub(crate) query_range: Range<usize>,
+    pub query_range: Range<usize>,
 }
 
 impl CdsInsertionRange {

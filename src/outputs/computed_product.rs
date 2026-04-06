@@ -84,7 +84,7 @@ impl ComputedInsertion {
     ///
     /// The slice of the query range representing the insertion should contain
     /// unaligned, uppercase IUPAC bases.
-    pub fn new(nt_insertion_idx: InsertionIdx, slice: &[u8]) -> (Self, bool) {
+    pub(crate) fn new(nt_insertion_idx: InsertionIdx, slice: &[u8]) -> (Self, bool) {
         let ins_len = slice.len();
         let inserted_nucleotides = Nucleotides::from(slice);
 

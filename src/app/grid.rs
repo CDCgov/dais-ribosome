@@ -1,5 +1,4 @@
-use crate::app::log;
-use dais_ribosome::config::current_exe;
+use crate::app::{log, paths::current_exe};
 use std::{
     env,
     fs::File,

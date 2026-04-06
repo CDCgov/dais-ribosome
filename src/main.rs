@@ -1,6 +1,6 @@
 #![feature(string_from_utf8_lossy_owned, bufreader_peek, try_trait_v2)]
 
-use crate::app::num_cpus::init_thread_pool;
+use crate::app::{num_cpus::init_thread_pool, paths::find_modules_toml};
 use app::{
     args::Args,
     grid::{self, Grid},
@@ -9,12 +9,13 @@ use app::{
 };
 use clap::Parser;
 use dais_ribosome::{
-    config::{TomlConfig, annotation_module::AnnotationModule, find_modules_toml, module_data::ModuleData},
+    AnnotationModule, ModuleData,
     error::{RibosomeError, UnimplementedCtype},
+    toml::TomlConfig,
     tsv::{Writers, write_genome_output, write_product_output},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
-use std::{collections::HashSet, fs::File, io::BufWriter, path::Path};
+use std::{collections::HashSet, io::Write, path::Path};
 use zoe::{data::err::OrFail, iter_utils::ProcessResultsExt};
 
 pub mod app;
@@ -74,9 +75,8 @@ fn main() {
 }
 
 /// Processes queries sequentially (single-threaded).
-fn process_queries(
-    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers<BufWriter<File>>,
-    mut gen_writers: Option<Writers<BufWriter<File>>>,
+fn process_queries<W: Write>(
+    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers<W>, mut gen_writers: Option<Writers<W>>,
 ) -> Result<(), RibosomeError> {
     log::ts("started, processing data");
     let queries = QueryInput::open(path)?;
@@ -107,9 +107,8 @@ fn process_queries(
 }
 
 /// Process queries in parallel using Rayon then write results sequentially.
-fn process_queries_parallel(
-    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers<BufWriter<File>>,
-    mut gen_writers: Option<Writers<BufWriter<File>>>,
+fn process_queries_parallel<W: Write>(
+    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers<W>, mut gen_writers: Option<Writers<W>>,
 ) -> Result<(), RibosomeError> {
     log::ts("started, processing data (parallel)");
     let queries = QueryInput::open(path)?;
@@ -157,9 +156,9 @@ fn process_queries_parallel(
 ///
 /// Note that this will not provide any messages regarding unimplemented
 /// compound types.
-fn process_queries_grid(
-    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers<BufWriter<File>>,
-    mut gen_writers: Option<Writers<BufWriter<File>>>, g: &Grid,
+fn process_queries_grid<W: Write>(
+    path: &Path, annotation_module: &AnnotationModule, mut writers: Writers<W>, mut gen_writers: Option<Writers<W>>,
+    g: &Grid,
 ) -> Result<(), RibosomeError> {
     let queries = QueryInput::open(path)?;
 

@@ -1,11 +1,15 @@
-use std::cmp::Ordering;
+//! The [`ProductSpec`] specification struct, containing references to a protein
+//! product's name, exons, and codon position weights.
 
-use crate::data::{
-    exons::Exons,
-    products::Product,
-    ranges::{CdsStateRange, StateRange},
-    weights::{CodonPositionWeights, DEFAULT_CODON_STATS},
+use crate::{
+    data::{
+        exons::Exons,
+        ranges::{CdsStateRange, StateRange},
+        weights::{CodonPositionWeights, DEFAULT_CODON_STATS},
+    },
+    outputs::Product,
 };
+use std::cmp::Ordering;
 
 /// The specifications for a single protein product (e.g., `HA`, `HA-signal`).
 #[derive(Copy, Clone, Debug)]

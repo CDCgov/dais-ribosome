@@ -1,15 +1,18 @@
 #![feature(int_format_into)]
 
-use std::ops::ControlFlow;
-use zoe::{alignment::AlignmentStates, data::cigar::Ciglet};
-
-pub mod annotation;
-pub mod config;
-/// Data loading and structures for module resources.
-pub mod data;
+mod annotation;
+pub(crate) mod config;
+pub(crate) mod data;
 pub mod error;
 pub(crate) mod hashing;
+pub mod outputs;
 pub mod tsv;
+
+pub use config::{annotation_module::AnnotationModule, module_data::ModuleData, toml};
+pub use data::{QueryRecord, ranges};
+
+use std::ops::ControlFlow;
+use zoe::{alignment::AlignmentStates, data::cigar::Ciglet};
 
 trait IteratorExt: Iterator {
     fn take_until_inclusive<F>(self, f: F) -> TakeUntilInclusive<Self, F>

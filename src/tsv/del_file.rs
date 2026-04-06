@@ -2,7 +2,7 @@
 //! file.
 
 use crate::{
-    data::{ComputedDeletion, ComputedProduct},
+    outputs::{ComputedDeletion, ComputedProduct},
     tsv::{HADOOP_NULL, Nullable},
 };
 use csv::{Reader, ReaderBuilder};

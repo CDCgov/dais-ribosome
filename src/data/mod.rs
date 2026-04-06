@@ -1,15 +1,10 @@
+//! Miscellaneous data types used by DAIS-ribosome.
+
 pub(crate) mod coords;
-pub(crate) mod ctype;
 pub(crate) mod exons;
 pub(crate) mod keys;
-mod outputs;
-pub(crate) mod products;
-pub(crate) mod ranges;
-pub(crate) mod refs;
-pub(crate) mod spec;
+pub mod ranges;
 pub(crate) mod weights;
-
-pub use outputs::*;
 
 use zoe::prelude::Nucleotides;
 

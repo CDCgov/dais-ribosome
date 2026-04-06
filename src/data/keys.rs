@@ -1,7 +1,6 @@
 //! Key types used throughout the crate for indexing maps.
 
 use std::fmt;
-use zoe::prelude::AminoAcidsView;
 
 /// A key for reference sequences, combining a reference ID and a compound type.
 ///
@@ -73,21 +72,6 @@ impl SpecKey {
 impl fmt::Display for SpecKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}|{}", self.reference_id, self.protein_product)
-    }
-}
-
-/// A key for codon position weights, combining position and the codon.
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct CodonKey {
-    /// The 1-based position of the codon within the coding sequence.
-    pub position: u32,
-    /// The uppercase codon.
-    pub codon:    [u8; 3],
-}
-
-impl fmt::Display for CodonKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.position, AminoAcidsView::from(&self.codon))
     }
 }
 

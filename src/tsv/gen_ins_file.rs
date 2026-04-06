@@ -1,6 +1,7 @@
 //! Row structs, parsers, and display implementations for the genome insertion
 //! file.
 
+use crate::outputs::ComputedGenomeInsertion;
 use csv::{Reader, ReaderBuilder};
 use serde::Deserialize;
 use serde_derive::Deserialize;
@@ -9,8 +10,6 @@ use zoe::{
     data::err::ResultWithErrorContext,
     prelude::{DataOwned, Nucleotides, NucleotidesView},
 };
-
-use crate::data::ComputedGenomeInsertion;
 
 /// The data in a single row of the genome insertion file.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]

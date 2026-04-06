@@ -2,8 +2,8 @@
 //! file.
 
 use crate::{
-    config::Formatting,
-    data::PrecomputedGenomeData,
+    outputs::PrecomputedGenomeData,
+    toml::Formatting,
     tsv::{HADOOP_NULL, Nullable},
 };
 use csv::{Reader, ReaderBuilder};

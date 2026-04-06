@@ -2,8 +2,8 @@
 //! file.
 
 use crate::{
-    config::Formatting,
-    data::ComputedProduct,
+    outputs::ComputedProduct,
+    toml::Formatting,
     tsv::{HADOOP_NULL, Nullable},
 };
 use csv::{Reader, ReaderBuilder};
@@ -224,7 +224,7 @@ impl Display for SeqRowView<'_> {
         #[cfg(feature = "regression-testing")]
         let aa_aln = self.aa_aln;
         #[cfg(not(feature = "regression-testing"))]
-        let aa_aln = Nullable(&computed_product.aa_aln);
+        let aa_aln = Nullable(&self.aa_aln);
 
         write!(
             f,
