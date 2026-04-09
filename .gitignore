@@ -3,6 +3,8 @@ out.log
 debug/
 lib
 workdir/
+supp_docs/
+extras/
 *.fa
 *.fasta
 *.seq
