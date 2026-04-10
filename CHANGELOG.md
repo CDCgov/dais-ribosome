@@ -1,10 +1,13 @@
 # DAIS-RIBOSOME Change Log
 
-## v1.7.0 (TBD)
+## v1.7.0 (2026.04.13)
 
-**Feature**: DAIS-ribosome now supports aarch64/arm64 on both Mac and Linux, albeit SSWSORT requires Rosetta 2 if it is called.
+- **Feature**:
+  - DAIS-ribosome now supports aarch64/arm64 on both Mac and Linux, albeit SSWSORT requires Rosetta 2 if it is called.
 
-- **Changes**: The ranges for the `HA1` product for `A_HA_H1` and `A_HA_H3` are extended by 3 nucleotides and 18 nucleotides respectively
+- **Changes**:
+  - The ranges for the `HA1` product for `A_HA_H1` and `A_HA_H3` are extended by 3 nucleotides and 18 nucleotides respectively
+  - In advance of ribosome/sswsort v2, we pin ribosome v1 to sswsort v1.
 
 - **Fixes**:
   - The check for the required start codon in PB1-F2 now allows for AUG in addition to ATG
