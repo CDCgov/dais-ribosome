@@ -94,6 +94,10 @@ function install() {
     if [ ! -d "$repo" ]; then
         git clone "https://${server}/${namespace}/${repo}.git" > /dev/null \
             || die "failed to install $repo"
+        if [ "$repo" == "sswsort" ]; then
+            git -C "$libp/$repo" checkout v1.6.3 > /dev/null 2>&1 \
+                || die "failed to checkout sswsort v1.6.3"
+        fi
     fi
 }
 
