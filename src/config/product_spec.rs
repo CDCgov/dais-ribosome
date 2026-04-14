@@ -7,6 +7,7 @@ use crate::{
         ranges::{CdsStateRange, StateRange},
         weights::{CodonPositionWeights, DEFAULT_CODON_STATS},
     },
+    error,
     outputs::Product,
 };
 use std::cmp::Ordering;
@@ -64,14 +65,10 @@ impl ProductSpec {
         match first {
             CdsStateRange::M(m) => m.cds_range.start,
             CdsStateRange::D(d) => d.cds_range.start,
-
-            #[cfg(debug_assertions)]
-            CdsStateRange::I(_) => {
-                panic!("product_ranges cannot begin with an insertion!");
+            CdsStateRange::I(i) => {
+                error!("product_ranges cannot begin with an insertion!");
+                i.cds_index.right()
             }
-
-            #[cfg(not(debug_assertions))]
-            CdsStateRange::I(i) => i.cds_index.right(),
         }
     }
 
@@ -117,14 +114,10 @@ impl ProductSpec {
         match last {
             CdsStateRange::M(m) => m.cds_range.end,
             CdsStateRange::D(d) => d.cds_range.end,
-
-            #[cfg(debug_assertions)]
-            CdsStateRange::I(_) => {
-                panic!("product_ranges cannot begin with an insertion!");
+            CdsStateRange::I(i) => {
+                error!("product_ranges cannot begin with an insertion!");
+                i.cds_index.right()
             }
-
-            #[cfg(not(debug_assertions))]
-            CdsStateRange::I(i) => i.cds_index.right(),
         }
     }
 

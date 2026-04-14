@@ -6,12 +6,12 @@ use crate::{
     config::annotation_module::{AnnotationModule, ReferenceGroup},
     data::{
         QueryRecord,
-        ranges::{CdsMatchRange, CdsStateRange, InsertionIdx, InsertionRange, RangeExt, StateRange},
+        ranges::{CdsStateRange, InsertionIdx, InsertionRange, RangeExt, StateRange},
     },
-    error::RibosomeError,
+    errors::RibosomeError,
     outputs::{GenomeAndProductStates, Product, RibosomeOutput},
 };
-use std::{cmp::Ordering, ops::Range};
+use std::ops::Range;
 use zoe::{
     alignment::Alignment,
     data::{SanitizeBase, types::nucleotides::CodonExtension},
@@ -64,14 +64,17 @@ impl<'a> AnnotationModule<'a> {
                 // state_ranges_from_aligment guarantees
                 let mut product_ranges = product.make_product_ranges(&genome_aln_states);
 
+                // Shift indels to fix their frames
+                product_ranges.fix_frames(&query);
+
+                // Condense any remaining deletions
+                product_ranges.condense_deletions();
+
                 // Validity: the same `query_seq` is passed as was used to form
                 // `genome_aln_states`
                 if product_ranges.missing_required_start(&query) {
                     continue;
                 }
-
-                product_ranges.condense_deletions();
-                product_ranges.fix_frames(&query);
 
                 products.push(product_ranges);
             }
@@ -352,265 +355,5 @@ impl<'a> Product<'a> {
                 false
             }
         });
-    }
-
-    /// Fixes indel frames by repositioning insertions and deletions to in-frame
-    /// boundaries.
-    ///
-    /// This corrects in-frame indels (length divisible by 3) that occur at
-    /// out-of-frame positions by shifting them left or right based on codon
-    /// usage statistics. The algorithm mirrors the logic in
-    /// `codonCorrectStats.pl`, albeit for coordinate math instead of strings.
-    pub(crate) fn fix_frames(&mut self, query: &QueryRecord) {
-        let len = self.product_ranges.len();
-
-        // We iterate by index because we need to access neighbors
-        let mut i = 0;
-        while i < len {
-            match &self.product_ranges[i] {
-                CdsStateRange::I(ins) => {
-                    let codon_shift = ins.cds_index.codon_shift();
-
-                    // Only correct in-frame insertions at out-of-frame positions
-                    if codon_shift != 0 && ins.len() % 3 == 0 {
-                        self.fix_insertion_frame(i, query);
-                    }
-                }
-                CdsStateRange::D(del) => {
-                    // The inclusive 0-based index is the upstream 1-based position
-                    let frame = del.cds_range.start % 3;
-
-                    // Only correct in-frame deletions at out-of-frame positions
-                    if frame != 0 && del.len() % 3 == 0 {
-                        self.fix_deletion_frame(i, query);
-                    }
-                }
-                CdsStateRange::M(_) => {}
-            }
-            i += 1;
-        }
-    }
-
-    // TODO: Can fixing frame mess up order of partition in case of flanking
-    // deletion?
-
-    /// Fixes an insertion at `idx` by shifting it to an in-frame position.
-    ///
-    /// Uses the A1/A2 shift logic from `codonCorrectStats.pl`:
-    /// - A1 (frame 1): Compare codons formed by:
-    ///   - 1 preceding base + first 2 insert bases
-    ///   - last 1 insert base + 2 following
-    ///+
-    /// - A2 (frame 2): Compare codons formed by:
-    ///   - 2 preceding bases + first 1 insert base
-    ///   - last 2 insert bases + 1 following
-    fn fix_insertion_frame(&mut self, idx: usize, query: &QueryRecord) -> Option<()> {
-        let Product {
-            product_ranges,
-            product_spec,
-            ..
-        } = self;
-        let query = &query.nucleotides;
-
-        // Insertions cannot be split over exons, and in practice many scoring
-        // schemes tend to avoid adjacent insertions and deletions, so in
-        // practice left_match and right_match occur at idx-1 and idx+1
-        // respectively. But in case either is a deletion, we perform a search.
-        let Some((left_match, CdsStateRange::I(ins), right_match)) = Self::partition_states(product_ranges, idx) else {
-            return None;
-        };
-
-        let codon_shift = ins.cds_index.codon_shift();
-        let codon_position = ins.cds_index.to_aa_idx().right_pos();
-        let insert_len = ins.len();
-
-        // for weight lookup
-        let insert_seq = &query[ins.query_range.clone()];
-
-        if codon_shift == 2 {
-            // A2: insertion after 2nd codon base
-            //
-            // A2/L2: shift insert left 2
-            //   New codon: last 2 bases of insert + cp3
-            //
-            // A2/R1: shift insert right 1
-            //   New codon: cp1 + cp2 + first 1 base of insert
-            let cp1 = *query.get(left_match.query_range.end - 2)?;
-            let cp2 = *query.get(left_match.query_range.end - 1)?;
-            let cp3 = *query.get(right_match.query_range.start)?;
-
-            let a2l2 = build_discontiguous_codon(insert_seq[insert_len - 2], insert_seq[insert_len - 1], cp3);
-            let a2r1 = build_discontiguous_codon(cp1, cp2, insert_seq[0]);
-
-            // Validity: The codons are uppercase because they are derived from
-            // bases in query
-            if product_spec.codon_left_ge_right(a2r1, a2l2, codon_position as u32) {
-                // Insertion shifts right 1 for frame 2 split codon
-                left_match.extend_end(1);
-                ins.shift_right(1);
-                right_match.cut_start(1);
-            } else {
-                // Insertion shifts left 2 for frame 2 split codon
-                left_match.cut_end(2);
-                ins.shift_left(2);
-                right_match.extend_start(2);
-            }
-        } else if codon_shift == 1 {
-            // A1 insertion: insertion after 1st base of codon
-            //
-            // A1/L1: shift insert left 1
-            //   New codon: last 1 base of insert + cp2 + cp3
-            //
-            // A1/R2: shift insert right 2
-            //   New codon: cp1 + first 2 bases of insert
-
-            let cp1 = *query.get(left_match.query_range.end - 1)?;
-            let cp2 = *query.get(right_match.query_range.start)?;
-            let cp3 = *query.get(right_match.query_range.start + 1)?;
-
-            let a1l1 = build_discontiguous_codon(insert_seq[insert_len - 1], cp2, cp3);
-            let a1r2 = build_discontiguous_codon(cp1, insert_seq[0], insert_seq[1]);
-
-            // Validity: build_discontiguous_codon ensures validity requirements
-            // are met
-            if product_spec.codon_left_ge_right(a1l1, a1r2, codon_position as u32) {
-                // Insertion shifts left 1 for frame 1 split codon
-                left_match.cut_end(1);
-                ins.shift_left(1);
-                right_match.extend_start(1);
-            } else {
-                // Insertion shifts right 2 for frame 1 split codon
-                left_match.extend_end(2);
-                ins.shift_right(2);
-                right_match.cut_start(2);
-            }
-        }
-
-        Some(())
-    }
-
-    /// Fix a deletion at index `i` by shifting it to an in-frame position.
-    fn fix_deletion_frame(&mut self, idx: usize, query: &QueryRecord) -> Option<()> {
-        let Product {
-            product_ranges,
-            product_spec,
-            ..
-        } = self;
-        let query = &query.nucleotides;
-
-        let Some((left_match, CdsStateRange::D(del), right_match)) = Self::partition_states(product_ranges, idx) else {
-            return None;
-        };
-
-        // Codon positions (1-based) at the boundaries of the deletion for table
-        // checking
-        let pos_left = (del.cds_range.start / 3) + 1;
-        let pos_right = ((del.cds_range.end - 1) / 3) + 1;
-
-        let frame = del.cds_range.start % 3;
-
-        // Get the pivot codon bases that cross the deletion boundary
-        if frame == 1 {
-            // Frame 1 pivot codon: is last 1 base before gap + first 2 bases
-            // after gap
-            let pivot = build_discontiguous_codon(
-                *query.get(left_match.query_range.end - 1)?,
-                *query.get(right_match.query_range.start)?,
-                *query.get(right_match.query_range.start + 1)?,
-            );
-
-            // TODO: Likely want to compare with Ordering::is_gt instead, so
-            // that ties resolve as right shift.
-
-            // By default, we shift the deletion left for frame 1 (causing 1
-            // match to shift right, rather than 2). Only if there is evidence
-            // for shifting the deletion to right do we do that. pos_left being
-            // better means shifting matches left is better, which means
-            // shifting deletion right is better. Validity: The codon is
-            // uppercase because it is derived from bases in query
-            let shift_del_right = product_spec
-                .compare_codon_positions(pos_left as u32, pos_right as u32, pivot)
-                .is_some_and(Ordering::is_ge);
-
-            if shift_del_right {
-                // Shift the deletion right by 2, causing 2 matches to move left
-                left_match.extend_end(2);
-                del.shift_right(2);
-                right_match.cut_start(2);
-            } else {
-                // Shift the deletion left by 1, causing 1 match to move right
-                left_match.cut_end(1);
-                del.shift_left(1);
-                right_match.extend_start(1);
-            }
-        } else if frame == 2 {
-            // Frame2 pivot codon is last 2 bases before gap + first 1 base
-            // after gap.
-            let pivot = build_discontiguous_codon(
-                *query.get(left_match.query_range.end - 2)?,
-                *query.get(left_match.query_range.end - 1)?,
-                *query.get(right_match.query_range.start)?,
-            );
-
-            // By default, we shift the deletion right for frame 2 (causing 1
-            // match to shift left, rather than 2). Only if there is evidence
-            // for a left shift do we do that. pos_right being better means
-            // shifting matches right is better, which means shifting deletion
-            // left is better. Validity: The codon is uppercase because it is
-            // derived from bases in query
-            let shift_del_left = product_spec
-                .compare_codon_positions(pos_left as u32, pos_right as u32, pivot)
-                .is_some_and(Ordering::is_lt);
-
-            if shift_del_left {
-                // Shift the deletion left by 2, causing 2 matches to move right
-                left_match.cut_end(2);
-                del.shift_left(2);
-                right_match.extend_start(2);
-            } else {
-                // Shift the deletion right by 1, causing 1 match to move right
-                left_match.extend_end(1);
-                del.shift_right(1);
-                right_match.cut_start(1);
-            }
-        }
-
-        Some(())
-    }
-
-    /// Get the match ranges to modify and the indel
-    fn partition_states(
-        product_ranges: &mut [CdsStateRange], idx: usize,
-    ) -> Option<(&mut CdsMatchRange, &mut CdsStateRange, &mut CdsMatchRange)> {
-        let (left, mid, right) = product_ranges.split_around_mut(idx)?;
-
-        let l = left.iter_mut().rev().filter_map(CdsStateRange::match_range_mut).next()?;
-        let r = right.iter_mut().filter_map(CdsStateRange::match_range_mut).next()?;
-
-        Some((l, mid, r))
-    }
-}
-
-/// Combines three discontinuous bases into a codon, automatically converting
-/// `U` to `T`.
-///
-/// No other bytes are altered, and case is not changed.
-fn build_discontiguous_codon(b1: u8, b2: u8, b3: u8) -> [u8; 3] {
-    [b1, b2, b3].map(|base| if base == b'U' { b'T' } else { base })
-}
-
-/// An extension trait for slices, providing functionality specific to
-/// DAIS-ribosome.
-trait SliceExt<T> {
-    /// Extracts a mutable index from a slice, along with the slice before it
-    /// and the slice after it.
-    fn split_around_mut(&mut self, index: usize) -> Option<(&mut [T], &mut T, &mut [T])>;
-}
-
-impl<T> SliceExt<T> for [T] {
-    fn split_around_mut(&mut self, index: usize) -> Option<(&mut [T], &mut T, &mut [T])> {
-        let (left, rest) = self.split_at_mut_checked(index)?;
-        let (mid, right) = rest.split_first_mut()?;
-        Some((left, mid, right))
     }
 }

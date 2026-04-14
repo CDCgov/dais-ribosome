@@ -184,6 +184,21 @@ pub struct CdsMatchRange {
 }
 
 impl CdsMatchRange {
+    /// Returns the lengths of the ranges.
+    #[inline]
+    pub(crate) fn len(&self) -> usize {
+        // The ranges are the same length
+        self.cds_range.len()
+    }
+
+    /// Returns whether the range is empty.
+    #[inline]
+    #[allow(dead_code)]
+    pub(crate) fn is_empty(&self) -> bool {
+        // The ranges are the same length
+        self.cds_range.is_empty()
+    }
+
     /// Extends the start of both ranges by `amount`.
     ///
     /// This _decreases_ the start of the ranges.
@@ -258,6 +273,23 @@ impl CdsDeletionRange {
     pub(crate) fn len(&self) -> usize {
         self.cds_range.len()
     }
+
+    /// The frame shift of the deletion.
+    pub(crate) fn frameshift(&self) -> usize {
+        self.cds_range.start % 3
+    }
+
+    /// Returns whether a deletion is eligible to be shifted based solely on its
+    /// frame and length.
+    ///
+    /// The length of the deletion in CDS coordinates must be a multiple of
+    /// three, and frame must be non-zero.
+    ///
+    /// Note that the result of this can vary before and after a deletion is
+    /// merged with adjacent deletions.
+    pub(crate) fn eligible_for_shift(&self) -> bool {
+        self.frameshift() != 0 && self.len().is_multiple_of(3)
+    }
 }
 
 /// The range within the query where an insertion occurs, as well as the
@@ -271,15 +303,11 @@ pub struct CdsInsertionRange {
 }
 
 impl CdsInsertionRange {
-    // TODO: What is this used for? Why are both fields modified?
-    /// Shift state left (subtract) by offset
     pub(crate) fn shift_left(&mut self, amount: usize) {
         self.cds_index.right -= amount;
         self.query_range = self.query_range.start - amount..self.query_range.end - amount;
     }
 
-    // TODO: What is this used for? Why are both fields modified?
-    /// Shift state right (add) by offset
     pub(crate) fn shift_right(&mut self, amount: usize) {
         self.cds_index.right += amount;
         self.query_range = self.query_range.start + amount..self.query_range.end + amount;
@@ -288,6 +316,20 @@ impl CdsInsertionRange {
     /// Returns the length of the insertion.
     pub(crate) fn len(&self) -> usize {
         self.query_range.len()
+    }
+
+    /// The frame shift of the insertion.
+    pub(crate) fn frameshift(&self) -> usize {
+        self.cds_index.codon_shift()
+    }
+
+    /// Returns whether an insertion is eligible to be shifted based solely on
+    /// its frame and length.
+    ///
+    /// The length of the insertion in CDS coordinates must be a multiple of
+    /// three, and frame must be non-zero.
+    pub(crate) fn eligible_for_shift(&self) -> bool {
+        self.frameshift() != 0 && self.len().is_multiple_of(3)
     }
 }
 
@@ -337,16 +379,9 @@ impl InsertionRange {
     /// appears in the middle of the exon), then compute the
     /// [`CdsInsertionRange`] of the intersection.
     fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsInsertionRange> {
-        // Intuitively, the range occurs in [start, end) or [start, end-1]. The
-        // insertion occurs between indices at left+0.5 or right-0.5. Overlap
-        // requires start < right-0.5 < end-1 (without concern for equality,
-        // since right-0.5 is not an integer). start < right-0.5 if and only if
-        // start < right. right-0.5 < end-1 if and only if right < end-0.5, or
-        // right < end.
-
-        (exon.ref_range.start < self.ref_index.right && self.ref_index.right < exon.ref_range.end).then(|| {
+        exon.ref_range.contains_ins(self.ref_index).then(|| {
             // Intuitively, cds_range.start + (ref_index.right-ref_range.start)
-            // where the second term is the offsetof the insertion within the
+            // where the second term is the offset of the insertion within the
             // reference range. However, that offset may be positive or
             // negative, so we need to do additions before substractions to
             // prevent underflow
@@ -466,10 +501,19 @@ pub(crate) trait RangeExt: Sized {
     #[allow(dead_code)]
     fn overlaps(&self, other: &Self) -> bool;
 
+    /// Checks whether the range contains an insertion strictly inside of it.
+    #[must_use]
+    fn contains_ins(&self, ins: InsertionIdx) -> bool;
+
     /// Intersects the two ranges, returning `Some` only if the result is
     /// non-empty.
     #[must_use]
     fn intersect(&self, other: &Self) -> Option<Self>;
+
+    /// Intersects the end of `self` with the beginning of `next`, returning
+    /// `Some` only if the result is non-empty.
+    #[must_use]
+    fn intersect_ordered(&self, next: &Self) -> Option<Self>;
 
     /// Checks whether the range is a superset of `other`.
     ///
@@ -487,6 +531,12 @@ pub(crate) trait RangeExt: Sized {
     /// contains the other as a strict subset. Overlap is permitted.
     #[must_use]
     fn relaxed_cmp(&self, other: &Self) -> Option<Ordering>;
+
+    /// Compare the position of the range with the insertion, returning
+    /// [`Ordering::Less`] if the range comes before the insertion,
+    /// [`Ordering::Greater`] if the range comes after, or [`None`] if the range
+    /// strictly contains the insertion.
+    fn cmp_ins(&self, ins: &InsertionIdx) -> Option<Ordering>;
 
     /// Returns a formatter displaying the 0-based range as 1-based, and
     /// end-inclusive instead of end-exclusive.
@@ -530,6 +580,16 @@ impl RangeExt for Range<usize> {
         self.end > other.start && other.end > self.start
     }
 
+    fn contains_ins(&self, ins: InsertionIdx) -> bool {
+        // Intuitively, the range occurs in [start, end) or [start, end-1]. The
+        // insertion occurs between indices at left+0.5 or right-0.5. Overlap
+        // requires start < right-0.5 < end-1 (without concern for equality,
+        // since right-0.5 is not an integer). start < right-0.5 if and only if
+        // start < right. right-0.5 < end-1 if and only if right < end-0.5, or
+        // right < end.
+        self.start < ins.right() && ins.right() < self.end
+    }
+
     fn intersect(&self, other: &Self) -> Option<Self> {
         dbg_check_endpoints(self);
         dbg_check_endpoints(other);
@@ -537,6 +597,13 @@ impl RangeExt for Range<usize> {
         let start = self.start.max(other.start);
         let end = self.end.min(other.end);
         (start < end).then_some(start..end)
+    }
+
+    fn intersect_ordered(&self, next: &Self) -> Option<Self> {
+        dbg_check_endpoints(self);
+        dbg_check_endpoints(next);
+
+        (next.start < self.end).then_some(next.start..self.end)
     }
 
     fn is_superset_of(&self, other: &Self) -> bool {
@@ -577,6 +644,25 @@ impl RangeExt for Range<usize> {
 
             // One range contains the other
             (Ordering::Less, Ordering::Greater) | (Ordering::Greater, Ordering::Less) => None,
+        }
+    }
+
+    fn cmp_ins(&self, ins: &InsertionIdx) -> Option<Ordering> {
+        dbg_check_endpoints(self);
+
+        if ins.right() <= self.start {
+            // The index right of the insertion is the start of the range, or
+            // less. The range is thus right of the insertion
+            Some(Ordering::Greater)
+        } else if self.end <= ins.right() {
+            // The end-exclusive index is at most the index right of the
+            // insertion. Equivalently, the end-inclusive index is at most the
+            // index left of the insertion. The range is thus left of the
+            // insertion.
+            Some(Ordering::Less)
+        } else {
+            // This is precisely the case checked for in contains_ins
+            None
         }
     }
 

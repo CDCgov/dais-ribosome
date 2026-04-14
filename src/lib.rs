@@ -3,7 +3,7 @@
 mod annotation;
 pub(crate) mod config;
 pub(crate) mod data;
-pub mod error;
+pub mod errors;
 pub(crate) mod hashing;
 pub mod outputs;
 pub mod tsv;
@@ -178,4 +178,32 @@ impl AlignmentStatesExt for AlignmentStates {
             self.add_inc_op(inc, b'M');
         }
     }
+}
+
+#[cfg(feature = "regression-testing")]
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)+) => {
+        ::log::warn!($($arg)+)
+    };
+}
+
+#[cfg(not(feature = "regression-testing"))]
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)+) => {};
+}
+
+#[cfg(feature = "regression-testing")]
+#[macro_export]
+macro_rules! error {
+    ($($arg:tt)+) => {
+        ::log::error!($($arg)+)
+    };
+}
+
+#[cfg(not(feature = "regression-testing"))]
+#[macro_export]
+macro_rules! error {
+    ($($arg:tt)+) => {};
 }

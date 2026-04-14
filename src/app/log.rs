@@ -1,4 +1,4 @@
-use dais_ribosome::{AnnotationModule, error::UnimplementedCtype};
+use dais_ribosome::{AnnotationModule, errors::UnimplementedCtype};
 use jiff::Timestamp;
 use std::collections::{HashMap, HashSet};
 
@@ -64,17 +64,4 @@ pub fn print_unimplemented_ctypes(set: HashSet<UnimplementedCtype>, module: &Ann
             ts(&msg);
         }
     }
-}
-
-#[cfg(feature = "regression-testing")]
-#[macro_export]
-macro_rules! warn {
-    ($($arg:tt)+) => {
-        ::log::warn!($($arg)+)
-    };
-}
-#[cfg(not(feature = "regression-testing"))]
-#[macro_export]
-macro_rules! warn {
-    ($($arg:tt)+) => {};
 }

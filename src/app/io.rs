@@ -1,5 +1,5 @@
 use crate::app::grid::get_partition_filename;
-use dais_ribosome::{error::RibosomeError, tsv::Writers};
+use dais_ribosome::{errors::RibosomeError, tsv::Writers};
 use std::{fs::File, io::BufWriter, path::PathBuf, sync::LazyLock};
 use zoe::{data::err::ResultWithErrorContext, prelude::rand_sequence};
 

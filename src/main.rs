@@ -11,7 +11,7 @@ use app::{
     },
     paths::find_modules_toml,
 };
-use dais_ribosome::{AnnotationModule, error::RibosomeError, outputs::RibosomeOutput, toml::TomlConfig, tsv::Writers};
+use dais_ribosome::{AnnotationModule, errors::RibosomeError, outputs::RibosomeOutput, toml::TomlConfig, tsv::Writers};
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use sswsort::SSWSortModule;
 use std::{collections::HashSet, error::Error, fmt::Display, io::Write, path::PathBuf};

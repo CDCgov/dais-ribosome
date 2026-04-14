@@ -3,7 +3,7 @@
 //! The file is opened only once.
 
 use crate::{ClassificationStrategy, app::log::time_stamp};
-use dais_ribosome::{NoNucleotides, QueryRecord, error::RibosomeError};
+use dais_ribosome::{NoNucleotides, QueryRecord, errors::RibosomeError};
 use sswsort::{ClassificationResult, Strand};
 use std::{
     error::Error,

@@ -1,6 +1,6 @@
 use crate::{
     data::{
-        exons::{ExonCoords, Exons},
+        exons::{ExonCoords, ExonOverlapCoords, Exons, NoncodingCoords},
         keys::RefKey,
     },
     ranges::RangeExt,
@@ -84,8 +84,26 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
             .into());
         }
 
+        let mut overlapped_regions = Vec::new();
+        let mut noncoding_regions = Vec::new();
+
+        for [exon1, exon2] in coords.array_windows() {
+            // Overlapping and containing a noncoding region between them are
+            // mutually exclusive, so use "else if"
+            if let Some(overlapped) = ExonOverlapCoords::new(exon1, exon2) {
+                overlapped_regions.push(overlapped);
+            } else if let Some(noncoding) = NoncodingCoords::new(exon1, exon2) {
+                noncoding_regions.push(noncoding);
+            }
+        }
+
         // Validity: coords is non-empty, CDS length is multiple of 3, etc.
-        let exons = Exons { required_start, coords };
+        let exons = Exons {
+            required_start,
+            coords,
+            overlapped_regions,
+            noncoding_regions,
+        };
 
         let key = RefKey::new(reference_id, ctype);
         cds_specs.entry(key).or_default().push((protein, exons));
@@ -247,6 +265,9 @@ impl Iterator for TsvReader {
 ///
 /// - Each range must successfully parse
 /// - The ranges must be in order, with at most 2 nt of overlap
+/// - The ranges must not be perfectly adjacent (all ranges must either overlap
+///   or have a non-coding region between them)
+/// - A single region of overlap cannot involve more than 2 ranges.
 fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
     /// The maximum amount of overlap allowed between exons.
     ///
@@ -287,6 +308,19 @@ fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
                 }
             }
 
+            // Prevent perfectly adjacent exons (there should either be overlap
+            // or non-coding region)
+            if last.ref_range.end == ref_range.start {
+                return Err(std::io::Error::other(format!(
+                    "Two exons are perfectly adjacent, and should therefore be represented as a single exon. Found {} then {}",
+                    last.ref_range.display_inclusive(),
+                    ref_range.display_inclusive(),
+                )));
+            }
+
+            // Prevent overlapping exons that overlap by more than
+            // MAX_DUPLICATED_OVERLAP_NT
+            //
             // Exclusive index - inclusive index is valid length
             let overlap_nt = last.ref_range.end.saturating_sub(ref_range.start);
             if overlap_nt > MAX_DUPLICATED_OVERLAP_NT {
@@ -295,6 +329,20 @@ fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
                     last.ref_range.display_inclusive(),
                     ref_range.display_inclusive(),
                 )));
+            }
+
+            // Prevent a single region of overlap from involving more than 2
+            // exons
+            if let Some(second_to_last) = exon_ranges.iter().nth_back(1) {
+                let overlap_nt = second_to_last.ref_range.end.saturating_sub(ref_range.start);
+                if overlap_nt > 0 {
+                    return Err(std::io::Error::other(format!(
+                        "A single region of overlap cannot involve more than 2 exons within a given protein product. Found {}, {}, then {}, which all overlap",
+                        second_to_last.ref_range.display_inclusive(),
+                        last.ref_range.display_inclusive(),
+                        ref_range.display_inclusive(),
+                    )));
+                }
             }
         }
 
