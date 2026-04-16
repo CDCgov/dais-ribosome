@@ -13,7 +13,7 @@
   - The check for the required start codon in PB1-F2 now allows for AUG in addition to ATG
   - Fixes a bug causing some query coordinate ranges to be incorrectly shifted right for `M2`, `NEP`, and `PA-X`
   - Fixes Dockerfile build process to allow for custom certificates
-  - Fixes the majority of bugs where indels in non-coding regions are not reflected in query coordinates
+  - Fixes the majority of bugs where indels in non-coding regions are not reflected in query coordinates. **It is a known bug that in rare cases, the query coordinates may still be incorrect. This will be resolved in DAIS-ribosome v2**
 
 ## v1.6.2 (2026.03.19)
 
