@@ -3,7 +3,6 @@
 
 use crate::{
     data::ranges::StateRange,
-    error::RibosomeError,
     outputs::RibosomeOutput,
     tsv::{DelRowView, GenDelRowView, GenInsRowView, GenSeqRowView, InsRowView, SeqRowView},
 };
@@ -23,7 +22,7 @@ pub struct Writers<W> {
 }
 
 /// Writes the product outputs for a single query to the appropriate writers.
-pub fn write_product_output<W: Write>(output: &RibosomeOutput<'_>, writers: &mut Writers<W>) -> Result<(), RibosomeError> {
+pub fn write_product_output<W: Write>(output: &RibosomeOutput<'_>, writers: &mut Writers<W>) -> std::io::Result<()> {
     for state in &output.states {
         for product in &state.products {
             let computed_product = &product.materialize(&output.query.nucleotides);
@@ -68,9 +67,7 @@ pub fn write_product_output<W: Write>(output: &RibosomeOutput<'_>, writers: &mut
 }
 
 /// Writes the genome outputs for a single query to the appropriate writers.
-pub fn write_genome_output<W: Write>(
-    output: &RibosomeOutput<'_>, gen_writers: &mut Writers<W>,
-) -> Result<(), RibosomeError> {
+pub fn write_genome_output<W: Write>(output: &RibosomeOutput<'_>, gen_writers: &mut Writers<W>) -> std::io::Result<()> {
     for state in &output.states {
         let genome = state.materialize_genome(&output.query.nucleotides);
 

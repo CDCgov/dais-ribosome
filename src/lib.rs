@@ -9,7 +9,7 @@ pub mod outputs;
 pub mod tsv;
 
 pub use config::{annotation_module::AnnotationModule, module_data::ModuleData, toml};
-pub use data::{QueryRecord, ranges};
+pub use data::{NoNucleotides, QueryRecord, ranges};
 
 use std::ops::ControlFlow;
 use zoe::{alignment::AlignmentStates, data::cigar::Ciglet};

@@ -13,7 +13,7 @@ rayon = "1"
 toml = "1.1"
 serde = "1"
 serde_derive = "1"
-
+sswsort = { git = "https://github.com/CDCgov/sswsort.git" }
 zoe = { version = "0.0.28", default-features = false, features = [
     "multiversion",
     "rand",

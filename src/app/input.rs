@@ -1,32 +1,181 @@
 //! Multiplexed query input: auto-detects FASTA vs. TSV by peeking at the
-//! first byte, then yields [`QueryRecord`]s through a unified iterator.
+//! first byte, then yields [`QueryInfo`]s through a unified iterator.
 //! The file is opened only once.
 
-use dais_ribosome::{QueryRecord, error::RibosomeError};
+use crate::{ClassificationStrategy, app::log::time_stamp};
+use dais_ribosome::{NoNucleotides, QueryRecord, error::RibosomeError};
+use sswsort::{ClassificationResult, Strand};
 use std::{
+    error::Error,
+    fmt::Display,
     fs::File,
     io::{BufRead, BufReader, Lines},
     path::Path,
 };
 use zoe::{
-    data::{ByteMap, RetainSequence, err::ResultWithErrorContext, fasta::FastaSeq},
+    data::{
+        err::{GetCode, ResultWithErrorContext},
+        fasta::FastaSeq,
+    },
     define_whichever,
     prelude::*,
+    unwrap_or_return_some_err,
 };
 
-use crate::app::log::time_stamp;
+/// Extracts the ctype from a [`ClassificationResult`], performing any logging
+/// or filtering based on `rules`.
+///
+/// If the strand of the classification is [`Strand::Minus`], then the sequence
+/// is converted to reverse complement as well.
+fn handle_classification(
+    classification: &ClassificationResult, id: &str, sequence: &mut Vec<u8>, verbose: bool,
+) -> Option<String> {
+    let (taxon, strand) = match classification {
+        ClassificationResult::Unrecognizable { best_score } => {
+            if verbose {
+                if let Some(best_score) = best_score {
+                    time_stamp(
+                        &format!("The sequence for the following ID was unrecognizable with a score of {best_score}: {id}"),
+                        true,
+                    );
+                } else {
+                    time_stamp(&format!("The sequence for the following ID was unrecognizable: {id}"), true);
+                }
+            }
+            return None;
+        }
+        ClassificationResult::Classification {
+            taxon,
+            best_score: _,
+            strand,
+        } => (taxon, strand),
+        ClassificationResult::Chimeric { taxa } => {
+            if verbose {
+                let mut warning =
+                    format!("The sequence for the following ID was detected as chimeric: {id}. Possible taxa: ");
+
+                for part in taxa.iter().cloned().intersperse(", ") {
+                    warning.push_str(part);
+                }
+
+                time_stamp(&warning, true);
+            }
+
+            return None;
+        }
+        ClassificationResult::UnusuallyLong {
+            taxon,
+            best_score: _,
+            strand: _,
+        } => {
+            if verbose {
+                time_stamp(
+                    &format!("The sequence for the following ID was detected as unusually long for taxa {taxon}: {id}"),
+                    true,
+                );
+            }
+
+            return None;
+        }
+        ClassificationResult::Unresolvable { taxa, best_score } => {
+            if verbose {
+                let mut warning = format!(
+                    "The sequence for the following ID was detected as unresolvable with a score of {best_score}: {id}. Possible taxa: "
+                );
+
+                for part in taxa.iter().cloned().intersperse(", ") {
+                    warning.push_str(part);
+                }
+
+                time_stamp(&warning, true);
+            }
+
+            return None;
+        }
+    };
+
+    match strand {
+        Strand::Plus => {}
+        Strand::Minus => {
+            NucleotidesViewMut::from(sequence).make_reverse_complement();
+        }
+    }
+
+    Some(taxon.to_string())
+}
+
+/// The information from reading a FASTA or TSV input, possibly with a compound
+/// type.
+pub struct QueryInfo {
+    /// The ID of the query
+    id:       String,
+    /// The unsanitized query sequence
+    sequence: Vec<u8>,
+    /// The compound type, if provided
+    ctype:    Option<String>,
+}
+
+impl QueryInfo {
+    /// Converts the [`QueryInfo`] into a [`QueryRecord`] by classifying the
+    /// ctype using SSWSort if needed. If the reverse strand is aligned against,
+    /// then the reverse complement of the sequence is taken.
+    ///
+    /// ## Errors
+    ///
+    /// If `module` is not available and the `ctype` field of the query is
+    /// missing, then [`NoCtype`] is returned.
+    pub fn classify_and_prepare(
+        mut self, classification: &Option<ClassificationStrategy>, verbose: bool,
+    ) -> Result<Option<QueryRecord>, NoCtype> {
+        let ctype = match (self.ctype, classification) {
+            (Some(ctype), _) => ctype,
+            (None, Some(ClassificationStrategy::SswSort(module))) => {
+                let classification = module.classify(&self.sequence);
+                let Some(ctype) = handle_classification(&classification, &self.id, &mut self.sequence, verbose) else {
+                    return Ok(None);
+                };
+                ctype
+            }
+            (None, Some(ClassificationStrategy::Default(default_ctype))) => default_ctype.clone(),
+            (None, None) => return Err(NoCtype { id: self.id }),
+        };
+
+        match QueryRecord::new(self.id, self.sequence, ctype) {
+            Ok(record) => Ok(Some(record)),
+            Err(NoNucleotides { id }) => {
+                if verbose {
+                    time_stamp(&format!("A sequence contained no unaligned DNA data. See ID: {id}"), true);
+                }
+                Ok(None)
+            }
+        }
+    }
+}
+
+/// An error caused by the absense of a ctype within an input file.
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct NoCtype {
+    /// The ID of the record in the file.
+    pub id: String,
+}
+
+impl Display for NoCtype {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "A query was missing a ctype: {id}", id = self.id)
+    }
+}
+
+impl Error for NoCtype {}
+impl GetCode for NoCtype {}
 
 /// A reader for a FASTA file containing query data, parsing it into
-/// [`QueryRecord`].
-///
-/// This uses *Zoe*'s [`FastaReader`]. All non-IUPAC bases and gap characters
-/// are filtered, and bases are converted to uppercase. `U` is preserved in
-/// addition to `T`.
+/// [`QueryInfo`].
 pub struct FastaQueryIter {
     reader: FastaReader<File>,
 }
 
 impl FastaQueryIter {
+    /// Constructs a [`FastaQueryIter`] from an existing [`BufReader`].
     fn from_bufreader(buf: BufReader<File>) -> Result<Self, RibosomeError> {
         let reader = FastaReader::from_bufreader(buf)?;
         Ok(Self { reader })
@@ -34,94 +183,44 @@ impl FastaQueryIter {
 }
 
 impl Iterator for FastaQueryIter {
-    type Item = Result<QueryRecord, QueryInputError>;
+    type Item = std::io::Result<QueryInfo>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let record = match self.reader.next()? {
-            Ok(record) => record,
-            Err(e) => return Some(Err(e.into())),
-        };
+        let info = unwrap_or_return_some_err!(self.reader.next()?);
+        let FastaSeq { name, sequence } = info;
 
-        Some(parse_fasta_seq(record))
-    }
-}
+        if name.contains('|') {
+            let mut parts = name.split('|').map(|part| part.trim_ascii().to_string());
 
-pub enum QueryInputError {
-    Io(std::io::Error),
-    NoNucleotides(String, ReaderType),
-}
-
-pub enum ReaderType {
-    Fasta,
-    Tsv,
-}
-
-impl From<std::io::Error> for QueryInputError {
-    fn from(value: std::io::Error) -> Self {
-        QueryInputError::Io(value)
-    }
-}
-
-impl From<&str> for QueryInputError {
-    fn from(value: &str) -> Self {
-        QueryInputError::Io(std::io::Error::other(value))
-    }
-}
-
-impl From<String> for QueryInputError {
-    fn from(value: String) -> Self {
-        QueryInputError::Io(std::io::Error::other(value))
-    }
-}
-
-/// Parses a [`FastaSeq`] into a [`QueryRecord`] for use in DAIS-ribosome.
-///
-///
-/// This filters all non-IUPAC bases and gap characters, and converts to
-/// uppercase. `U` is preserved in addition to `T`.
-///
-/// ## Errors
-///
-/// - The sequence must be non-empty after filtering.
-/// - The header must be successfully parsed.
-fn parse_fasta_seq(record: FastaSeq) -> Result<QueryRecord, QueryInputError> {
-    let FastaSeq { name, sequence } = record;
-    // BREAKING: we previously only removed: '*: .~-'
-    let nucleotides = sanitize_seq(sequence);
-
-    if nucleotides.is_empty() {
-        return Err(QueryInputError::NoNucleotides(name, ReaderType::Fasta));
-    }
-
-    if name.contains('|') {
-        let mut parts = name.split('|').map(|part| part.trim_ascii().to_string());
-
-        if let (Some(id), Some(ctype)) = (parts.next(), parts.next())
-            && !ctype.is_empty()
-        {
-            Ok(QueryRecord { id, nucleotides, ctype })
+            if let (Some(id), Some(ctype)) = (parts.next(), parts.next())
+                && !ctype.is_empty()
+            {
+                Some(Ok(QueryInfo {
+                    id,
+                    sequence,
+                    ctype: Some(ctype),
+                }))
+            } else {
+                Some(Err(std::io::Error::other(format!(
+                    "Invalid FASTA header found. Expected ID or ID|ctype, found {name}"
+                ))))
+            }
         } else {
-            Err(format!("Invalid FASTA header found. Expected ID or ID|ctype, found {name}").into())
+            Some(Ok(QueryInfo {
+                id: name,
+                sequence,
+                ctype: None,
+            }))
         }
-    } else {
-        // TODO : handle unclassified queries
-        Ok(QueryRecord {
-            id: name.trim_ascii().to_string(),
-            nucleotides,
-            ctype: String::new(),
-        })
     }
 }
 
 /// A reader for a TSV file containing query data, parsing it into
-/// [`QueryRecord`].
+/// [`QueryInfo`].
 ///
 /// Supports 3-column annotated (`ID<TAB>ctype<TAB>sequence`) and 2-column
-/// unannotated (`ID\<TAB>sequence`, currently stubbed) input.
-///
-/// All non-IUPAC bases and gap characters are filtered, and bases are converted
-/// to uppercase. `U` is preserved in addition to `T`.
+/// unannotated (`ID\<TAB>sequence`) input.
 pub struct TsvQueryIter {
     reader: Lines<BufReader<File>>,
 }
@@ -132,10 +231,7 @@ impl TsvQueryIter {
         Self { reader: buf.lines() }
     }
 
-    /// Parses a single TSV line into a [`QueryRecord`].
-    ///
-    /// This filters all non-IUPAC bases and gap characters, and converts to
-    /// uppercase. `U` is preserved in addition to `T`.
+    /// Parses a single TSV line into a [`QueryInfo`].
     ///
     /// ## Validity
     ///
@@ -144,51 +240,42 @@ impl TsvQueryIter {
     ///
     /// ## Errors
     ///
-    /// If the line is missing fields, or if the sequence contained no unaligned
-    /// DNA data, a [`RibosomeError::Io`] error is returned.
-    fn parse_line(line: &str) -> Result<QueryRecord, QueryInputError> {
-        let mut columns = line.split('\t');
+    /// The line must contain all required fields.
+    fn parse_line(line: &str) -> std::io::Result<QueryInfo> {
+        let mut columns = line.split('\t').map(|part| part.trim_ascii().to_string());
 
         // Validity: this will always exist since split is never empty
         let id = columns.next().unwrap_or_default();
         let Some(second) = columns.next() else {
-            return Err("Invalid TSV format: expected 2 or 3 tab-separated columns, but found 1".into());
+            return Err(std::io::Error::other(
+                "Invalid TSV format: expected 2 or 3 tab-separated columns, but found 1",
+            ));
         };
         let third = columns.next();
 
         match third {
             // Three columns: ID  ctype  sequence  (annotated)
-            Some(seq_field) => {
-                let ctype = second.trim_ascii().to_string();
-                if ctype.is_empty() {
-                    return Err("Invalid TSV format: the second field was empty".into());
+            Some(sequence) => {
+                if second.is_empty() {
+                    return Err(std::io::Error::other("Invalid TSV format: the second field was empty"));
                 }
 
-                let nucleotides = sanitize_seq(seq_field.as_bytes().to_vec());
+                let sequence = sequence.as_bytes().to_vec();
 
-                if nucleotides.is_empty() {
-                    return Err(QueryInputError::NoNucleotides(id.to_string(), ReaderType::Tsv));
-                }
-
-                Ok(QueryRecord {
-                    id: id.trim_ascii().to_string(),
-                    nucleotides,
-                    ctype,
+                Ok(QueryInfo {
+                    id,
+                    sequence,
+                    ctype: Some(second),
                 })
             }
-            // Two columns: ID  sequence  (unannotated — stub)
+            // Two columns: ID  sequence  (unannotated)
             None => {
-                let nucleotides = sanitize_seq(second.as_bytes().to_vec());
+                let sequence = second.as_bytes().to_vec();
 
-                if nucleotides.is_empty() {
-                    return Err(QueryInputError::NoNucleotides(id.to_string(), ReaderType::Tsv));
-                }
-
-                // TODO: handle unclassified TSV queries (feature-gated)
-                Ok(QueryRecord {
-                    id: id.trim_ascii().to_string(),
-                    nucleotides,
-                    ctype: String::new(),
+                Ok(QueryInfo {
+                    id,
+                    sequence,
+                    ctype: None,
                 })
             }
         }
@@ -196,14 +283,11 @@ impl TsvQueryIter {
 }
 
 impl Iterator for TsvQueryIter {
-    type Item = Result<QueryRecord, QueryInputError>;
+    type Item = std::io::Result<QueryInfo>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let line = match self.reader.next()? {
-                Ok(line) => line,
-                Err(e) => return Some(Err(e.into())),
-            };
+            let line = unwrap_or_return_some_err!(self.reader.next()?);
 
             if !line.trim().is_empty() {
                 // Validity: Lines removes trailing line breaks, and we
@@ -216,104 +300,31 @@ impl Iterator for TsvQueryIter {
 
 define_whichever! {
     /// Unified query iterator over FASTA or TSV input, returning queries as
-    /// [`QueryRecord`].
-    ///
-    /// Both iterators filter all non-IUPAC bases and gap characters, and bases
-    /// are converted to uppercase. `U` is preserved in addition to `T`.
-    pub enum QueryInput {
+    /// [`QueryInfo`].
+    pub enum QueryReader {
         /// Backed by a FASTA reader.
         Fasta(FastaQueryIter),
         /// Backed by a TSV reader.
         Tsv(TsvQueryIter),
     }
 
-    impl Iterator for QueryInput {
-        type Item = Result<QueryRecord, QueryInputError>;
+    impl Iterator for QueryReader {
+        type Item = std::io::Result<QueryInfo>;
     }
 }
 
-impl QueryInput {
+impl QueryReader {
     /// Open `path`, peek at the first byte to detect format, and return
     /// the appropriate reader.
-    pub fn open(path: &Path) -> Result<Self, RibosomeError> {
+    pub fn from_path(path: &Path) -> Result<Self, RibosomeError> {
         let file = File::open(path).with_path_context("Failed to open file", path)?;
 
         let mut buffer = BufReader::new(file);
 
         match *buffer.peek(1)? {
             [] => Err(RibosomeError::EmptyFile(path.to_path_buf())),
-            [b'>', ..] => Ok(QueryInput::Fasta(FastaQueryIter::from_bufreader(buffer)?)),
-            _ => Ok(QueryInput::Tsv(TsvQueryIter::from_bufreader(buffer))),
+            [b'>', ..] => Ok(QueryReader::Fasta(FastaQueryIter::from_bufreader(buffer)?)),
+            _ => Ok(QueryReader::Tsv(TsvQueryIter::from_bufreader(buffer))),
         }
     }
-}
-
-/// An extension trait for handling [`QueryInputError::NoNucleotides`] in an
-/// iterator.
-pub trait HandleNoNucleotidesExt {
-    /// Filters any records with empty sequences post-filtering, issuing a
-    /// warning to `stderr` if `verbose` is set.
-    fn handle_no_nucleotides(self, verbose: bool) -> impl Iterator<Item = std::io::Result<QueryRecord>>;
-}
-
-impl<I> HandleNoNucleotidesExt for I
-where
-    I: Iterator<Item = Result<QueryRecord, QueryInputError>>,
-{
-    fn handle_no_nucleotides(self, verbose: bool) -> impl Iterator<Item = std::io::Result<QueryRecord>> {
-        self.filter_map(move |res| match res {
-            Ok(record) => Some(Ok(record)),
-            Err(QueryInputError::Io(e)) => Some(Err(e)),
-            Err(QueryInputError::NoNucleotides(header, reader_type)) => {
-                if verbose {
-                    let field = match reader_type {
-                        ReaderType::Fasta => "header",
-                        ReaderType::Tsv => "ID",
-                    };
-
-                    time_stamp(
-                        &format!("A sequence contained no unaligned DNA data. See {field}: {header}"),
-                        true,
-                    );
-                }
-                None
-            }
-        })
-    }
-}
-
-/// Sanitizes an incoming sequence so that it meets the validity requirements of
-/// [`QueryRecord`].
-///
-/// This converts to uppercase, preserves IUPAC characters, preserves `U` in
-/// addition to `T`, and preserves `X`. All other bytes are removed.
-#[must_use]
-#[cfg(feature = "regression-testing")]
-fn sanitize_seq(mut seq: Vec<u8>) -> Nucleotides {
-    const SANITIZE: ByteMap = ByteMap::all(0)
-        .preserve_range(b'A'..=b'Z')
-        .preserve_range(b'a'..=b'z')
-        .map(b"acgturyswkmbdhvn", b"ACGTURYSWKMBDHVN")
-        .map(b"ux", b"UX");
-
-    seq.retain_by_recoding(&SANITIZE);
-    Nucleotides::from(seq)
-}
-
-/// Sanitizes an incoming sequence so that it meets the validity requirements of
-/// [`QueryRecord`].
-///
-/// This converts to uppercase, preserves IUPAC characters, preserves `U` in
-/// addition to `T`, and maps `X` to `N`. All other bytes are removed.
-#[must_use]
-#[cfg(not(feature = "regression-testing"))]
-fn sanitize_seq(mut seq: Vec<u8>) -> Nucleotides {
-    const SANITIZE: ByteMap = ByteMap::all(0)
-        .preserve_range(b'A'..=b'Z')
-        .preserve_range(b'a'..=b'z')
-        .map(b"acgturyswkmbdhvn", b"ACGTURYSWKMBDHVN")
-        .map(b"uxX", b"UNN");
-
-    seq.retain_by_recoding(&SANITIZE);
-    Nucleotides::from(seq)
 }

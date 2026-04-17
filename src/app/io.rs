@@ -1,10 +1,7 @@
-use std::{fs::File, io::BufWriter, path::PathBuf, sync::LazyLock};
-
-use dais_ribosome::{error::RibosomeError, tsv::Writers};
-use zoe::data::err::ResultWithErrorContext;
-use zoe::prelude::rand_sequence;
-
 use crate::app::grid::get_partition_filename;
+use dais_ribosome::{error::RibosomeError, tsv::Writers};
+use std::{fs::File, io::BufWriter, path::PathBuf, sync::LazyLock};
+use zoe::{data::err::ResultWithErrorContext, prelude::rand_sequence};
 
 pub fn open_writer(path: &Option<PathBuf>, extension: &str) -> Result<BufWriter<File>, RibosomeError> {
     let mut new_path = PathBuf::with_capacity(TEMP_PREFIX.len() + extension.len() + 1);

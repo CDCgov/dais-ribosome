@@ -54,10 +54,16 @@ pub struct Args {
     #[arg(short = 'S', long, conflicts_with_all = ["threads", "is_grid_task"])]
     pub submit_grid_job: Option<usize>,
 
-    /// Prints warning messages to stderr if any input sequences failed to be
-    /// processed.
+    /// Prints warning messages to stderr. See the TODO for a full list of
+    /// warnings that may be generated.
     #[arg(long, conflicts_with_all = ["is_grid_task", "submit_grid_job"])]
     pub verbose: bool,
+
+    /// A default ctype to use if any input records are not annotated. If not
+    /// specified, an SSWSort module will be used to classify the query if a
+    /// module exists, otherwise an error is produced.
+    #[arg(long)]
+    pub assume_default_ctype: Option<String>,
 }
 
 impl Args {
