@@ -126,7 +126,7 @@ impl<'a> AnnotationModule<'a> {
             query,
             states,
             failed_ref_ids,
-            formatting: &self.data.formatting,
+            formatting: self.formatting,
         })
     }
 
@@ -140,7 +140,7 @@ impl<'a> AnnotationModule<'a> {
         // Note: This contains uppercase IUPAC, possibly with either U or T
         let query_seq = &query.nucleotides;
 
-        if self.data.rules.list_contig_stop_extension
+        if self.rules.list_contig_stop_extension
             && genome_aln.uanligned_ref_tail() == 0
             && genome_aln.unaligned_query_tail() >= 3
             && let Some(last_aligned_codon) = query_seq.slice(genome_aln.aln_query_range()).get_tail_codon()
@@ -184,7 +184,7 @@ impl<'a> AnnotationModule<'a> {
     fn rule_chew_to_start<'b>(
         &self, query: &'b QueryRecord, ref_id_data: &ReferenceGroup<'_>,
     ) -> (usize, NucleotidesView<'b>) {
-        if self.data.rules.chew_to_start
+        if self.rules.chew_to_start
             && query.nucleotides.len() > ref_id_data.length
             // Validity: QueryRecord contains uppercase bases
             && let Some(r) = query.nucleotides.find_substring(b"ATG")
@@ -206,7 +206,7 @@ impl<'a> AnnotationModule<'a> {
     ///
     /// The score of the alignment is not altered.
     fn rule_repairable_ends(&self, genome_aln: &mut Alignment<u32>) {
-        if let Some(limit) = self.data.rules.repairable_end_limit {
+        if let Some(limit) = self.rules.repairable_end_limit {
             let unaligned_pre = genome_aln.query_range.start.min(genome_aln.ref_range.start);
             if genome_aln.ref_range.start <= limit {
                 genome_aln.extend_left(unaligned_pre);

@@ -113,7 +113,7 @@ impl<'a> GenomeAndProductStates<'a> {
 pub struct Product<'a> {
     /// The information for the protein product being aligned against, including
     /// the name and exons.
-    pub(crate) product_spec: ProductSpec<'a>,
+    pub(crate) product_spec: &'a ProductSpec,
 
     /// The ranges within the exons that the query covers. This is initially
     /// formed by intersecting the query ranges with the exon ranges, then is

@@ -12,17 +12,17 @@ use crate::{
 use std::cmp::Ordering;
 
 /// The specifications for a single protein product (e.g., `HA`, `HA-signal`).
-#[derive(Copy, Clone, Debug)]
-pub(crate) struct ProductSpec<'a> {
+#[derive(Clone, Debug)]
+pub(crate) struct ProductSpec {
     /// The protein/peptide product name
-    pub(crate) name:          &'a str,
+    pub(crate) name:          String,
     /// The exon coordinates, as well as translation rules specific to the exons
-    pub(crate) exons:         &'a Exons,
+    pub(crate) exons:         Exons,
     /// The codon position weight matrix for the protein product
-    pub(crate) codon_weights: Option<&'a CodonPositionWeights>,
+    pub(crate) codon_weights: Option<CodonPositionWeights>,
 }
 
-impl<'a> ProductSpec<'a> {
+impl ProductSpec {
     /// Intersects the ranges for an alignment ([`StateRange`]) with the ranges
     /// for the exons ([`Exons`]) to form the ranges in the product.
     ///
@@ -35,7 +35,7 @@ impl<'a> ProductSpec<'a> {
     /// fully partition the aligned query and reference ranges (if any part of
     /// the sequences was not locally aligned, this will not be included). It
     /// also must begin and end with [`StateRange::M`] (and hence be non-empty).
-    pub(crate) fn make_product_ranges(self, state_ranges: &[StateRange]) -> Product<'a> {
+    pub(crate) fn make_product_ranges(&self, state_ranges: &[StateRange]) -> Product<'_> {
         let product_ranges = self.intersect(state_ranges);
 
         let leading_cds_unaligned = self.compute_leading_cds_unaligned(&product_ranges);
@@ -54,7 +54,7 @@ impl<'a> ProductSpec<'a> {
     /// `leading_cds_unaligned` field.
     ///
     /// [`make_product_ranges`]: ProductSpec::make_product_ranges
-    fn compute_leading_cds_unaligned(self, product_ranges: &[CdsStateRange]) -> usize {
+    fn compute_leading_cds_unaligned(&self, product_ranges: &[CdsStateRange]) -> usize {
         let Some(first) = product_ranges.first() else {
             // No intersection between query and exons, so put all the CDS
             // length as leading unaligned
@@ -79,7 +79,7 @@ impl<'a> ProductSpec<'a> {
     /// `product_ranges` field.
     ///
     /// [`make_product_ranges`]: ProductSpec::make_product_ranges
-    fn intersect(self, state_ranges: &[StateRange]) -> Vec<CdsStateRange> {
+    fn intersect(&self, state_ranges: &[StateRange]) -> Vec<CdsStateRange> {
         // TODO: Is this a good enough capacity? We could end up exceeding it.
         let mut product_ranges = Vec::with_capacity(state_ranges.len());
 
@@ -107,7 +107,7 @@ impl<'a> ProductSpec<'a> {
     /// `trailing_cds_unaligned` field.
     ///
     /// [`make_product_ranges`]: ProductSpec::make_product_ranges
-    fn compute_trailing_cds_unaligned(self, product_ranges: &[CdsStateRange]) -> usize {
+    fn compute_trailing_cds_unaligned(&self, product_ranges: &[CdsStateRange]) -> usize {
         let Some(last) = product_ranges.last() else {
             // No intersection between query and exons, and we counted all the
             // CDS length as leading unaligned

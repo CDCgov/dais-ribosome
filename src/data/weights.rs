@@ -28,7 +28,7 @@ pub type CodonWeightMatrix = HashMap<SpecKey, CodonPositionWeights>;
 ///
 /// This map assumes that all codons are in uppercase. Any `U` bases in the
 /// codons are automatically converted to `T`.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct CodonPositionWeights {
     map: HashMap<CodonKey, u32>,
 }

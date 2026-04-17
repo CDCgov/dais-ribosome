@@ -1,17 +1,9 @@
-//! The module data structure and parsing for it.
-
 use crate::{
-    config::{
-        annotation_module::AnnotationModule,
-        toml::{AlignmentWeights, Formatting, Rules, TomlConfig},
-    },
     data::{
         exons::{ExonCoords, Exons},
         keys::RefKey,
-        ranges::RangeExt,
-        weights::{CodonWeightMatrix, load_codon_weights},
     },
-    toml::AlignmentMethod,
+    ranges::RangeExt,
 };
 use std::{
     cmp::Ordering,
@@ -20,116 +12,17 @@ use std::{
     io::{BufRead, BufReader, ErrorKind, Lines},
     iter::Enumerate,
     ops::Range,
-    path::{Path, PathBuf},
+    path::Path,
     str::FromStr,
 };
 use zoe::{
     data::{
         SanitizeBase,
         err::{ResultWithErrorContext, WithErrorContext},
-        fasta::FastaSeq,
-        nucleotides::ToDNA,
     },
-    prelude::{FastaReader, Nucleotides, RefineDNAStrat},
+    prelude::RefineDNAStrat,
     unwrap_or_return_some_err,
 };
-
-/// Owned data backing an annotation module.
-#[derive(Debug)]
-pub struct ModuleData {
-    /// The name of the module (e.g., `flu`, `cov`, or `rsv`). This must
-    /// correspond to a folder in `ribosome_res`.
-    pub name:                     String,
-    /// An optional version for the module (e.g., `2.0-alpha`).
-    pub version:                  String,
-    /// The method to use for performing sequence alignment.
-    pub(crate) alignment_method:  AlignmentMethod,
-    pub(crate) formatting:        Formatting,
-    pub(crate) rules:             Rules,
-    /// Alignments weights for the module.
-    pub(crate) alignment_weights: AlignmentWeights,
-    /// A vector of the other module names and the paths to their reference
-    /// files, used in for providing warning messages when unrecognized compound
-    /// types are encountered.
-    pub(crate) other_modules:     Vec<(String, PathBuf)>,
-    /// A hash map from [`RefKey`] values to a vector of reference sequences.
-    ///
-    /// [`RefKey`]: crate::data::keys::RefKey
-    pub(crate) references:        ReferenceMap,
-
-    /// A hash map from [`RefKey`] values to a vector of the protein product
-    /// names (e.g., `HA`, `HA-signal`) and their [`Exons`].
-    ///
-    /// [`RefKey`]: crate::data::keys::RefKey
-    /// [`Exons`]: crate::data::exons::Exons
-    pub(crate) cds_spec:      CdsSpecMap,
-    pub(crate) codon_weights: CodonWeightMatrix,
-}
-
-impl ModuleData {
-    /// Build module data from a parsed configuration.
-    ///
-    /// ## Errors
-    ///
-    /// Any errors are returned without including the `module_name` as context,
-    /// since the caller will add that. The `toml_path` is included as context
-    /// when relevant.
-    pub fn new(config: TomlConfig, toml_path: &Path, module_name: &str) -> std::io::Result<Self> {
-        // Get path to ribosome_res directory
-        let modules_dir = toml_path
-            .parent()
-            .expect("The modules.toml path must have parent ribosome_res");
-
-        // Select the module of interest given module_name
-        let Some((module, other_modules)) = config.find_module(module_name, modules_dir) else {
-            return Err(std::io::Error::other(format!(
-                "Module name not found in configuration file: {toml_path}",
-                toml_path = toml_path.display()
-            )));
-        };
-
-        // Get path to module folder
-        let module_root = modules_dir.join(&module.name);
-
-        // Get paths to files within module folder
-        let references_path = module_root.join(&module.references);
-        let weights_path = module_root.join(&module.weights);
-        let cds_spec_path = module_root.join(&module.cds_spec);
-
-        let references = load_references(&references_path)
-            .with_path_context("Failed to load the references from file", &references_path)?;
-        let codon_weights = load_codon_weights(&weights_path)
-            .with_path_context("Failed to load the codon position weights from file", weights_path)?;
-        let cds_spec =
-            load_cds_spec(&cds_spec_path).with_path_context("Failed to load the CDS specs from file", cds_spec_path)?;
-        let alignment_weights = module.alignment;
-
-        Ok(Self {
-            name: module.name,
-            version: module.version.unwrap_or_else(|| "unknown".to_string()),
-            alignment_method: module.alignment_method,
-            formatting: module.formatting,
-            rules: module.rules,
-            alignment_weights,
-            other_modules,
-            references,
-            cds_spec,
-            codon_weights,
-        })
-    }
-
-    /// Builds an [`AnnotationModule`] that borrows from this [`ModuleData`].
-    pub fn build_annotation_module(&self) -> std::io::Result<AnnotationModule<'_>> {
-        AnnotationModule::new(self)
-    }
-}
-
-/// A [`HashMap`] from a reference key to list of reference sequences.
-///
-/// Each `reference_id` may have many compound types, which in turn may have
-/// many records due to distinct coding regions. Hence, we store multiple
-/// sequences per [`RefKey`].
-pub type ReferenceMap = HashMap<RefKey, Vec<Nucleotides>>;
 
 /// A hash map from [`RefKey`] values to a vector of the proteins (e.g., `HA`,
 /// `HA-signal`) and their [`Exons`].
@@ -455,40 +348,4 @@ fn parse_coordinate_range(coord_range: &str) -> std::io::Result<Range<usize>> {
     };
 
     Ok(start..end)
-}
-
-/// Loads reference sequences from a FASTA file.
-///
-/// Each record header must be pipe-delimited of the form:
-/// `reference_id|compound_type`. Any additional pipe-delimited fields are
-/// ignored.
-///
-/// This function also recodes the sequence to uppercase IUPAC with corrected
-/// gaps, using `N` for anything that cannot be recoded.
-///
-/// ## Errors
-///
-/// Returns an error if:
-///
-/// - The file cannot be read
-/// - A sequence name doesn't match the expected format
-pub fn load_references(path: &Path) -> Result<ReferenceMap, std::io::Error> {
-    let data = FastaReader::from_path(path)?;
-    let mut refs = HashMap::new();
-
-    for r in data {
-        let FastaSeq { name, sequence } = r?;
-
-        let forward = sequence.recode_to_dna();
-
-        let key = RefKey::parse(&name).ok_or_else(|| {
-            std::io::Error::other(format!(
-                "Reference FASTA header must have format '<reference_id>|<compound_type>', but found '{name}'",
-            ))
-        })?;
-
-        refs.entry(key).or_insert_with(Vec::new).push(forward);
-    }
-
-    Ok(refs)
 }

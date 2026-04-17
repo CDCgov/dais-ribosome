@@ -8,7 +8,7 @@ pub(crate) mod hashing;
 pub mod outputs;
 pub mod tsv;
 
-pub use config::{annotation_module::AnnotationModule, module_data::ModuleData, toml};
+pub use config::{annotation_module::AnnotationModule, toml};
 pub use data::{NoNucleotides, QueryRecord, ranges};
 
 use std::ops::ControlFlow;

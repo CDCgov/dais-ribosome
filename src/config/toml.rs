@@ -41,16 +41,16 @@ impl TomlConfig {
     /// reference sequences. These are used to populate `other_modules`.
     ///
     /// [`ModuleData`]: crate::config::module_data::ModuleData
-    pub fn find_module(self, name: &str, modules_dir: &Path) -> Option<(ConfiguredModule, Vec<(String, PathBuf)>)> {
+    pub fn find_module(&self, name: &str, modules_dir: &Path) -> Option<(&ConfiguredModule, Vec<(&String, PathBuf)>)> {
         let mut selected = None;
         let mut others = Vec::new();
 
-        for m in self.modules {
+        for m in &self.modules {
             if m.name == name {
                 selected = Some(m);
             } else {
                 let ref_path = modules_dir.join(&m.name).join(&m.references);
-                others.push((m.name, ref_path));
+                others.push((&m.name, ref_path));
             }
         }
 

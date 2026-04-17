@@ -73,7 +73,7 @@ impl<'a> Product<'a> {
         let variant_hash = variant_hash(&aa_seq);
 
         ComputedProduct {
-            product_name: self.product_spec.name,
+            product_name: &self.product_spec.name,
             cds_seq,
             cds_aln,
             cds_id,

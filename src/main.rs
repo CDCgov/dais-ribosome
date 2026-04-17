@@ -14,7 +14,7 @@ use app::{
 };
 use clap::Parser;
 use dais_ribosome::{
-    AnnotationModule, ModuleData,
+    AnnotationModule,
     error::{RibosomeError, UnimplementedCtype},
     outputs::RibosomeOutput,
     toml::TomlConfig,
@@ -43,13 +43,8 @@ fn main() {
     // Parse the TOML file
     let parsed_toml = TomlConfig::from_file(&toml_path).unwrap_or_fail();
 
-    // Convert the TOML data into ModuleData
-    let module_data = ModuleData::new(parsed_toml, &toml_path, &args.module)
-        .unwrap_or_die(&format!("Failed to prepare module '{}'", args.module));
-
     // Build the AnnotationModule
-    let annotation_module = module_data
-        .build_annotation_module()
+    let annotation_module = AnnotationModule::new(&parsed_toml, &toml_path, &args.module)
         .unwrap_or_die(&format!("Failed to build module '{}'", args.module));
 
     let classification = ClassificationStrategy::new(&args).unwrap_or_fail();
