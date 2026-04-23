@@ -90,15 +90,19 @@ function install() {
     local repo=$1
     local namespace=${2:-"flu-informatics"}
     local server=${3:-"git.biotech.cdc.gov"}
+    local pinned_tag="R1.7.0"
+    if [ "$repo" == "sswsort" ]; then
+        pinned_tag="v1.6.3"
+    fi
+
     cd "$libp" || die "Bad directory $libp"
+
     if [ ! -d "$repo" ]; then
         git clone "https://${server}/${namespace}/${repo}.git" > /dev/null \
             || die "failed to install $repo"
-        if [ "$repo" == "sswsort" ]; then
-            git -C "$libp/$repo" checkout v1.6.3 > /dev/null 2>&1 \
-                || die "failed to checkout sswsort v1.6.3"
-        fi
     fi
+    git -C "$libp/$repo" checkout $pinned_tag > /dev/null 2>&1 \
+        || die "failed to checkout $repo $pinned_tag"
 }
 
 function script_path() {

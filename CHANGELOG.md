@@ -1,6 +1,6 @@
 # DAIS-RIBOSOME Change Log
 
-## v1.7.0 (2026.04.13)
+## v1.7.0 (2026.04.23)
 
 - **Feature**:
   - DAIS-ribosome now supports aarch64/arm64 on both Mac and Linux, albeit SSWSORT requires Rosetta 2 if it is called.
