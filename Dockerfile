@@ -34,19 +34,31 @@ RUN --mount=type=secret,id=gitlab_ca \
     && libp=/dais-ribosome/lib \
     && for i in $(ls "$libp/convert/"|grep -vP 'sam2fasta.pl|delim2fasta.pl|fa2delim.pl|nt2aa.pl');do rm "$libp/convert/$i";done \
     && for i in $(ls "$libp/editMSA/"|grep -vP 'reviseTaxa.pl|codonCorrectStats.pl|stripSequences.pl'); do rm "$libp/editMSA/$i";done \
-    && for i in $(ls "$libp/sampling/"|grep -vP 'partitionByField.pl'); do rm "$libp/sampling/$i";done \
-    && rm -rf /dais-ribosome/workdir /dais-ribosome/lib/sswsort/workdir \
-    && ln -s /tmp /dais-ribosome/workdir \
-    && ln -s /tmp /dais-ribosome/lib/sswsort/workdir \
-    && rm /dais-ribosome/lib/sswsort/bin/ssw_* \
-    && ln -s /dais-ribosome/bin/third_party/ssw_Linux_$(uname -m) /dais-ribosome/lib/sswsort/bin/ssw_Linux
+    && for i in $(ls "$libp/sampling/"|grep -vP 'partitionByField.pl'); do rm "$libp/sampling/$i";done
+
+RUN mkdir /app \
+    && mv /dais-ribosome/spec \
+    /dais-ribosome/refs \
+    /dais-ribosome/bin \
+    /dais-ribosome/lib \
+    /dais-ribosome/ribosome \
+    /dais-ribosome/CHANGELOG.md \
+    /dais-ribosome/README.md \
+    /dais-ribosome/LICENSE \
+    /app/
+
+RUN rm /app/lib/sswsort/bin/ssw_* \
+    && ln -s /app/bin/third_party/ssw_Linux_$(uname -m) /app/lib/sswsort/bin/ssw_Linux
 
 
 FROM base AS final
 
-COPY --from=builder /dais-ribosome /dais-ribosome
+WORKDIR /app
+COPY --from=builder /app /app
+
+ENV IFX_WORK_DIR=/tmp
 
 # Recommended mount point for data volume from host
 WORKDIR /data
 
-ENV PATH="/dais-ribosome:${PATH}"
+ENV PATH="/app:/app/lib/sswsort:${PATH}"
