@@ -15,6 +15,8 @@
 //!
 //! [`outputs`]: crate::outputs
 //! [`RibosomeOutput`]: crate::outputs::RibosomeOutput
+//! [`write_product_output`]: Writers::write_product_output
+//! [`write_genome_output`]: Writers::write_genome_output
 
 mod del_file;
 mod gen_del_file;

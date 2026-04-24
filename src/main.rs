@@ -1,31 +1,24 @@
 #![feature(string_from_utf8_lossy_owned, bufreader_peek, try_trait_v2, iter_intersperse)]
 
-use crate::app::{
-    input::{NoCtype, QueryInfo},
-    log::time_stamp,
-    num_cpus::init_thread_pool,
-    paths::find_modules_toml,
-};
 use app::{
     args::Args,
-    grid::{self, Grid},
-    input::QueryReader,
-    log,
+    input::{NoCtype, QueryInfo, QueryReader},
+    log::{self, time_stamp},
+    num_cpus::init_thread_pool,
+    par_utils::{
+        grid::{GridCompatibleArgs, GridInfo, JobErrorOrFail},
+        writers::WriterThreaded,
+    },
+    paths::find_modules_toml,
 };
-use clap::Parser;
-use dais_ribosome::{
-    AnnotationModule,
-    error::{RibosomeError, UnimplementedCtype},
-    outputs::RibosomeOutput,
-    toml::TomlConfig,
-    tsv::{Writers, write_genome_output, write_product_output},
-};
+use dais_ribosome::{AnnotationModule, error::RibosomeError, outputs::RibosomeOutput, toml::TomlConfig, tsv::Writers};
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use sswsort::SSWSortModule;
 use std::{collections::HashSet, error::Error, fmt::Display, io::Write, path::PathBuf};
 use zoe::{
     data::err::{Fail, GetCode, OrFail, ResultWithErrorContext, WithErrorContext},
     iter_utils::ProcessResultsExt,
+    unwrap_or_return_some_err,
 };
 
 pub mod app;
@@ -38,7 +31,9 @@ fn main() {
     #[cfg(feature = "regression-testing")]
     env_logger::init();
 
-    let args = Args::parse();
+    // Parse the arguments, get grid info, adjust paths based on task ID, open
+    // writers.
+    let (args, grid_info) = Args::parse_maybe_grid().unwrap_or_fail();
 
     // Find the full file-system path to ribosome_res/modules.toml
     let toml_path = find_modules_toml().unwrap_or_fail();
@@ -50,63 +45,109 @@ fn main() {
     let annotation_module = AnnotationModule::new(&parsed_toml, &toml_path, &args.module)
         .unwrap_or_die(&format!("Failed to build module '{}'", args.module));
 
+    // Determine the classification strategy, which may involve loading SSWSort
+    // module
     let classification = ClassificationStrategy::new(&args).unwrap_or_fail();
 
-    // Grid submission, blocks on the array
-    if let Some(n) = args.submit_grid_job {
-        let output_paths = args.output_paths_for_grid();
-        grid::submit_job_sync(n, &args.module, &args.data_file, output_paths).unwrap_or_die("Grid job submission failed!");
-        return;
-    }
+    // Handle a request to submit a grid job
+    let grid_info = match grid_info {
+        Some(GridInfo::Requested(grid_info)) => {
+            grid_info.submit_job_sync().unwrap_or_fail();
+            return;
+        }
+        Some(GridInfo::Task(grid_info)) => Some(grid_info),
+        None => None,
+    };
 
+    // Group relevant information together for ease of function calls
     let config = BinaryConfig {
         classification,
         annotation: annotation_module,
         verbose: args.verbose,
-        list_unimplemented_ctypes: !args.is_grid_task,
+        list_unimplemented_ctypes: grid_info.is_none(),
     };
 
+    // Initialize an iterator over the input queries
     let queries = QueryReader::from_path(&args.data_file).unwrap_or_fail();
 
-    let result = if args.is_grid_task {
-        let g = Grid::task_vars_from_env().unwrap_or_fail();
-        let writers = args.get_grid_writers(g.task_id).unwrap_or_fail();
-        let gen_writers = args.get_optional_writers().unwrap_or_fail();
-
-        // 0-based offset so we start on our partition
-        let offset = (g.task_id - g.task_first) / g.task_stepsize;
-        // modulus for interleaved partitioning
-        let array_size = (g.task_last - g.task_first + 1).div_ceil(g.task_stepsize);
-
-        queries.process_results(|queries| {
-            let stepped = queries.skip(offset).step_by(array_size);
-            process_queries(stepped, &config, writers, gen_writers)
-        })
+    // Open the writers
+    let (seq, ins, del) = args.product_output;
+    let writers = Writers::from_paths(seq, ins, del).unwrap_or_die("Failed to create product output files");
+    let gen_writers = if let Some((seq, ins, del)) = args.genome_output {
+        Some(Writers::from_paths(seq, ins, del).unwrap_or_die("Failed to create genome output files"))
     } else {
-        let writers = args.get_writers().unwrap_or_fail();
-        let gen_writers = args.get_optional_writers().unwrap_or_fail();
-
-        let num_threads = init_thread_pool(args.threads);
-
-        if num_threads > 1 {
-            queries.process_results(|queries| process_queries_parallel(queries, &config, writers, gen_writers))
-        } else {
-            queries.process_results(|queries| process_queries(queries, &config, writers, gen_writers))
-        }
+        None
     };
 
+    // Handle processing in the case of a grid task
+    if let Some(grid_info) = grid_info {
+        grid_info.run_task(|grid_info| {
+            log::ts("started, processing data (grid)");
+
+            let result = queries.process_results(|queries| {
+                let stepped = grid_info.select_inputs(queries);
+                process_queries(stepped, &config, writers, gen_writers)
+            });
+
+            // Handle any errors in the query iterator or the processing
+            match result {
+                Ok(Ok(())) => {}
+                Ok(Err(ProcessingError::NoCtype(err))) => {
+                    log::ts("annotation failed");
+                    let err = std::io::Error::from(err.with_context(format!(
+                        "All ctypes must be specified since SSWSort does not have a module for: {module}",
+                        module = args.module
+                    )));
+                    err.fail()
+                }
+                Ok(Err(err)) => {
+                    log::ts("annotation failed");
+                    err.fail()
+                }
+                Err(err) => {
+                    log::ts("annotation failed");
+                    err.fail()
+                }
+            }
+
+            log::ts("finished");
+        });
+    }
+
+    // Get the number of threads
+    let num_threads = init_thread_pool(args.threads);
+
+    // Handle processing for either single threaded or multithreaded
+    let result = if num_threads > 1 {
+        log::ts("started, processing data (parallel)");
+        queries.process_results(|queries| process_queries_parallel(queries, &config, writers, gen_writers))
+    } else {
+        log::ts("started, processing data");
+        queries.process_results(|queries| process_queries(queries, &config, writers, gen_writers))
+    };
+
+    // Handle any errors in the query iterator or the processing
     match result {
         Ok(Ok(())) => {}
-        Ok(Err(ProcessingError::NoCtype(e))) => {
-            let err = std::io::Error::other(e.with_context(format!(
+        Ok(Err(ProcessingError::NoCtype(err))) => {
+            log::ts("annotation failed");
+            let err = std::io::Error::from(err.with_context(format!(
                 "All ctypes must be specified since SSWSort does not have a module for: {module}",
                 module = args.module
             )));
             err.fail()
         }
-        Ok(Err(e)) => e.fail(),
-        Err(e) => e.fail(),
+        Ok(Err(err)) => {
+            log::ts("annotation failed");
+            err.fail()
+        }
+        Err(err) => {
+            log::ts("annotation failed");
+            err.fail()
+        }
     }
+
+    log::ts("finished");
 }
 
 /// Configuration for the binary portion of DAIS-ribosome.
@@ -234,8 +275,6 @@ fn process_queries<Q, W>(
 where
     Q: Iterator<Item = QueryInfo>,
     W: Write, {
-    log::ts("started, processing data");
-
     let mut unimplemented_ctypes = HashSet::new();
 
     for info in queries {
@@ -248,7 +287,7 @@ where
         let output = match config.annotation.process(record) {
             Ok(output) => output,
             Err(RibosomeError::UnimplementedCtype(ctype)) => {
-                unimplemented_ctypes.insert(ctype.0);
+                unimplemented_ctypes.insert(ctype);
                 continue;
             }
             Err(RibosomeError::EmptyFile(e)) => return Err(ProcessingError::EmptyFile(e)),
@@ -259,71 +298,73 @@ where
             warn_failed_ref_ids(&output);
         }
 
-        write_product_output(&output, &mut writers)?;
+        writers.write_product_output(&output)?;
         if let Some(gen_writers) = &mut gen_writers {
-            write_genome_output(&output, gen_writers)?;
+            gen_writers.write_genome_output(&output)?;
         }
+    }
+
+    writers.flush()?;
+    if let Some(mut gen_writers) = gen_writers {
+        gen_writers.flush()?;
     }
 
     if config.list_unimplemented_ctypes {
         log::print_unimplemented_ctypes(unimplemented_ctypes, &config.annotation);
     }
-
-    log::ts("finished");
 
     Ok(())
 }
 
 /// Process queries in parallel using Rayon then write results sequentially.
 fn process_queries_parallel<Q, W>(
-    queries: Q, config: &BinaryConfig, mut writers: Writers<W>, mut gen_writers: Option<Writers<W>>,
+    queries: Q, config: &BinaryConfig, writers: Writers<W>, gen_writers: Option<Writers<W>>,
 ) -> Result<(), ProcessingError>
 where
     Q: Iterator<Item = QueryInfo> + ParallelBridge + Send,
-    W: Write, {
-    log::ts("started, processing data (parallel)");
-
+    W: Write + Send + 'static, {
     // Use process_results to properly propagate catch errors that occur in the
     // input iterator. Collect into a result that propagates all errors instead
     // of UnimplementedCtype, so that rayon can end threads early when an error
     // occurs.
 
-    let results = queries
+    let mut writers = writers.map(WriterThreaded::new);
+    let gen_writers = gen_writers.map(|gen_writers| gen_writers.map(WriterThreaded::new));
+
+    let unimplemented_ctypes = queries
         .par_bridge()
         .flat_map(|info| info.classify_and_prepare(&config.classification, config.verbose).transpose())
-        .map(|record| match config.annotation.process(record?) {
-            Ok(output) => Ok(Ok(output)),
-            Err(RibosomeError::UnimplementedCtype(e)) => Ok(Err(e)),
-            Err(RibosomeError::EmptyFile(e)) => Err(ProcessingError::EmptyFile(e)),
-            Err(RibosomeError::Io(e)) => Err(ProcessingError::Io(e)),
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+        .map_with((writers.clone(), gen_writers.clone()), |(writers, gen_writers), record| {
+            let record = unwrap_or_return_some_err!(record.map_err(Into::into));
 
-    let mut unimplemented_ctypes = HashSet::new();
+            match config.annotation.process(record) {
+                Ok(output) => {
+                    if config.verbose {
+                        warn_failed_ref_ids(&output);
+                    }
 
-    for result in results {
-        let output = match result {
-            Ok(output) => output,
-            Err(UnimplementedCtype(ctype)) => {
-                unimplemented_ctypes.insert(ctype);
-                continue;
+                    unwrap_or_return_some_err!(writers.write_product_output(&output).map_err(Into::into));
+                    if let Some(gen_writers) = gen_writers {
+                        unwrap_or_return_some_err!(gen_writers.write_genome_output(&output).map_err(Into::into));
+                    }
+                    None
+                }
+                Err(RibosomeError::UnimplementedCtype(e)) => Some(Ok(e)),
+                Err(RibosomeError::EmptyFile(e)) => Some(Err(ProcessingError::EmptyFile(e))),
+                Err(RibosomeError::Io(e)) => Some(Err(ProcessingError::Io(e))),
             }
-        };
+        })
+        .flatten()
+        .collect::<Result<HashSet<_>, _>>()?;
 
-        if config.verbose {
-            warn_failed_ref_ids(&output);
-        }
-
-        write_product_output(&output, &mut writers)?;
-        if let Some(gen_writers) = &mut gen_writers {
-            write_genome_output(&output, gen_writers)?;
-        }
+    writers.flush()?;
+    if let Some(mut gen_writers) = gen_writers {
+        gen_writers.flush()?;
     }
 
     if config.list_unimplemented_ctypes {
         log::print_unimplemented_ctypes(unimplemented_ctypes, &config.annotation);
     }
-    log::ts("finished");
 
     Ok(())
 }

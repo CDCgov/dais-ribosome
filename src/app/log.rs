@@ -1,4 +1,4 @@
-use dais_ribosome::AnnotationModule;
+use dais_ribosome::{AnnotationModule, error::UnimplementedCtype};
 use jiff::Timestamp;
 use std::collections::{HashMap, HashSet};
 
@@ -28,14 +28,14 @@ pub fn ts(message: &str) {
     time_stamp(message, false);
 }
 
-pub fn print_unimplemented_ctypes(set: HashSet<String>, module: &AnnotationModule<'_>) {
+pub fn print_unimplemented_ctypes(set: HashSet<UnimplementedCtype>, module: &AnnotationModule<'_>) {
     if set.is_empty() {
         return;
     }
 
     // Get unimplemented ctypes in alphabetical order
 
-    let mut unimplemented_ctypes: Vec<String> = set.clone().into_iter().collect();
+    let mut unimplemented_ctypes: Vec<String> = set.clone().into_iter().map(|x| x.0).collect();
     unimplemented_ctypes.sort();
 
     let mut msg = "no specification yet for:".to_owned();

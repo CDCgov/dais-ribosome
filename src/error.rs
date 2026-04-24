@@ -4,7 +4,7 @@ use zoe::data::err::{ErrorWithContext, GetCode};
 
 /// An error holding a compound type that was not implemented for the given
 /// module.
-#[derive(Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct UnimplementedCtype(pub String);
 
 impl std::error::Error for UnimplementedCtype {}
