@@ -35,6 +35,9 @@ pub mod app;
 // const PROGRAM_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " v", env!("CARGO_PKG_VERSION"));
 
 fn main() {
+    #[cfg(feature = "regression-testing")]
+    env_logger::init();
+
     let args = Args::parse();
 
     // Find the full file-system path to ribosome_res/modules.toml

@@ -65,3 +65,16 @@ pub fn print_unimplemented_ctypes(set: HashSet<String>, module: &AnnotationModul
         }
     }
 }
+
+#[cfg(feature = "regression-testing")]
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)+) => {
+        ::log::warn!($($arg)+)
+    };
+}
+#[cfg(not(feature = "regression-testing"))]
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)+) => {};
+}
