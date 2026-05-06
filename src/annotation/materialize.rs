@@ -3,12 +3,10 @@
 
 use crate::{
     IteratorExt,
-    data::{
-        coords::Coords,
-        ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, CdsStateRange, InsertionIdx},
-    },
+    data::ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, CdsStateRange, InsertionIdx},
     hashing::{nt_id, variant_hash},
     outputs::{ComputedDeletion, ComputedInsertion, ComputedProduct, Product},
+    ranges::CdsCoord,
 };
 use std::ops::Range;
 use zoe::prelude::{AminoAcids, Len, Nucleotides, Slice, Translate};
@@ -110,10 +108,10 @@ struct ComputedIncrementalProducts {
     has_insertion:          bool,
     /// Whether any insertion or deletion causes a frameshift (length % 3 != 0)
     has_shift_indel:        bool,
-    /// Query nucleotide coordinates (e.g., "1..45;48..90")
-    query_coords:           Coords,
-    /// CDS nucleotide coordinates (e.g., "1..45")
-    cds_coords:             Coords,
+    /// Query nucleotide coordinates
+    query_coords:           Vec<Range<usize>>,
+    /// CDS nucleotide coordinates
+    cds_coords:             Vec<CdsCoord>,
     /// Computed non-filtered insertions for this product
     insertions:             Vec<ComputedInsertion>,
     /// Computed deletions for this product
@@ -307,11 +305,11 @@ struct DependentFields {
     /// Whether any insertion or deletion causes a frameshift (length % 3 != 0)
     has_shift_indel: bool,
 
-    /// Query nucleotide coordinates (e.g., "1..45;48..90")
-    query_coords: Coords,
+    /// Query nucleotide coordinates
+    query_coords: Vec<Range<usize>>,
 
-    /// CDS nucleotide coordinates (e.g., "1..45")
-    cds_coords: Coords,
+    /// CDS nucleotide coordinates
+    cds_coords: Vec<CdsCoord>,
 
     /// Computed non-filtered insertions for this product
     insertions: Vec<ComputedInsertion>,
@@ -328,8 +326,8 @@ impl DependentFields {
             cds_seq:         Nucleotides::new(),
             has_insertion:   false,
             has_shift_indel: false,
-            query_coords:    Coords::with_capacity((5 + 2 + 5) * range_capacity),
-            cds_coords:      Coords::with_capacity((5 + 2 + 5) * range_capacity),
+            query_coords:    Vec::with_capacity(range_capacity),
+            cds_coords:      Vec::with_capacity(range_capacity),
             insertions:      Vec::new(),
             deletions:       Vec::new(),
         }
@@ -340,8 +338,8 @@ impl DependentFields {
         let slice = &query[range.query_range.clone()];
         self.cds_seq.extend_from_slice(slice);
 
-        self.query_coords.push_range(&range.query_range);
-        self.cds_coords.push_range(&range.cds_range);
+        self.query_coords.push(range.query_range.clone());
+        self.cds_coords.push(CdsCoord::M(range.cds_range.clone()));
     }
 
     /// Extends the dependent fields from a insertion range.
@@ -360,12 +358,12 @@ impl DependentFields {
         }
         self.has_insertion = true;
 
-        self.query_coords.push_range(&range.query_range);
+        self.query_coords.push(range.query_range.clone());
 
         // If the insertion happens at the beginning of the sequence, do not
         // include this coordinate in cds_coords.
         if !range.cds_index.at_start() {
-            self.cds_coords.push_upstream(range.cds_index);
+            self.cds_coords.push(CdsCoord::I(range.cds_index));
         }
 
         if !range.len().is_multiple_of(3) {
@@ -423,9 +421,9 @@ impl DependentFields {
             // TODO: Added based on regression tests:
             self.has_insertion = true;
 
-            self.query_coords.push_range(ext_range);
+            self.query_coords.push(ext_range.clone());
 
-            self.cds_coords.push_upstream(nt_insertion_idx);
+            self.cds_coords.push(CdsCoord::I(nt_insertion_idx));
 
             if !ext_range.len().is_multiple_of(3) {
                 self.has_shift_indel = true;

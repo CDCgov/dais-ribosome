@@ -1,5 +1,3 @@
-#![feature(int_format_into)]
-
 mod annotation;
 pub(crate) mod config;
 pub(crate) mod data;

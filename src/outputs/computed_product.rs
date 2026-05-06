@@ -1,4 +1,6 @@
-use crate::data::{coords::Coords, ranges::InsertionIdx};
+use std::ops::Range;
+
+use crate::{data::ranges::InsertionIdx, ranges::CdsCoord};
 use zoe::prelude::*;
 
 /// Pre-computed product data ready for output.
@@ -24,10 +26,10 @@ pub struct ComputedProduct<'a> {
     pub has_insertion:          bool,
     /// Whether any insertion or deletion causes a frameshift (length % 3 != 0)
     pub has_shift_indel:        bool,
-    /// Query nucleotide coordinates (e.g., "1..45;48..90")
-    pub query_coords:           Coords,
-    /// CDS nucleotide coordinates (e.g., "1..45")
-    pub cds_coords:             Coords,
+    /// Query nucleotide coordinates
+    pub query_coords:           Vec<Range<usize>>,
+    /// CDS nucleotide coordinates
+    pub cds_coords:             Vec<CdsCoord>,
     /// Computed non-filtered insertions for this product
     pub insertions:             Vec<ComputedInsertion>,
     /// Computed deletions for this product

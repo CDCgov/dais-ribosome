@@ -3,15 +3,16 @@
 
 use crate::{
     outputs::ComputedProduct,
+    ranges::{CdsCoord, InclusiveDisplay, parse_coords_inclusive},
     toml::Formatting,
     tsv::{HADOOP_NULL, Nullable},
 };
 use csv::{Reader, ReaderBuilder};
-use serde::Deserialize;
+use serde::{Deserialize, de::Error};
 use serde_derive::Deserialize;
-use std::{fmt::Display, fs::File, io::Read, path::Path};
+use std::{fmt::Display, fs::File, io::Read, ops::Range, path::Path};
 use zoe::{
-    data::err::ResultWithErrorContext,
+    data::err::{ResultWithErrorContext, WithErrorContext},
     prelude::{AminoAcids, AminoAcidsView, DataOwned, Len, Nucleotides, NucleotidesView},
 };
 
@@ -30,8 +31,8 @@ pub struct SeqRow {
     pub has_shift_indel:   bool,
     pub cds_seq:           Option<Nucleotides>,
     pub cds_aln:           Option<Nucleotides>,
-    pub query_coordinates: String,
-    pub cds_coordinates:   String,
+    pub query_coordinates: Vec<Range<usize>>,
+    pub cds_coordinates:   Vec<CdsCoord>,
 }
 
 impl<'de> Deserialize<'de> for SeqRow {
@@ -61,6 +62,18 @@ impl<'de> Deserialize<'de> for SeqRow {
         let cds_id = Nullable::from(cds_id).into_option();
         let cds_seq = Nullable::from(cds_seq).into_option();
         let cds_aln = Nullable::from(cds_aln).into_option();
+
+        let query_coordinates = parse_coords_inclusive::<Range<usize>>(&query_coordinates)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                D::Error::custom(e.with_context(format!("Failed to parse query coordinates: {query_coordinates}")))
+            })?;
+
+        let cds_coordinates = parse_coords_inclusive::<CdsCoord>(&cds_coordinates)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                D::Error::custom(e.with_context(format!("Failed to parse coding sequence coordinates: {cds_coordinates}")))
+            })?;
 
         Ok(SeqRow {
             query_id,
@@ -121,8 +134,8 @@ pub struct SeqRowView<'a> {
     pub cds_seq:           NucleotidesView<'a>,
     pub cds_aln:           NucleotidesView<'a>,
     pub cds_aln_rpad:      usize,
-    pub query_coordinates: &'a str,
-    pub cds_coordinates:   &'a str,
+    pub query_coordinates: &'a [Range<usize>],
+    pub cds_coordinates:   &'a [CdsCoord],
 }
 
 impl<'a> SeqRowView<'a> {
@@ -213,8 +226,8 @@ impl Display for SeqRow {
                 .cds_aln
                 .as_ref()
                 .map_or(NucleotidesView::from(HADOOP_NULL), |s| s.as_view()),
-            query_coordinates = Nullable(&self.query_coordinates),
-            cds_coordinates = Nullable(&self.cds_coordinates),
+            query_coordinates = self.query_coordinates.display_inclusive(),
+            cds_coordinates = self.cds_coordinates.display_inclusive(),
         )
     }
 }
@@ -249,8 +262,8 @@ impl Display for SeqRowView<'_> {
             cds_seq = Nullable(self.cds_seq),
             cds_aln = self.cds_aln,
             cds_aln_rpad = self.cds_aln_rpad,
-            query_coordinates = Nullable(self.query_coordinates),
-            cds_coordinates = Nullable(self.cds_coordinates),
+            query_coordinates = self.query_coordinates.display_inclusive(),
+            cds_coordinates = self.cds_coordinates.display_inclusive(),
             empty = ""
         )
     }

@@ -3,7 +3,7 @@ use crate::{
         exons::{ExonCoords, ExonOverlapCoords, Exons, NoncodingCoords},
         keys::RefKey,
     },
-    ranges::RangeExt,
+    ranges::{InclusiveDisplay, RangeExt, parse_coords_inclusive},
 };
 use std::{
     cmp::Ordering,
@@ -174,7 +174,7 @@ impl FromStr for TsvRow {
         let ctype = ctype.to_string();
 
         // Parse coordinate ranges (e.g., 1..54 or 1..36;692..1027)
-        let coords = parse_coordinate_ranges(coords)?;
+        let coords = parse_exon_coords(coords)?;
 
         // Parse optional required start codon
         let required_start = match required_start {
@@ -268,7 +268,7 @@ impl Iterator for TsvReader {
 /// - The ranges must not be perfectly adjacent (all ranges must either overlap
 ///   or have a non-coding region between them)
 /// - A single region of overlap cannot involve more than 2 ranges.
-fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
+fn parse_exon_coords(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
     /// The maximum amount of overlap allowed between exons.
     ///
     /// SARS-CoV-2 requires -1 exon-to-exon frameshift with other viruses
@@ -280,8 +280,8 @@ fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
 
     // Parses and pushes a range to exon_ranges. Iterators do not work since we
     // need to access the previous ExonCoords to validate order and overlap.
-    for coord_range in coords.split(';') {
-        let ref_range = parse_coordinate_range(coord_range)?;
+    for ref_range in parse_coords_inclusive::<Range<usize>>(coords) {
+        let ref_range = ref_range?;
 
         if let Some(last) = exon_ranges.last() {
             match ref_range.relaxed_cmp(&last.ref_range) {
@@ -360,40 +360,4 @@ fn parse_coordinate_ranges(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
 
     // Validity: exon_ranges will be non-empty since split is always non-empty.
     Ok(exon_ranges)
-}
-
-/// Parses a string containing a 1-based end-inclusive range, converting it to a
-/// 0-based [`Range`].
-///
-/// The returned range is guaranteed to be non-empty.
-fn parse_coordinate_range(coord_range: &str) -> std::io::Result<Range<usize>> {
-    let coord_range = coord_range.trim();
-    let range_parts: Vec<&str> = coord_range.split("..").collect();
-
-    let &[start_part, end_part] = range_parts.as_slice() else {
-        return Err(std::io::Error::other(format!("Invalid coordinate range '{coord_range}'")));
-    };
-
-    // Parse 1-based inclusive range
-    let start: usize = start_part
-        .parse()
-        .with_context(format!("Invalid start coordinate '{}'", range_parts[0]))?;
-    let end: usize = end_part
-        .parse()
-        .with_context(format!("Invalid end coordinate '{}'", range_parts[1]))?;
-
-    // Since we are using inclusive range, this also requires the range is
-    // non-empty
-    if end < start {
-        return Err(std::io::Error::other(format!(
-            "End coordinate must be >= start ({start}..{end})",
-        )));
-    }
-
-    // Convert to 0-based half-open range (inclusive start, exclusive end)
-    let Some(start) = start.checked_sub(1) else {
-        return Err(std::io::Error::other("Start coordinate must be at least 1"));
-    };
-
-    Ok(start..end)
 }

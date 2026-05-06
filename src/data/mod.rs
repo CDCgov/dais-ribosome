@@ -1,6 +1,5 @@
 //! Miscellaneous data types used by DAIS-ribosome.
 
-pub(crate) mod coords;
 pub(crate) mod exons;
 pub(crate) mod keys;
 pub mod ranges;
