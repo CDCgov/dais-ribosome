@@ -56,20 +56,38 @@ impl ProductSpec {
     ///
     /// [`make_product_ranges`]: ProductSpec::make_product_ranges
     fn compute_leading_cds_unaligned(&self, product_ranges: &[CdsStateRange]) -> usize {
-        let Some(first) = product_ranges.first() else {
-            // No intersection between query and exons, so put all the CDS
-            // length as leading unaligned
-            return self.exons.cds_len();
-        };
-
-        match first {
-            CdsStateRange::M(m) => m.cds_range.start,
-            CdsStateRange::D(d) => d.cds_range.start,
-            CdsStateRange::I(i) => {
+        match product_ranges.first() {
+            Some(CdsStateRange::M(m)) => m.cds_range.start,
+            Some(CdsStateRange::D(d)) => d.cds_range.start,
+            Some(CdsStateRange::I(i)) => {
                 error!("product_ranges cannot begin with an insertion!");
                 i.cds_index.right()
             }
+
+            // We put all of the unaligned bases in trailing_cds_unaligned
+            None => 0,
         }
+    }
+
+    /// A helper function for [`make_product_ranges`] which computes the
+    /// `trailing_cds_unaligned` field.
+    ///
+    /// [`make_product_ranges`]: ProductSpec::make_product_ranges
+    fn compute_trailing_cds_unaligned(&self, product_ranges: &[CdsStateRange]) -> usize {
+        let end = match product_ranges.last() {
+            Some(CdsStateRange::M(m)) => m.cds_range.end,
+            Some(CdsStateRange::D(d)) => d.cds_range.end,
+            Some(CdsStateRange::I(i)) => {
+                error!("product_ranges cannot begin with an insertion!");
+                i.cds_index.right()
+            }
+
+            // If product_ranges is empty, then the aligned-against region ends
+            // at 0 (resulting in trailing_cds_unaligned being cds_len)
+            None => 0,
+        };
+
+        self.exons.cds_len() - end
     }
 
     /// A helper function for [`make_product_ranges`] which computes the
@@ -98,27 +116,6 @@ impl ProductSpec {
         }
 
         product_ranges
-    }
-
-    /// A helper function for [`make_product_ranges`] which computes the
-    /// `trailing_cds_unaligned` field.
-    ///
-    /// [`make_product_ranges`]: ProductSpec::make_product_ranges
-    fn compute_trailing_cds_unaligned(&self, product_ranges: &[CdsStateRange]) -> usize {
-        let Some(last) = product_ranges.last() else {
-            // No intersection between query and exons, and we counted all the
-            // CDS length as leading unaligned
-            return 0;
-        };
-
-        match last {
-            CdsStateRange::M(m) => m.cds_range.end,
-            CdsStateRange::D(d) => d.cds_range.end,
-            CdsStateRange::I(i) => {
-                error!("product_ranges cannot begin with an insertion!");
-                i.cds_index.right()
-            }
-        }
     }
 
     /// Compares the counts of two codons at the specified 1-based position,

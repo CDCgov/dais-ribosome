@@ -131,6 +131,9 @@ pub struct Product<'a> {
 
     /// The number of bases in the coding sequence that were not aligned against
     /// in the beginning (i.e., not included in `product_ranges`).
+    ///
+    /// If `product_ranges` is empty, then this field is 0, and the unaligned
+    /// bases are counted in `trailing_cds_unaligned`.
     pub leading_cds_unaligned: usize,
 
     /// The number of bases in the coding sequence that were not aligned against
