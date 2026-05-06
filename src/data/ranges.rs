@@ -1,7 +1,6 @@
 //! Structs and enums for representing product and genome alignments,
 //! specifically the ranges where matches, insertions, and deletions apply.
 
-use crate::data::exons::ExonCoords;
 use std::{
     cmp::Ordering,
     fmt::{self, Display, Formatter},
@@ -51,6 +50,12 @@ impl InsertionIdx {
     /// The 0-based index in the reference sequence after the insertion.
     pub(crate) fn right(self) -> usize {
         self.right
+    }
+
+    /// A mutable reference to the 0-based index in the reference sequence after
+    /// the insertion.
+    pub(crate) fn right_mut(&mut self) -> &mut usize {
+        &mut self.right
     }
 
     /// Converts a [`InsertionIdx`] in a nucleotides sequences to the
@@ -158,17 +163,6 @@ pub enum CdsStateRange {
     I(CdsInsertionRange),
 }
 
-impl CdsStateRange {
-    /// Extracts a mutable reference to a [`CdsMatchRange`], or `None` is a
-    /// different variant is present.
-    pub fn match_range_mut(&mut self) -> Option<&mut CdsMatchRange> {
-        match self {
-            CdsStateRange::M(cds_match_ranges) => Some(cds_match_ranges),
-            _ => None,
-        }
-    }
-}
-
 /// The range within the query and coding sequence where a contiguous block of
 /// matches occurs.
 ///
@@ -193,7 +187,6 @@ impl CdsMatchRange {
 
     /// Returns whether the range is empty.
     #[inline]
-    #[allow(dead_code)]
     pub(crate) fn is_empty(&self) -> bool {
         // The ranges are the same length
         self.cds_range.is_empty()
@@ -255,40 +248,10 @@ pub struct CdsDeletionRange {
 }
 
 impl CdsDeletionRange {
-    /// Shifts the deletion in the coding sequence to the left by `amount`.
-    ///
-    /// This subtracts `amount` from the start and end of the range.
-    pub(crate) fn shift_left(&mut self, amount: usize) {
-        self.cds_range = self.cds_range.sub(amount);
-    }
-
-    /// Shifts the deletion in the coding sequence to the right by `amount`.
-    ///
-    /// This adds `amount` to the start and end of the range.
-    pub(crate) fn shift_right(&mut self, amount: usize) {
-        self.cds_range = self.cds_range.add(amount);
-    }
-
     /// Returns the length of the deletion.
+    #[inline]
     pub(crate) fn len(&self) -> usize {
         self.cds_range.len()
-    }
-
-    /// The frame shift of the deletion.
-    pub(crate) fn frameshift(&self) -> usize {
-        self.cds_range.start % 3
-    }
-
-    /// Returns whether a deletion is eligible to be shifted based solely on its
-    /// frame and length.
-    ///
-    /// The length of the deletion in CDS coordinates must be a multiple of
-    /// three, and frame must be non-zero.
-    ///
-    /// Note that the result of this can vary before and after a deletion is
-    /// merged with adjacent deletions.
-    pub(crate) fn eligible_for_shift(&self) -> bool {
-        self.frameshift() != 0 && self.len().is_multiple_of(3)
     }
 }
 
@@ -303,113 +266,14 @@ pub struct CdsInsertionRange {
 }
 
 impl CdsInsertionRange {
-    pub(crate) fn shift_left(&mut self, amount: usize) {
-        self.cds_index.right -= amount;
-        self.query_range = self.query_range.start - amount..self.query_range.end - amount;
-    }
-
-    pub(crate) fn shift_right(&mut self, amount: usize) {
-        self.cds_index.right += amount;
-        self.query_range = self.query_range.start + amount..self.query_range.end + amount;
-    }
-
     /// Returns the length of the insertion.
+    #[inline]
     pub(crate) fn len(&self) -> usize {
         self.query_range.len()
-    }
-
-    /// The frame shift of the insertion.
-    pub(crate) fn frameshift(&self) -> usize {
-        self.cds_index.codon_shift()
-    }
-
-    /// Returns whether an insertion is eligible to be shifted based solely on
-    /// its frame and length.
-    ///
-    /// The length of the insertion in CDS coordinates must be a multiple of
-    /// three, and frame must be non-zero.
-    pub(crate) fn eligible_for_shift(&self) -> bool {
-        self.frameshift() != 0 && self.len().is_multiple_of(3)
-    }
-}
-
-impl MatchRange {
-    fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsMatchRange> {
-        // Intersect the two ranges in reference coordinates
-        self.ref_range.intersect(&exon.ref_range).map(|intersect_ref_range| {
-            let self_shrinkage = self.ref_range.compute_shrinkage(&intersect_ref_range);
-            let intersect_query_range = self.query_range.shrink(self_shrinkage);
-
-            // self.query_range and self.ref_range have the same length, so the
-            // same should be true for the intersected versions
-            debug_assert_eq!(intersect_query_range.len(), intersect_ref_range.len());
-
-            let exon_shrinkage = exon.ref_range.compute_shrinkage(&intersect_ref_range);
-            let intersect_cds_range = exon.cds_range.shrink(exon_shrinkage);
-
-            // exon.cds_range and exon.ref_range have the same length, so the
-            // same should be true for the intersected versions
-            debug_assert_eq!(intersect_cds_range.len(), intersect_ref_range.len());
-
-            // Validity: Per above, these are the same length, equal to the
-            // intersect_ref_range.len()
-            CdsMatchRange {
-                query_range: intersect_query_range,
-                cds_range:   intersect_cds_range,
-            }
-        })
-    }
-}
-
-impl DeletionRange {
-    fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsDeletionRange> {
-        self.ref_range.intersect(&exon.ref_range).map(|intersect_ref_range| {
-            let exon_shrinkage = exon.ref_range.compute_shrinkage(&intersect_ref_range);
-            let intersect_cds_range = exon.cds_range.shrink(exon_shrinkage);
-
-            CdsDeletionRange {
-                cds_range: intersect_cds_range,
-            }
-        })
-    }
-}
-
-impl InsertionRange {
-    /// If the insertion range and exon strictly intersect (the insertion
-    /// appears in the middle of the exon), then compute the
-    /// [`CdsInsertionRange`] of the intersection.
-    fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsInsertionRange> {
-        exon.ref_range.contains_ins(self.ref_index).then(|| {
-            // Intuitively, cds_range.start + (ref_index.right-ref_range.start)
-            // where the second term is the offset of the insertion within the
-            // reference range. However, that offset may be positive or
-            // negative, so we need to do additions before substractions to
-            // prevent underflow
-            let cds_index = InsertionIdx::from_right_idx(self.ref_index.right + exon.cds_range.start - exon.ref_range.start);
-
-            CdsInsertionRange {
-                cds_index,
-                query_range: self.query_range.clone(),
-            }
-        })
     }
 }
 
 impl StateRange {
-    /// Intersects a [`StateRange`] with an exon in reference coordinates,
-    /// returning the resulting query coordinates and coding sequence
-    /// coordinates.
-    ///
-    /// An insertion is only considered to intersect an exon if it occurs
-    /// strictly within the exon (not on the boundaries).
-    pub(crate) fn intersect_exon(&self, exon: &ExonCoords) -> Option<CdsStateRange> {
-        match self {
-            Self::M(m) => m.intersect_exon(exon).map(CdsStateRange::M),
-            Self::D(d) => d.intersect_exon(exon).map(CdsStateRange::D),
-            Self::I(i) => i.intersect_exon(exon).map(CdsStateRange::I),
-        }
-    }
-
     /// Converts an [`Alignment`] to a sequence of [`StateRange`] for coordinate
     /// manipulation.
     ///
@@ -417,9 +281,8 @@ impl StateRange {
     ///
     /// A valid `alignment` must be passed to ensure the output sequence of
     /// ranges will form an ordered partition of `query_range` and `ref_range`
-    /// without overlap or gap. In particular, this also requires the `N`
-    /// operation to not be present in the `states`, which would otherwise cause
-    /// a gap not covered in the reference.
+    /// without overlap or gap. The alignment must only contain the operations
+    /// `MIDS=X`.
     ///
     /// Furthermore, excluding soft clipping, the first/last `states` must be
     /// `M`, so that the output also has the first and last states as
@@ -459,15 +322,7 @@ impl StateRange {
                     }));
                     ref_start += inc;
                 }
-                b'N' => {
-                    // TODO: It would be good not to support N
-                    ref_start += inc;
-                }
-                // Soft clipping is included in the ranges, so no need to handle
-                // S
-                _ => {
-                    // TODO: Add warning?
-                }
+                _ => {}
             }
         }
 

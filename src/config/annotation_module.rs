@@ -131,7 +131,9 @@ impl<'a> AnnotationModule<'a> {
         // unlikely to ever happen, it feels like it should be an error/warning.
         let mut alignments = refs.profiles.iter().filter_map(|p| {
             let alignment = match self.alignment_method {
+                // Validity: only contains M, I, D, and S per TODO
                 AlignmentMethod::OnePass => p.sw_align_from_i16(query.as_query_src()),
+                // Validity: only contains M, I, D, and S per TODO
                 AlignmentMethod::ThreePass => p.sw_align_from_i16_3pass(query.as_query_src()),
             };
 

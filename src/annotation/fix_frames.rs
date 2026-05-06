@@ -1151,3 +1151,62 @@ fn apply_deletion_shift(
 fn build_discontiguous_codon(b1: u8, b2: u8, b3: u8) -> [u8; 3] {
     [b1, b2, b3].map(|base| if base == b'U' { b'T' } else { base })
 }
+
+impl CdsDeletionRange {
+    /// Shifts the deletion in the coding sequence to the left by `amount`.
+    ///
+    /// This subtracts `amount` from the start and end of the range.
+    fn shift_left(&mut self, amount: usize) {
+        self.cds_range = self.cds_range.sub(amount);
+    }
+
+    /// Shifts the deletion in the coding sequence to the right by `amount`.
+    ///
+    /// This adds `amount` to the start and end of the range.
+    fn shift_right(&mut self, amount: usize) {
+        self.cds_range = self.cds_range.add(amount);
+    }
+
+    /// The frame shift of the deletion.
+    fn frameshift(&self) -> usize {
+        self.cds_range.start % 3
+    }
+
+    /// Returns whether a deletion is eligible to be shifted based solely on its
+    /// frame and length.
+    ///
+    /// The length of the deletion in CDS coordinates must be a multiple of
+    /// three, and frame must be non-zero.
+    ///
+    /// Note that the result of this can vary before and after a deletion is
+    /// merged with adjacent deletions.
+    fn eligible_for_shift(&self) -> bool {
+        self.frameshift() != 0 && self.len().is_multiple_of(3)
+    }
+}
+
+impl CdsInsertionRange {
+    fn shift_left(&mut self, amount: usize) {
+        *self.cds_index.right_mut() -= amount;
+        self.query_range = self.query_range.start - amount..self.query_range.end - amount;
+    }
+
+    fn shift_right(&mut self, amount: usize) {
+        *self.cds_index.right_mut() += amount;
+        self.query_range = self.query_range.start + amount..self.query_range.end + amount;
+    }
+
+    /// The frame shift of the insertion.
+    fn frameshift(&self) -> usize {
+        self.cds_index.codon_shift()
+    }
+
+    /// Returns whether an insertion is eligible to be shifted based solely on
+    /// its frame and length.
+    ///
+    /// The length of the insertion in CDS coordinates must be a multiple of
+    /// three, and frame must be non-zero.
+    fn eligible_for_shift(&self) -> bool {
+        self.frameshift() != 0 && self.len().is_multiple_of(3)
+    }
+}

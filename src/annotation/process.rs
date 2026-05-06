@@ -3,6 +3,7 @@
 
 use crate::{
     AlignmentStatesExt,
+    annotation::intersection,
     config::annotation_module::{AnnotationModule, ReferenceGroup},
     data::{
         QueryRecord,
@@ -62,7 +63,7 @@ impl<'a> AnnotationModule<'a> {
             for product in &ref_id_data.proteins {
                 // Validity: requirements met based on
                 // state_ranges_from_aligment guarantees
-                let mut product_ranges = product.make_product_ranges(&genome_aln_states);
+                let mut product_ranges = intersection::form_product(&genome_aln_states, product);
 
                 // Shift indels to fix their frames
                 product_ranges.fix_frames(&query);
@@ -207,7 +208,8 @@ impl<'a> AnnotationModule<'a> {
     /// if at most $L$ bases were clipped from both sequences on the right, then
     /// extend the alignment as well.
     ///
-    /// The score of the alignment is not altered.
+    /// The score of the alignment is not altered. The alignment may have match
+    /// states added and soft clipping removed, but no other changes will occur.
     fn rule_repairable_ends(&self, genome_aln: &mut Alignment<u32>) {
         if let Some(limit) = self.rules.repairable_end_limit {
             let unaligned_pre = genome_aln.query_range.start.min(genome_aln.ref_range.start);

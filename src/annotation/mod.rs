@@ -2,5 +2,6 @@
 //! annotation.
 
 mod fix_frames;
+mod intersection;
 mod materialize;
 mod process;
