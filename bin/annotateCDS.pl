@@ -136,7 +136,9 @@ sub addInsertionsBounded {
     foreach my $pos ( sort { $a <=> $b } keys( %{$inserts} ) ) {
 
         # 1 - based check
-        if ( ( $pos + $offset ) > $L || ( $pos + $offset ) < 1 ) { last; }
+        if ( ( $pos + $offset ) < 1 ) { next; }
+        if ( ( $pos + $offset ) > $L ) { last; }
+
         substr( $seq, $pos + $offset, 0, uc( $inserts->{$pos} ) );
         $offset += length( $inserts->{$pos} );
         $L = length($seq);
