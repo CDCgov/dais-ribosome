@@ -134,12 +134,11 @@ impl<'a> AnnotationModule<'a> {
         })
     }
 
-    /// If the alignment reaches the end of the reference but does not end in a
-    /// stop codon as expected, then attempts to represent any unaligned bases
-    /// at the tail of the query up until the first stop codon as an insertion.
+    /// Computes the stop extension if the [`list_contig_stop_extension`] rule
+    /// is set.
     ///
-    /// This insertion is called the stop extension. The stop codon that is
-    /// searched for must be in-frame.
+    /// [`list_contig_stop_extension`]:
+    ///     crate::config::toml::Rules::list_contig_stop_extension
     fn rule_stop_extension(&self, query: &QueryRecord, genome_aln: &Alignment<u32>) -> Option<InsertionRange> {
         // Note: This contains uppercase IUPAC, possibly with either U or T
         let query_seq = &query.nucleotides;
@@ -174,17 +173,13 @@ impl<'a> AnnotationModule<'a> {
     // Reference      --------------
     // Then this rule won't apply
 
-    /// If the `chew_to_start` rule is enabled, then handle the case when the
-    /// query is longer than the reference.
+    /// Applies the [`chew_to_start`] rule if it is set.
     ///
-    /// If a start codon can be found, such that excluding anything before the
-    /// start codon results in a query that is at least the length of the
-    /// reference, then slice the query to contain the start codon and
-    /// everything after it. The first value returned is the starting position
-    /// of the returned slice.
+    /// The first value returned is the starting index of the returned slice
+    /// within the query. If the rule cannot be applied or is not set, then the
+    /// full query is returned and with a starting index of 0.
     ///
-    /// If any of these conditions fail to hold, no shrinking occurs, and the
-    /// starting position of the returned slice is 0.
+    /// [`chew_to_start`]: crate::config::toml::Rules::chew_to_start
     fn rule_chew_to_start<'b>(
         &self, query: &'b QueryRecord, ref_id_data: &ReferenceGroup<'_>,
     ) -> (usize, NucleotidesView<'b>) {
@@ -200,16 +195,14 @@ impl<'a> AnnotationModule<'a> {
         }
     }
 
-    /// If the `repairable_end_limit` rule is enabled with a non-zero limit $L$,
-    /// then extend the ends of the alignment if they are within the limit.
-    ///
-    /// Specifically, if at most $L$ bases were clipped from both sequences on
-    /// the left, then extend the alignment to include these bases. Similarly,
-    /// if at most $L$ bases were clipped from both sequences on the right, then
-    /// extend the alignment as well.
+    /// Applies the repairable ends rule with the given limit in
+    /// [`repairable_end_limit`].
     ///
     /// The score of the alignment is not altered. The alignment may have match
     /// states added and soft clipping removed, but no other changes will occur.
+    ///
+    /// [`rule_repairable_ends`]:
+    ///     crate::config::toml::Rules::rule_repairable_ends
     fn rule_repairable_ends(&self, genome_aln: &mut Alignment<u32>) {
         if let Some(limit) = self.rules.repairable_end_limit {
             let unaligned_pre = genome_aln.query_range.start.min(genome_aln.ref_range.start);

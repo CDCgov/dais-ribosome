@@ -9,7 +9,7 @@ use std::{
     cmp::Ordering,
     collections::HashMap,
     fs::File,
-    io::{BufRead, BufReader, ErrorKind, Lines},
+    io::{BufRead, BufReader, Lines},
     iter::Enumerate,
     ops::Range,
     path::Path,
@@ -38,15 +38,14 @@ pub(crate) type CdsSpecMap = HashMap<RefKey, Vec<(String, Exons)>>;
 ///
 /// ## Errors
 ///
-/// Returns an error (without path context) if:
-///
-/// - The file cannot be read
-/// - A parsing error occurs on one of the lines (e.g., missing required field,
-///   invalid range, invalid residues in required beginning field, etc.)
+/// All IO errors are propagated without path context. Each row of the file must
+/// successfully parse using [`TsvRow::from_str`], and there must be at least
+/// one row. The length of the coding sequence (sum of all exon lengths) must be
+/// a multiple of 3.
 pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
     let reader = TsvReader::from_path(path)?;
 
-    let mut cds_specs: HashMap<RefKey, Vec<(String, Exons)>> = HashMap::new();
+    let mut cds_specs: CdsSpecMap = HashMap::new();
 
     for row in reader {
         let TsvRow {
@@ -54,22 +53,10 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
             protein,
             ctype,
             coords,
-            mut required_start,
+            required_start,
         } = row?;
 
-        // Standardize the required start
-        if let Some(codon) = &mut required_start {
-            for residue in codon {
-                let Some(new_residue) = residue.refine_base(RefineDNAStrat::AcgtNoGapsUc) else {
-                    return Err(std::io::Error::other(format!(
-                        "An invalid residue ({residue}) was found in the required beginning field. Expected any of ACGTUacgtu",
-                        residue = *residue as char
-                    )));
-                };
-                *residue = new_residue;
-            }
-        }
-
+        // Validity: coords is non-empty per TsvRow guarantees
         let cds_len = coords
             .last()
             .expect("The coords field of TsvRow should be non-empty")
@@ -99,7 +86,9 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
 
         // Validity: coords is non-empty, CDS length is multiple of 3, etc.
         let exons = Exons {
+            // Validity: this contains solely ACGT by TsvRow guarantees
             required_start,
+            // Validity: this is non-empty by TsvRow guarantees
             coords,
             overlapped_regions,
             noncoding_regions,
@@ -109,10 +98,12 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
         cds_specs.entry(key).or_default().push((protein, exons));
     }
 
+    if cds_specs.is_empty() {
+        return Err(std::io::Error::other("No specifications were found in the file"));
+    }
+
     Ok(cds_specs)
 }
-
-// TODO: Switch this to returning ModuleLoadError directly?
 
 /// The parsed data from a single row of the `cds-spec.tsv` file for the module.
 #[derive(Clone, Debug)]
@@ -139,14 +130,23 @@ struct TsvRow {
     coords: Vec<ExonCoords>,
 
     /// An optional required codon at the start in column 5 (e.g., `ATG`).
+    ///
+    /// The nucleotides will be in `ACGT`.
     required_start: Option<[u8; 3]>,
 }
 
 impl FromStr for TsvRow {
     type Err = std::io::Error;
 
-    /// Parses a string `line` to a [`TsvRow`]. The string must be trimmed and
-    /// non-empty, and should not be the header row or a commented line.
+    /// Parses a `line` to a [`TsvRow`]. The string must be trimmed and
+    /// non-empty, and not be the header row or a commented line.
+    ///
+    /// ## Errors
+    ///
+    /// If any of the first four columns are missing or empty, then an error is
+    /// returned. The exon coordinates must successfully parse using
+    /// [`parse_exon_coords`]. If provided, the required first codon must
+    /// contain exactly 3 nucleotides in `ACGTUacgtu`.
     fn from_str(line: &str) -> std::io::Result<Self> {
         // End the iterator on empty fields, so that missing field errors appear
         let mut parts = line.split('\t').map(str::trim_ascii).take_while(|s| !s.is_empty());
@@ -179,13 +179,26 @@ impl FromStr for TsvRow {
         // Parse optional required start codon
         let required_start = match required_start {
             Some(required_start) => {
+                // Validate length of codon
                 let mut codon: [u8; 3] = required_start.as_bytes().try_into().map_err(|_| {
                     std::io::Error::other(format!(
                         "If provided, Required Beginning must contain exactly 3 amino acids (not {})",
                         required_start.len()
                     ))
                 })?;
-                codon.make_ascii_uppercase();
+
+                // Attempt to recode ACGTUacgtu to ACGT
+                for residue in &mut codon {
+                    let Some(recoded) = residue.refine_base(RefineDNAStrat::AcgtNoGapsUc) else {
+                        return Err(std::io::Error::other(format!(
+                            "An invalid residue ({residue}) was found in the required beginning field. Expected any of ACGTUacgtu",
+                            residue = *residue as char
+                        )));
+                    };
+
+                    *residue = recoded;
+                }
+
                 Some(codon)
             }
             None => None,
@@ -195,7 +208,10 @@ impl FromStr for TsvRow {
             reference_id,
             protein,
             ctype,
+            // Validity: coords is non-empty since parse_exon_coords ensures
+            // this
             coords,
+            // Validity: we recoded to ACGT above
             required_start,
         })
     }
@@ -213,17 +229,17 @@ struct TsvReader {
 }
 
 impl TsvReader {
-    fn from_path(path: impl AsRef<Path>) -> std::io::Result<Self> {
-        let path = path.as_ref();
-        let file = File::open(path).with_path_context("Failed to open path", path)?;
-        let mut reader = std::io::BufReader::new(file);
-
-        if reader.fill_buf()?.is_empty() {
-            return Err(std::io::Error::new(
-                ErrorKind::InvalidData,
-                format!("No data was found at path {path}", path = path.display()),
-            ));
-        }
+    /// Opens a TSV reader for the CDS specifications file from a given path.
+    ///
+    /// No validation is performed to ensure the file is non-empty. Since the
+    /// file is slurped, this logic is handled after parsing.
+    ///
+    /// ## Errors
+    ///
+    /// IO errors opening the file are propagated without context.
+    fn from_path(path: &Path) -> std::io::Result<Self> {
+        let file = File::open(path)?;
+        let reader = std::io::BufReader::new(file);
 
         Ok(Self {
             lines: reader.lines().enumerate(),
@@ -234,6 +250,15 @@ impl TsvReader {
 impl Iterator for TsvReader {
     type Item = std::io::Result<TsvRow>;
 
+    /// Parses the next row of the CDS specifications file.
+    ///
+    /// The header row (any line beginning with "Reference ID") and commented
+    /// lines (those beginning with `#`) are skipped.
+    ///
+    /// ## Errors
+    ///
+    /// Any errors parsing the row with [`TsvRow::from_str`] are propagated with
+    /// context (including the line and line number).
     fn next(&mut self) -> Option<Self::Item> {
         let (line_idx, line) = self.lines.next()?;
         let line = unwrap_or_return_some_err!(line);
@@ -267,7 +292,7 @@ impl Iterator for TsvReader {
 /// - The ranges must be in order, with at most 2 nt of overlap
 /// - The ranges must not be perfectly adjacent (all ranges must either overlap
 ///   or have a non-coding region between them)
-/// - A single region of overlap cannot involve more than 2 ranges.
+/// - A single region of overlap cannot involve more than 2 ranges
 fn parse_exon_coords(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
     /// The maximum amount of overlap allowed between exons.
     ///

@@ -46,11 +46,6 @@ pub struct Cli {
     #[arg(short = 'T', long)]
     pub threads: Option<NonZero<usize>>,
 
-    // TODO: This does nothing
-    /// Write data as parquet files.
-    #[arg(short = 'q', long)]
-    pub output_parquet: bool,
-
     /// Automatically detect the array task id from SGE or Slurm environment
     /// variables and write partition files for downstream collation.
     ///
@@ -93,7 +88,6 @@ pub struct Args {
     pub output_prefix:        PathBuf,
     pub module:               String,
     pub threads:              Option<NonZero<usize>>,
-    pub output_parquet:       bool,
     pub submit_grid_job:      Option<usize>,
     pub verbose:              bool,
     pub assume_default_ctype: Option<String>,
@@ -167,7 +161,6 @@ impl GridCompatibleArgs for Args {
             output_prefix,
             module: cli.module,
             threads: cli.threads,
-            output_parquet: cli.output_parquet,
             submit_grid_job: cli.submit_grid_job,
             verbose: cli.verbose,
             assume_default_ctype: cli.assume_default_ctype,

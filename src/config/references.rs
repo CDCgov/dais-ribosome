@@ -18,11 +18,10 @@ use zoe::{
 ///
 /// ## Errors
 ///
-/// Returns an error if:
-///
-/// - The file cannot be read
-/// - A sequence name doesn't match the expected format
-pub fn load_references(path: &Path) -> Result<HashMap<RefKey, Vec<Nucleotides>>, std::io::Error> {
+/// All IO errors are propagated without path context. An error is also returned
+/// if a sequence name doesn't match the expected format, with context including
+/// the expected format and header.
+pub fn load_references(path: &Path) -> std::io::Result<HashMap<RefKey, Vec<Nucleotides>>> {
     let data = FastaReader::from_path(path)?;
     let mut refs = HashMap::new();
 

@@ -182,8 +182,6 @@ impl GenSeqFileParser<File> {
 impl<R: Read> GenSeqFileParser<R> {
     /// Creates a new [`GenSeqFileParser`] from a provided `readable` type.
     pub fn from_readable(readable: R) -> Self {
-        // TODO: Should we automatically detect headers? What process would add
-        // headers? What would they be? MIRA-oxide had a case with headers.
         Self {
             reader: ReaderBuilder::new().has_headers(false).delimiter(b'\t').from_reader(readable),
         }

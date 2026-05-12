@@ -121,8 +121,6 @@ impl AlignmentWeights {
     }
 }
 
-// TODO: What are these fields?
-
 /// Output formatting options for a module.
 ///
 /// Currently, all of these are related to padding on the right, which is not
@@ -137,7 +135,7 @@ pub struct Formatting {
     /// Whether to add right padding to the coding sequence.
     #[serde(default = "pad_default")]
     pub right_pad_cds: bool,
-    /// Whether to add right padding to the TODO.
+    /// Whether to add right padding to the genome alignment.
     #[serde(default = "pad_default")]
     pub right_pad_gen: bool,
 }
@@ -148,13 +146,46 @@ const fn pad_default() -> bool {
     true
 }
 
+/// Rules allowing customization of the annotation process.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Rules {
+    /// If the genome alignment reaches the end of the reference but does not
+    /// end in a stop codon as expected, then this rule causes the alignment to
+    /// be extended until the next in-frame stop codon. The extra bases are
+    /// represented as an insertion at the end of the genome and any products
+    /// extending to the end of the genome.
     #[serde(default)]
     pub list_contig_stop_extension: bool,
+
+    /// If the query does not start with a start codon, this rule will trim the
+    /// start of the query up to this start codon before carrying out alignment.
+    /// However, this trimming is only applied if the length of the query is at
+    /// least the length of the reference (i.e., it is feasible that the query
+    /// just has extra non-coding state on the left compared to the reference).
+    ///
+    /// This rule is designed to help reduce the complexity of the alignment
+    /// that is formed. The trimmed bases may be re-added if the
+    /// `repairable_end_limit` rule is enabled.
     #[serde(default)]
-    pub chew_to_start:              bool,
-    pub repairable_end_limit:       Option<usize>,
+    pub chew_to_start: bool,
+
+    // TODO: Can we use usize with #[serde(default)]?
+    /// If there are soft clipped nucleotides within the specified limit on
+    /// either side of the alignment, then extend the alignment with match
+    /// states to add them.
+    ///
+    /// When mismatches are present near either end of the query/reference,
+    /// local alignment can cause the ends of the query/reference to not be
+    /// included. This method _decreases_ the optimality of the alignment from a
+    /// Smith-Waterman standpoint, but may produce better products or genome
+    /// alignments.
+    ///
+    /// Specifically, to extend the alignment on a side, either the number of
+    /// clipped bases in the query _or_ the number of clipped bases in the
+    /// reference must be at most the specified limit.
+    ///
+    /// This rule may add back the bases removed by `chew_to_start`.
+    pub repairable_end_limit: Option<usize>,
 }
 
 // TODO: Should we be negating the mismatch penalty too when parsing?

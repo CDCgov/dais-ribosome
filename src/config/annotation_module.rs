@@ -52,6 +52,22 @@ pub struct AnnotationModule<'a> {
 }
 
 impl<'a> AnnotationModule<'a> {
+    /// Creates a new [`AnnotationModule`] from the parsed TOML file by reading
+    /// the references, specs, and other module files.
+    ///
+    /// ## Panics
+    ///
+    /// The `toml_path` must have a parent.
+    ///
+    /// ## Errors
+    ///
+    /// - The requested `module_name` must be present in the config.
+    /// - The reference file in the config must exist within the module's folder
+    ///   and be parsed successfully (see [`load_references`]).
+    /// - The codon position weights file must exist within the module's folder
+    ///   and be parsed successfully (see [`load_codon_weights`]).
+    /// - The CDS specifications file must exist within the module's folder and
+    ///   be parsed successfully (see [`load_cds_spec`]).
     pub fn new(config: &'a TomlConfig, toml_path: &Path, module_name: &str) -> std::io::Result<AnnotationModule<'a>> {
         // Get path to ribosome_res directory
         let modules_dir = toml_path

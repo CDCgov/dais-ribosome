@@ -5,7 +5,7 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet, hash_map::Entry},
     fs::File,
-    io::{BufRead, ErrorKind},
+    io::BufRead,
     path::Path,
     str::FromStr,
     sync::LazyLock,
@@ -163,22 +163,19 @@ pub(crate) static DEFAULT_CODON_STATS: LazyLock<HashMap<[u8; 3], u32>> = LazyLoc
 /// ...
 /// ```
 ///
+/// If the file is empty, then the resulting [`CodonWeightMatrix`] will also be
+/// empty.
+///
 /// ## Errors
 ///
-/// Returns an error if:
-///
-/// - The file cannot be read
-/// - A section header is malformed
-pub fn load_codon_weights(path: &Path) -> Result<CodonWeightMatrix, std::io::Error> {
-    let file = File::open(path).with_path_context("Failed to open path", path)?;
-    let mut reader = std::io::BufReader::new(file);
-
-    if reader.fill_buf()?.is_empty() {
-        return Err(std::io::Error::new(
-            ErrorKind::InvalidData,
-            format!("No data was found at path {path}", path = path.display()),
-        ));
-    }
+/// All IO errors are propagated without path context. Headers (lines containing
+/// `|`) must successfully parse. If any headers fail to parse, an error is
+/// returned with context including the line and the expected format. Each TSV
+/// row must parse successfully, and there should be no duplicate position/codon
+/// pairs.
+pub fn load_codon_weights(path: &Path) -> std::io::Result<CodonWeightMatrix> {
+    let file = File::open(path)?;
+    let reader = std::io::BufReader::new(file);
 
     let mut all_matrices = HashMap::new();
     let mut current_weights = CodonPositionWeights::new();
@@ -269,17 +266,19 @@ struct TsvRow {
     raw_codon: [u8; 3],
 }
 
-// TODO: We should validate that the code is only ACTG, or specify what
-// behavior is otherwise. For example, RTC codon appears in
-// flu-codon-position-weights.tsv, which will never match.
-
 impl FromStr for TsvRow {
     type Err = std::io::Error;
 
-    /// Parses a string `line` to a [`TsvRow`]. The string must be trimmed and
+    /// Parses a `line` to a [`TsvRow`]. The string must be trimmed and
     /// non-empty, and should not be a header row.
     ///
     /// The codons are converted to uppercase, and `U` is substituted for `T`.
+    ///
+    /// ## Errors
+    ///
+    /// If any of the columns are missing or empty, then an error is returned.
+    /// The position and count must successfully parse as `u32`, and the codon
+    /// must be three characters.
     fn from_str(line: &str) -> Result<Self, Self::Err> {
         // End the iterator on empty fields, so that missing field errors appear
         let mut parts = line.split_ascii_whitespace().take_while(|s| !s.is_empty());

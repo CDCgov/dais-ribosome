@@ -27,7 +27,6 @@ impl From<String> for UnimplementedCtype {
 #[derive(Debug)]
 pub enum RibosomeError {
     UnimplementedCtype(UnimplementedCtype),
-    EmptyFile(std::path::PathBuf),
     Io(std::io::Error),
 }
 
@@ -47,7 +46,6 @@ impl GetCode for RibosomeError {
         match self {
             RibosomeError::UnimplementedCtype(e) => e.get_code(),
             RibosomeError::Io(e) => e.get_code(),
-            RibosomeError::EmptyFile(_) => 66, // EX_NOINPUT
         }
     }
 }
@@ -57,7 +55,6 @@ impl std::fmt::Display for RibosomeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RibosomeError::UnimplementedCtype(e) => write!(f, "{e}"),
-            RibosomeError::EmptyFile(p) => write!(f, "Empty file: {}", p.display()),
             RibosomeError::Io(e) => write!(f, "{e}"),
         }
     }

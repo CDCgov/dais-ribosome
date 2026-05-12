@@ -3,7 +3,7 @@
 //! The file is opened only once.
 
 use crate::{ClassificationStrategy, app::log::time_stamp};
-use dais_ribosome::{NoNucleotides, QueryRecord, errors::RibosomeError};
+use dais_ribosome::{NoNucleotides, QueryRecord};
 use sswsort::{ClassificationResult, Strand};
 use std::{
     error::Error,
@@ -117,12 +117,13 @@ pub struct QueryInfo {
 
 impl QueryInfo {
     /// Converts the [`QueryInfo`] into a [`QueryRecord`] by classifying the
-    /// ctype using SSWSort if needed. If the reverse strand is aligned against,
-    /// then the reverse complement of the sequence is taken.
+    /// ctype using the given [`ClassificationStrategy`] if needed. If the
+    /// reverse strand is aligned against, then the reverse complement of the
+    /// sequence is taken.
     ///
     /// ## Errors
     ///
-    /// If `module` is not available and the `ctype` field of the query is
+    /// If `classification` is `None` and the `ctype` field of the query is
     /// missing, then [`NoCtype`] is returned.
     pub fn classify_and_prepare(
         mut self, classification: &Option<ClassificationStrategy>, verbose: bool,
@@ -176,7 +177,11 @@ pub struct FastaQueryIter {
 
 impl FastaQueryIter {
     /// Constructs a [`FastaQueryIter`] from an existing [`BufReader`].
-    fn from_bufreader(buf: BufReader<File>) -> Result<Self, RibosomeError> {
+    ///
+    /// ## Errors
+    ///
+    /// See [`FastaReader::from_bufreader`].
+    fn from_bufreader(buf: BufReader<File>) -> std::io::Result<Self> {
         let reader = FastaReader::from_bufreader(buf)?;
         Ok(Self { reader })
     }
@@ -314,15 +319,21 @@ define_whichever! {
 }
 
 impl QueryReader {
-    /// Open `path`, peek at the first byte to detect format, and return
-    /// the appropriate reader.
-    pub fn from_path(path: &Path) -> Result<Self, RibosomeError> {
+    /// Open `path`, peek at the first byte to detect format, and return the
+    /// appropriate reader.
+    ///
+    /// ## Errors
+    ///
+    /// IO errors are propagated without context. An error is also returned if
+    /// the file is empty, since the file is streamed in DAIS-ribosome and this
+    /// error would not otherwise be detected.
+    pub fn from_path(path: &Path) -> std::io::Result<Self> {
         let file = File::open(path).with_path_context("Failed to open file", path)?;
 
         let mut buffer = BufReader::new(file);
 
         match *buffer.peek(1)? {
-            [] => Err(RibosomeError::EmptyFile(path.to_path_buf())),
+            [] => Err(std::io::Error::other("The file is empty")),
             [b'>', ..] => Ok(QueryReader::Fasta(FastaQueryIter::from_bufreader(buffer)?)),
             _ => Ok(QueryReader::Tsv(TsvQueryIter::from_bufreader(buffer))),
         }

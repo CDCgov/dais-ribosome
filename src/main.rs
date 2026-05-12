@@ -68,7 +68,10 @@ fn main() {
     };
 
     // Initialize an iterator over the input queries
-    let queries = QueryReader::from_path(&args.data_file).unwrap_or_fail();
+    let queries = QueryReader::from_path(&args.data_file)
+        .with_path_context("Failed to open query file", args.data_file)
+        .map_err(std::io::Error::from)
+        .unwrap_or_fail();
 
     // Open the writers
     let (seq, ins, del) = args.product_output;
@@ -220,8 +223,6 @@ pub enum ProcessingError {
     /// A ctype was not specified in an input file, and no classification
     /// strategy was specified.
     NoCtype(NoCtype),
-    /// A file was empty.
-    EmptyFile(std::path::PathBuf),
     /// Any other error that may have occurred.
     Io(std::io::Error),
 }
@@ -242,7 +243,6 @@ impl Display for ProcessingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ProcessingError::NoCtype(e) => e.fmt(f),
-            ProcessingError::EmptyFile(p) => write!(f, "Empty file: {}", p.display()),
             ProcessingError::Io(e) => e.fmt(f),
         }
     }
@@ -252,7 +252,6 @@ impl Error for ProcessingError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             ProcessingError::NoCtype(e) => e.source(),
-            ProcessingError::EmptyFile(_) => None,
             ProcessingError::Io(e) => e.source(),
         }
     }
@@ -262,7 +261,6 @@ impl GetCode for ProcessingError {
     fn get_code(&self) -> i32 {
         match self {
             ProcessingError::NoCtype(e) => e.get_code(),
-            ProcessingError::EmptyFile(_) => 66, // EX_NOINPUT
             ProcessingError::Io(e) => e.get_code(),
         }
     }
@@ -290,7 +288,6 @@ where
                 unimplemented_ctypes.insert(ctype);
                 continue;
             }
-            Err(RibosomeError::EmptyFile(e)) => return Err(ProcessingError::EmptyFile(e)),
             Err(RibosomeError::Io(e)) => return Err(ProcessingError::Io(e)),
         };
 
@@ -350,7 +347,6 @@ where
                     None
                 }
                 Err(RibosomeError::UnimplementedCtype(e)) => Some(Ok(e)),
-                Err(RibosomeError::EmptyFile(e)) => Some(Err(ProcessingError::EmptyFile(e))),
                 Err(RibosomeError::Io(e)) => Some(Err(ProcessingError::Io(e))),
             }
         })
