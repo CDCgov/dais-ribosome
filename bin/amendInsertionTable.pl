@@ -91,7 +91,16 @@ my %gc = (
     'TCH'=>'S','TCK'=>'S','TCM'=>'S','TCN'=>'S','TCR'=>'S','TCS'=>'S','TCT'=>'S','TCV'=>'S','TCW'=>'S','TCY'=>'S','ACA'=>'T',
     'ACB'=>'T','ACC'=>'T','ACD'=>'T','ACG'=>'T','ACH'=>'T','ACK'=>'T','ACM'=>'T','ACN'=>'T','ACR'=>'T','ACS'=>'T','ACT'=>'T',
     'ACV'=>'T','ACW'=>'T','ACY'=>'T','GTA'=>'V','GTB'=>'V','GTC'=>'V','GTD'=>'V','GTG'=>'V','GTH'=>'V','GTK'=>'V','GTM'=>'V',
-    'GTN'=>'V','GTR'=>'V','GTS'=>'V','GTT'=>'V','GTV'=>'V','GTW'=>'V','GTY'=>'V','TGG'=>'W','TAC'=>'Y','TAT'=>'Y','TAY'=>'Y'
+    'GTN'=>'V','GTR'=>'V','GTS'=>'V','GTT'=>'V','GTV'=>'V','GTW'=>'V','GTY'=>'V','TGG'=>'W','TAC'=>'Y','TAT'=>'Y','TAY'=>'Y',
+
+    'UAA'=>'*','UAG'=>'*','UAR'=>'*','UGA'=>'*','URA'=>'*','GCU'=>'A','UGC'=>'C','UGU'=>'C','UGY'=>'C','GAU'=>'D','UUC'=>'F',
+    'UUU'=>'F','UUY'=>'F','GGU'=>'G','CAU'=>'H','AUA'=>'I','AUC'=>'I','AUH'=>'I','AUM'=>'I','AUU'=>'I','AUW'=>'I','AUY'=>'I',
+    'CUA'=>'L','CUB'=>'L','CUC'=>'L','CUD'=>'L','CUG'=>'L','CUH'=>'L','CUK'=>'L','CUM'=>'L','CUN'=>'L','CUR'=>'L','CUS'=>'L',
+    'CUU'=>'L','CUV'=>'L','CUW'=>'L','CUY'=>'L','UUA'=>'L','UUG'=>'L','UUR'=>'L','YUA'=>'L','YUG'=>'L','YUR'=>'L','AUG'=>'M',
+    'AAU'=>'N','CCU'=>'P','CGU'=>'R','AGU'=>'S','UCA'=>'S','UCB'=>'S','UCC'=>'S','UCD'=>'S','UCG'=>'S','UCH'=>'S','UCK'=>'S',
+    'UCM'=>'S','UCN'=>'S','UCR'=>'S','UCS'=>'S','UCU'=>'S','UCV'=>'S','UCW'=>'S','UCY'=>'S','ACU'=>'T','GUA'=>'V','GUB'=>'V',
+    'GUC'=>'V','GUD'=>'V','GUG'=>'V','GUH'=>'V','GUK'=>'V','GUM'=>'V','GUN'=>'V','GUR'=>'V','GUS'=>'V','GUU'=>'V','GUV'=>'V',
+    'GUW'=>'V','GUY'=>'V','UGG'=>'W','UAC'=>'Y','UAU'=>'Y','UAY'=>'Y'
 );
 #>>>
 
