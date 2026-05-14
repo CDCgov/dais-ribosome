@@ -90,9 +90,13 @@ function install() {
     local repo=$1
     local namespace=${2:-"flu-informatics"}
     local server=${3:-"git.biotech.cdc.gov"}
-    local pinned_tag="R1.7.0"
+    local pinned_tag="R1.7.1"
     if [ "$repo" == "sswsort" ]; then
         pinned_tag="v1.6.3"
+    fi
+
+    if [ "$repo" == "sampling" ]; then
+        pinned_tag="R1.7.0"
     fi
 
     cd "$libp" || die "Bad directory $libp"

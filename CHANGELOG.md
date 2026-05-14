@@ -1,5 +1,13 @@
 # DAIS-RIBOSOME Change Log
 
+## v1.7.1 (2026.05.14)
+
+- **Fixes**:
+  - Fixes a bug where some insertions after the first may not be spliced into the unaligned sequence properly
+  - The translation of insertions now supports `U`
+  - An out-of-frame deletion that occurs within 3 bases of another is properly shifted
+  - Partially fixes a bug where trailing insertions appear at the end of a product. **It is a known bug that in some cases, an insertion still may appear after a stop codon in the aligned CDS sequence for a product. This will be resolved in DAIS-ribosome v2**
+
 ## v1.7.0 (2026.04.23)
 
 - **Feature**:
