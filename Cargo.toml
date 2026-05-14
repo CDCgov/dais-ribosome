@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 rayon = "1"
-toml = "0.9"
+toml = "1.1"
 serde = "1"
 serde_derive = "1"
 
@@ -16,7 +16,7 @@ zoe = { version = "0.0.28", default-features = false, features = [
 ] }
 sha1_smol = "1"
 md5 = "0.8"
-getrandom = "0.3.4"
+getrandom = "0.4"
 jiff = "0.2.18"
 
 [[bin]]
