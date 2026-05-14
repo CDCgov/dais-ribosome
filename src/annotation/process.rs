@@ -37,12 +37,12 @@ impl<'a> AnnotationModule<'a> {
 
             for product in ref_id_data.iter_proteins() {
                 let mut product_ranges = product.make_product_ranges(&genome_aln_states);
-                if product_ranges.missing_required_start(&query_seq) {
+                if product_ranges.missing_required_start(query_seq) {
                     continue;
                 }
 
                 product_ranges.condense_deletions();
-                product_ranges.fix_frames(&query_seq);
+                product_ranges.fix_frames(query_seq);
                 product_ranges.add_query_coords(query_ori_offset);
 
                 products.push(product_ranges);

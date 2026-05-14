@@ -1,42 +1,22 @@
-//! Sequence hashing utilities ported from `Omics::Nucleotide` and `Omics::AminoAcids`.
+//! Sequence hashing utilities ported from `Omics::Nucleotide` and
+//! `Omics::AminoAcids` in `ifx-perl`
 
-use zoe::data::{RetainSequence, nucleotides::Nucleotides, types::amino_acids::AminoAcids};
+use zoe::data::{ByteMap, RetainSequence, nucleotides::Nucleotides, types::amino_acids::AminoAcids};
 
-/// Filters and uppercases nucleotides; removes `\n\r\t :.~-`.
-const NT_HASH_FILTER: [u8; 256] = {
-    let mut map = [0u8; 256];
-    let mut i = 0;
-    while i < 256 {
-        map[i] = match i as u8 {
-            // Characters to remove
-            b'\n' | b'\r' | b'\t' | b' ' | b':' | b'.' | b'~' | b'-' => 0,
-            // Lowercase letters -> uppercase
-            b'a'..=b'z' => (i as u8) - 32,
-            // Everything else passes through
-            c => c,
-        };
-        i += 1;
-    }
-    map
-};
+/// A transformation mapping for use with [`retain_by_recoding`] which
+/// uppercases amino acids and filters `\n\r\t :.-` (keeps `~` for partial
+/// codons).
+///
+/// [`retain_by_recoding`]: RetainSequence::retain_by_recoding
+const AA_HASH_FILTER: ByteMap = ByteMap::identity()
+    .map_to_one(b"\n\r\t :.-", 0)
+    .map_range(b'a'..=b'z', b'A'..=b'Z');
 
-/// Filters and uppercases amino acids; removes `\n\r\t :.-` (keeps `~` for partial codons).
-const AA_HASH_FILTER: [u8; 256] = {
-    let mut map = [0u8; 256];
-    let mut i = 0;
-    while i < 256 {
-        map[i] = match i as u8 {
-            // Characters to remove
-            b'\n' | b'\r' | b'\t' | b' ' | b':' | b'.' | b'-' => 0,
-            // Lowercase letters -> uppercase
-            b'a'..=b'z' => (i as u8) - 32,
-            // Everything else passes through (including ~)
-            c => c,
-        };
-        i += 1;
-    }
-    map
-};
+/// A transformation mapping for use with [`retain_by_recoding`] which
+/// uppercases nucleotides and filters `\n\r\t :.~-`.
+///
+/// [`retain_by_recoding`]: RetainSequence::retain_by_recoding
+const NT_HASH_FILTER: ByteMap = AA_HASH_FILTER.map_to_one(b"~", 0);
 
 /// Returns SHA1 hex of uppercased sequence with `\n\r\t :.~-` removed.
 #[inline]

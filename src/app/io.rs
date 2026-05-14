@@ -17,7 +17,7 @@ pub fn open_writer(path: &Option<PathBuf>, extension: &str) -> Result<BufWriter<
         new_path.add_extension(extension);
         &new_path
     });
-    let f = File::create(p).with_file_context(format!("Could not open writer for {extension} file"), p)?;
+    let f = File::create(p).with_path_context(format!("Could not open writer for {extension} file"), p)?;
     Ok(BufWriter::new(f))
 }
 
@@ -25,15 +25,15 @@ pub fn optional_writers(path: &Option<PathBuf>) -> Result<Option<Writers>, Ribos
     if let Some(p) = path {
         let mut p = p.clone();
         p.set_extension("gen_seq.txt");
-        let seq = BufWriter::new(File::create(&p).with_file_context("Could not open writer for genome sequence file", &p)?);
+        let seq = BufWriter::new(File::create(&p).with_path_context("Could not open writer for genome sequence file", &p)?);
         p.set_extension("gen_ins.txt");
-        let ins = BufWriter::new(File::create(&p).with_file_context(
+        let ins = BufWriter::new(File::create(&p).with_path_context(
             format!("Could not open writer for genome insertion file: {}", p.display()),
             &p,
         )?);
 
         p.set_extension("gen_del.txt");
-        let del = BufWriter::new(File::create(&p).with_file_context("Could not open writer for genome deletion file", &p)?);
+        let del = BufWriter::new(File::create(&p).with_path_context("Could not open writer for genome deletion file", &p)?);
 
         Ok(Some(Writers { seq, ins, del }))
     } else {

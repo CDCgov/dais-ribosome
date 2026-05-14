@@ -16,7 +16,7 @@ impl CtypeExons {
         debug_assert!(
             total_cds_length.is_multiple_of(3),
             "{} product was not in-frame: {total_cds_length}",
-            &self.ctype
+            self.ctype
         );
 
         (

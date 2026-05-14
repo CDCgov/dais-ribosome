@@ -20,7 +20,7 @@ pub type ReferenceMap = HashMap<RefKey, Vec<Nucleotides>>;
 /// - The file cannot be read
 /// - A sequence name doesn't match the expected format
 pub fn load_references(path: &Path) -> Result<ReferenceMap, std::io::Error> {
-    let data = FastaReader::from_filename(path)?;
+    let data = FastaReader::from_path(path)?;
     let mut refs = HashMap::new();
 
     for r in data {

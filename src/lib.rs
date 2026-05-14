@@ -1,4 +1,4 @@
-#![feature(try_trait_v2, int_format_into)]
+#![feature(int_format_into)]
 
 // =============================================================================
 // Module hierarchy

@@ -21,7 +21,7 @@ impl<'a> AnnotationModule<'a> {
     pub fn suggest_modules_for_compound_types(&self, mut compound_types: HashSet<String>) -> HashMap<&str, Vec<String>> {
         let mut found: HashMap<&str, Vec<String>> = HashMap::new();
         for (module_name, ref_path) in &self.data.other_modules {
-            if let Ok(reader) = FastaReader::from_filename(ref_path) {
+            if let Ok(reader) = FastaReader::from_path(ref_path) {
                 for fasta_result in reader.flatten() {
                     if let Some(key) = RefKey::parse(&fasta_result.name)
                         && let Some(ctype) = compound_types.take(&key.compound_type)

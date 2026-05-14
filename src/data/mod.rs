@@ -24,8 +24,8 @@ use std::{fs::File, io, path::Path};
 pub(crate) struct TSVReader;
 
 impl TSVReader {
-    /// Open a file, returning an error if the file is empty.
+    /// Open a file, returning an error if the file is empty. TODO: Remove this
     pub fn open_nonempty_file(path: &Path) -> io::Result<File> {
-        zoe::data::err::open_nonempty_file(path)
+        File::open(path)
     }
 }

@@ -34,7 +34,7 @@ pub fn load_cds_spec(path: &Path) -> Result<CdsSpecMap, std::io::Error> {
     let mut result = HashMap::new();
 
     for line in reader.lines() {
-        let line = line.with_file_context("line read failed", path)?;
+        let line = line.with_path_context("line read failed", path)?;
         let line = line.trim();
 
         // Skip empty lines and headers

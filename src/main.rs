@@ -42,7 +42,7 @@ fn process_queries(
     path: &Path, annotation_module: &AnnotationModule, args: &Args, mut writers: Writers, mut gen_writers: Option<Writers>,
 ) -> Result<(), RibosomeError> {
     log::ts("started, processing data");
-    let queries = FastaReader::from_filename(path)?;
+    let queries = FastaReader::from_path(path)?;
 
     let mut unimplemented_ctypes = HashSet::new();
 
