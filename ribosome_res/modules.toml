@@ -16,8 +16,8 @@ chew_to_start = true
 repairable_end_limit = 9
 
 [module.alignment]
-default = { match = 14, mismatch = -1, gap_open = 40, gap_extend = 1 }
-B_HA = { match = 10, mismatch = -1, gap_open = 50, gap_extend = 1 }
+default = { match = 14, mismatch = 1, gap_open = 40, gap_extend = 1 }
+B_HA = { match = 10, mismatch = 1, gap_open = 50, gap_extend = 1 }
 
 [[module]]
 name = "cov"
@@ -35,7 +35,7 @@ chew_to_start = true
 repairable_end_limit = 9
 
 [module.alignment]
-default = { match = 1, mismatch = -1, gap_open = 8, gap_extend = 1 }
+default = { match = 1, mismatch = 1, gap_open = 8, gap_extend = 1 }
 
 [[module]]
 name = "rsv"
@@ -52,4 +52,4 @@ right_pad_cds = true
 chew_to_start = true
 
 [module.alignment]
-default = { match = 1, mismatch = -1, gap_open = 10, gap_extend = 1 }
+default = { match = 1, mismatch = 1, gap_open = 10, gap_extend = 1 }

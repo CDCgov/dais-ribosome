@@ -12,6 +12,11 @@ use std::{
 use zoe::data::{WeightMatrix, err::ResultWithErrorContext};
 
 /// Root configuration structure parsed from `modules.toml`.
+///
+/// ## Notes
+///
+/// The alignment parameters specified for mismatch, gap open, and gap extend
+/// are automatically converted to non-positive.
 #[derive(Debug, Clone, Deserialize)]
 pub struct TomlConfig {
     #[serde(rename = "module")]
@@ -69,7 +74,7 @@ pub struct ConfiguredModule {
     /// The file name for the FASTA file containing the references. This should
     /// be a relative path within the module folder.
     pub references:       PathBuf,
-    // TODO: What is this?
+    // The path containing the codon position weights.
     pub weights:          PathBuf,
     /// The file name for the TSV file containing the coding sequence (CDS)
     /// specifications. This should be a relative path within the module folder.
@@ -77,10 +82,12 @@ pub struct ConfiguredModule {
     /// The alignment method to use.
     #[serde(default)]
     pub alignment_method: AlignmentMethod,
-    // TODO: What is this?
+    /// The output formatting options.
     pub formatting:       Formatting,
-    // TODO: What is this?
+    /// Rules allowing customization of the annotation process.
     pub rules:            Rules,
+    /// Collection of alignment weights for the module (and specific compound
+    /// types within it).
     pub alignment:        AlignmentWeights,
 }
 
@@ -188,8 +195,6 @@ pub struct Rules {
     pub repairable_end_limit: Option<usize>,
 }
 
-// TODO: Should we be negating the mismatch penalty too when parsing?
-
 /// A helper type for parsing [`AlignmentParams`] that does not impose any
 /// conditions or checking on the integers.
 #[derive(Deserialize)]
@@ -197,21 +202,28 @@ struct AlignmentParamsRaw {
     /// The score for a match
     #[serde(rename = "match")]
     match_score: i8,
-    /// The score for a mismatch (not negated during parsing)
-    mismatch:    i8,
-    /// The penalty for opening a gap, guaranteed to be negative or 0
-    #[serde(deserialize_with = "deserialize_gap_penalty")]
-    gap_open:    i8,
-    /// The penalty for extending a gap, guaranteed to be negative or 0
-    #[serde(deserialize_with = "deserialize_gap_penalty")]
-    gap_extend:  i8,
+
+    /// The score for a mismatch, guaranteed to be non-positive
+    #[serde(deserialize_with = "deserialize_penalty")]
+    mismatch: i8,
+
+    /// The score for opening a gap, guaranteed to be non-positive
+    #[serde(deserialize_with = "deserialize_penalty")]
+    gap_open: i8,
+
+    /// The score for extending a gap, guaranteed to be non-positive
+    #[serde(deserialize_with = "deserialize_penalty")]
+    gap_extend: i8,
 }
 
-/// Alignment scoring parameters.
+/// The alignment scoring parameters.
 #[derive(Debug, Clone)]
 pub struct AlignmentParams {
+    /// The weight matrix for alignment, with a non-positive mismatch score
     pub matrix:     WeightMatrix<'static, i8, 5>,
+    /// The score for opening a gap, guaranteed to be non-positive
     pub gap_open:   i8,
+    /// The score for extending a gap, guaranteed to be non-positive
     pub gap_extend: i8,
 }
 
@@ -235,14 +247,14 @@ impl<'de> Deserialize<'de> for AlignmentParams {
     }
 }
 
-/// Deserializes a gap penalty, validating the range and normalizing to be
-/// non-positive.
+/// Deserializes an alignment penalty, validating the range and normalizing to
+/// be non-positive.
 ///
 /// ## Errors
 ///
-/// If the gap penalty is -128, then an error is thrown since this is out of the
+/// If the penalty is -128, then an error is thrown since this is out of the
 /// range *Zoe* can handle.
-fn deserialize_gap_penalty<'de, D>(deserializer: D) -> Result<i8, D::Error>
+fn deserialize_penalty<'de, D>(deserializer: D) -> Result<i8, D::Error>
 where
     D: serde::Deserializer<'de>, {
     let value: i8 = Deserialize::deserialize(deserializer)?;

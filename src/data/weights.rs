@@ -153,7 +153,7 @@ pub(crate) static DEFAULT_CODON_STATS: LazyLock<HashMap<[u8; 3], u32>> = LazyLoc
     ])
 });
 
-/// Load codon position weight matrices from a TSV file.
+/// Loads the codon position weights from a TSV file.
 ///
 /// The file format uses pipe-delimited headers to start new sections:
 ///
