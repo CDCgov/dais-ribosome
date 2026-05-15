@@ -1,5 +1,5 @@
 use crate::{
-    config::{product_spec::ProductSpec, toml::Formatting},
+    config::{ProductSpec, toml::Formatting},
     data::{
         QueryRecord,
         ranges::{CdsStateRange, InsertionIdx, StateRange},

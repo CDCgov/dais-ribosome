@@ -3,7 +3,7 @@ use std::ops::Range;
 use crate::ranges::{InsertionIdx, RangeExt};
 
 /// Exon specification for a protein product (ctype stripped).
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct Exons {
     /// The optionally required codon which must be present at the start of the
     /// alignment in order for the product to be included.

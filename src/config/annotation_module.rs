@@ -9,8 +9,8 @@
 
 use crate::{
     config::{
+        ProductSpec,
         cds_spec::{CdsSpecMap, load_cds_spec},
-        product_spec::ProductSpec,
         references::load_references,
     },
     data::{

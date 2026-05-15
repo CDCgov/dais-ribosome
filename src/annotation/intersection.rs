@@ -2,7 +2,7 @@
 //! ([`Exons`]) in order to form a [`Product`].
 
 use crate::{
-    config::product_spec::ProductSpec,
+    config::ProductSpec,
     data::exons::{ExonCoords, Exons},
     error,
     outputs::Product,

@@ -44,7 +44,10 @@
 //! used to pick the most probably direction. The algorithm mirrors the logic in
 //! `codonCorrectStats.pl`, albeit for coordinate math instead of strings.
 //!
-//! TODO: Discuss default fallback behavior for ties or non-existent stats
+//! In the case of a tie, the direction is picked that minimizes the size of the
+//! shift. If the indel occurs after the first base in a codon, then it is
+//! shifted left. If the indel occurs after the second base in a codon, then it
+//! is shifted right.
 //!
 //! ## Deletion Merging
 //!
@@ -62,13 +65,17 @@
 
 use crate::{
     QueryRecord,
-    config::product_spec::ProductSpec,
+    config::ProductSpec,
+    data::weights::DEFAULT_CODON_STATS,
     error,
     outputs::Product,
     ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, CdsStateRange, RangeExt},
     warn,
 };
 use std::cmp::Ordering;
+
+#[cfg(test)]
+mod test;
 
 impl<'a> Product<'a> {
     /// The procedure for fixing the frames of all the eligible indels.
@@ -639,6 +646,7 @@ fn validate_ins_merge(ins1: &CdsInsertionRange, ins2: &CdsInsertionRange) {
 }
 
 /// The chosen direction to shift an out-of-frame indel.
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 enum ShiftDir {
     /// The indel should be shifted left (causing 1-2 match states to move
     /// right).
@@ -805,55 +813,8 @@ fn pick_insertion_shift(
         (true, true) => {}
     }
 
-    let codon_position = ins.cds_index.to_aa_idx().right_pos();
-    let insert_seq = &query.nucleotides[ins.query_range.clone()];
-
-    if frameshift == 2 {
-        let [i1, .., i2, i3] = *insert_seq else {
-            return None;
-        };
-
-        let cp1 = query.nucleotides[left_match.query_range.end - 2];
-        let cp2 = query.nucleotides[left_match.query_range.end - 1];
-        let cp3 = query.nucleotides[right_match.query_range.start];
-
-        // Codon formed by shifting insertion right 1
-        let a2r1 = build_discontiguous_codon(cp1, cp2, i1);
-        // Codon formed by shifting insertion left 2
-        let a2l2 = build_discontiguous_codon(i2, i3, cp3);
-
-        // TODO: What about N vs X
-        // Validity: The codons are uppercase because they are derived from
-        // bases in query
-        if product_spec.codon_left_ge_right(a2r1, a2l2, codon_position as u32) {
-            Some(ShiftDir::Right)
-        } else {
-            Some(ShiftDir::Left)
-        }
-    } else if frameshift == 1 {
-        let [i1, i2, .., i3] = *insert_seq else {
-            return None;
-        };
-
-        let cp1 = query.nucleotides[left_match.query_range.end - 1];
-        let cp2 = query.nucleotides[right_match.query_range.start];
-        let cp3 = query.nucleotides[right_match.query_range.start + 1];
-
-        // Codon formed by shifting insertion right 2
-        let a1r2 = build_discontiguous_codon(cp1, i1, i2);
-        // Codon formed by shifting insertion left 1
-        let a1l1 = build_discontiguous_codon(i3, cp2, cp3);
-
-        // Validity: build_discontiguous_codon ensures validity requirements
-        // are met
-        if product_spec.codon_left_ge_right(a1l1, a1r2, codon_position as u32) {
-            Some(ShiftDir::Left)
-        } else {
-            Some(ShiftDir::Right)
-        }
-    } else {
-        None
-    }
+    // Both shifts are possible, so use codon weights to pick
+    pick_ins_shift_with_stats(left_match, ins, right_match, query, product_spec)
 }
 
 /// Picks the direction to shift a deletion if it is out of frame, or
@@ -1012,63 +973,122 @@ fn pick_deletion_shift(
         (true, true) => {}
     }
 
-    // Both shifts are possible, so get the codon positions (1-based) at the
-    // boundaries of the deletion for table checking
+    // Both shifts are possible, so use codon weights to pick
+    pick_del_shift_with_stats(left_match, del, right_match, query, product_spec)
+}
+
+fn pick_del_shift_with_stats(
+    left_match: &CdsMatchRange, del: &CdsDeletionRange, right_match: &CdsMatchRange, query: &QueryRecord,
+    product_spec: &ProductSpec,
+) -> Option<ShiftDir> {
+    // The pivot codon is placed at the left position if a right shift is used
     let pos_left = (del.cds_range.start / 3) + 1;
+    // The pivot codon is placed at the right position if a left shift is used
     let pos_right = ((del.cds_range.end - 1) / 3) + 1;
 
-    if frameshift == 1 {
+    let frameshift = del.frameshift();
+
+    let (pivot, default) = if frameshift == 1 {
         // We need to shift the deletion left by 1 or right by 2
 
         let cp1 = query.nucleotides[left_match.query_range.end - 1];
         let cp2 = query.nucleotides[right_match.query_range.start];
         let cp3 = query.nucleotides[right_match.query_range.start + 1];
 
-        let pivot = build_discontiguous_codon(cp1, cp2, cp3);
+        let pivot = codon_from_bases(cp1, cp2, cp3);
 
-        // TODO: Likely want to compare with Ordering::is_gt instead, so
-        // that ties resolve as right shift.
-
-        // By default, we shift the deletion left for frame 1 (causing 1
-        // match to shift right, rather than 2). Only if there is evidence
-        // for shifting the deletion to right do we do that. pos_left being
-        // better means shifting matches left is better, which means
-        // shifting deletion right is better. Validity: The codon is
-        // uppercase because it is derived from bases in query
-        let shift_del_right = product_spec
-            .compare_codon_positions(pos_left as u32, pos_right as u32, pivot)
-            .is_some_and(Ordering::is_ge);
-
-        if shift_del_right {
-            Some(ShiftDir::Right)
-        } else {
-            Some(ShiftDir::Left)
-            // Shift the deletion left by 1, causing 1 match to move right
-        }
+        // Left shift is default since it moves fewer states
+        (pivot, ShiftDir::Left)
     } else if frameshift == 2 {
+        // We need to shift the deletion right by 1 or left by 2
+
         let cp1 = query.nucleotides[left_match.query_range.end - 2];
         let cp2 = query.nucleotides[left_match.query_range.end - 1];
         let cp3 = query.nucleotides[right_match.query_range.start];
 
-        let pivot = build_discontiguous_codon(cp1, cp2, cp3);
+        let pivot = codon_from_bases(cp1, cp2, cp3);
 
-        // By default, we shift the deletion right for frame 2 (causing 1
-        // match to shift left, rather than 2). Only if there is evidence
-        // for a left shift do we do that. pos_right being better means
-        // shifting matches right is better, which means shifting deletion
-        // left is better. Validity: The codon is uppercase because it is
-        // derived from bases in query
-        let shift_del_left = product_spec
-            .compare_codon_positions(pos_left as u32, pos_right as u32, pivot)
-            .is_some_and(Ordering::is_lt);
+        // Right shift is default since it moves fewer states
+        (pivot, ShiftDir::Right)
+    } else {
+        return None;
+    };
 
-        if shift_del_left {
+    match product_spec.compare_codon_positions(pos_left as u32, pos_right as u32, pivot) {
+        Ordering::Less => {
+            // pos_right is better for the pivot codon, so shift deletion
+            // left
             Some(ShiftDir::Left)
-        } else {
+        }
+        Ordering::Greater => {
+            // pos_left is better for the pivot codon, so shift deletion
+            // right
             Some(ShiftDir::Right)
         }
+        Ordering::Equal => Some(default),
+    }
+}
+
+fn pick_ins_shift_with_stats(
+    left_match: &CdsMatchRange, ins: &CdsInsertionRange, right_match: &CdsMatchRange, query: &QueryRecord,
+    product_spec: &ProductSpec,
+) -> Option<ShiftDir> {
+    let codon_position = ins.cds_index.to_aa_idx().right_pos();
+    let insert_seq = &query.nucleotides[ins.query_range.clone()];
+
+    let frameshift = ins.frameshift();
+
+    let (left_shift_codon, right_shift_codon, default) = if frameshift == 1 {
+        // We need to shift the insertion left by 1 or right by 2
+
+        let [i1, i2, .., i3] = *insert_seq else {
+            return None;
+        };
+
+        let cp1 = query.nucleotides[left_match.query_range.end - 1];
+        let cp2 = query.nucleotides[right_match.query_range.start];
+        let cp3 = query.nucleotides[right_match.query_range.start + 1];
+
+        // Codon formed by shifting insertion right 2
+        let right_shift_codon = codon_from_bases(cp1, i1, i2);
+        // Codon formed by shifting insertion left 1
+        let left_shift_codon = codon_from_bases(i3, cp2, cp3);
+
+        // Left shift is default since it moves fewer states
+        (left_shift_codon, right_shift_codon, ShiftDir::Left)
+    } else if frameshift == 2 {
+        // We need to shift the insertion right by 1 or left by 2
+
+        let [i1, .., i2, i3] = *insert_seq else {
+            return None;
+        };
+
+        let cp1 = query.nucleotides[left_match.query_range.end - 2];
+        let cp2 = query.nucleotides[left_match.query_range.end - 1];
+        let cp3 = query.nucleotides[right_match.query_range.start];
+
+        // Codon formed by shifting insertion left 2
+        let left_shift_codon = codon_from_bases(i2, i3, cp3);
+        // Codon formed by shifting insertion right 1
+        let right_shift_codon = codon_from_bases(cp1, cp2, i1);
+
+        (left_shift_codon, right_shift_codon, ShiftDir::Right)
     } else {
-        None
+        return None;
+    };
+
+    // TODO: What about N vs X
+
+    match product_spec.compare_codons(left_shift_codon, right_shift_codon, codon_position as u32) {
+        Ordering::Greater => {
+            // `left` is more likely, so shift the insertion left
+            Some(ShiftDir::Left)
+        }
+        Ordering::Less => {
+            // `right` is more likely, so shift the insertion right
+            Some(ShiftDir::Right)
+        }
+        Ordering::Equal => Some(default),
     }
 }
 
@@ -1144,11 +1164,10 @@ fn apply_deletion_shift(
     }
 }
 
-/// Combines three discontinuous bases into a codon, automatically converting
-/// `U` to `T`.
+/// Combines three bases into a codon, automatically converting `U` to `T`.
 ///
 /// No other bytes are altered, and case is not changed.
-fn build_discontiguous_codon(b1: u8, b2: u8, b3: u8) -> [u8; 3] {
+fn codon_from_bases(b1: u8, b2: u8, b3: u8) -> [u8; 3] {
     [b1, b2, b3].map(|base| if base == b'U' { b'T' } else { base })
 }
 
@@ -1208,5 +1227,46 @@ impl CdsInsertionRange {
     /// three, and frame must be non-zero.
     fn eligible_for_shift(&self) -> bool {
         self.frameshift() != 0 && self.len().is_multiple_of(3)
+    }
+}
+
+impl ProductSpec {
+    /// Compares the likelihood of two codons at the specified 1-based position,
+    /// returning an ordering based on the observed counts.
+    ///
+    /// If both observed counts are 0, or if there are no position-specific
+    /// weights are available, [`DEFAULT_CODON_STATS`] is used.
+    ///
+    /// ## Validity
+    ///
+    /// The `left` and `right` codons must contain unaligned, uppercase IUPAC
+    /// bases. `T` must be used instead of `U`.
+    fn compare_codons(&self, left: [u8; 3], right: [u8; 3], position: u32) -> Ordering {
+        // Validity: both codons are in uppercase
+        self.codon_weights
+            .as_ref()
+            .and_then(|w| w.compare_codons(left, right, position))
+            .unwrap_or_else(|| {
+                let left_count = DEFAULT_CODON_STATS.get(&left).copied().unwrap_or(0);
+                let right_count = DEFAULT_CODON_STATS.get(&right).copied().unwrap_or(0);
+                left_count.cmp(&right_count)
+            })
+    }
+
+    /// Compares the likelihood of a codon appearing at the 1-based positions
+    /// `pos_left` and `pos_right`, returning an ordering based on the observed
+    /// counts.
+    ///
+    /// If no observed counts are available, [`Ordering::Equal`] is returned.
+    ///
+    /// ## Validity
+    ///
+    /// The `codon` must contain unaligned, uppercase IUPAC bases. `T` must be
+    /// used instead of `U`.
+    fn compare_codon_positions(&self, pos_left: u32, pos_right: u32, codon: [u8; 3]) -> Ordering {
+        self.codon_weights
+            .as_ref()
+            .and_then(|w| w.compare_positions(pos_left, pos_right, codon))
+            .unwrap_or(Ordering::Equal)
     }
 }

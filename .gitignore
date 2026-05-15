@@ -12,7 +12,8 @@ extras/
 *.gen
 *.del
 .DS*
-test*
+/*test*
+!/tests/
 log*.txt
 junk*
 .nfs*
