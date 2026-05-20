@@ -518,7 +518,7 @@ fn warn_adjacent_deletions(del: &CdsDeletionRange, query: &QueryRecord, product_
     if del.eligible_for_shift() {
         warn!(
             "Two deletions within adjacent exons occurred. Because they were separated by a non-coding region, frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id,
+            query_id = query.id(),
             product = product_spec.name
         );
     }
@@ -529,7 +529,7 @@ fn warn_adjacent_deletions(del: &CdsDeletionRange, query: &QueryRecord, product_
 fn warn_adjacent_insertions(query: &QueryRecord, product_spec: &ProductSpec) {
     error!(
         "Two insertions occurred adjacent to each other.\nQuery: {query_id}\nProduct: {product}",
-        query_id = query.id,
+        query_id = query.id(),
         product = product_spec.name
     );
 }
@@ -540,7 +540,7 @@ fn warn_del_with_flanking_ins(del: &CdsDeletionRange, query: &QueryRecord, produ
     if del.eligible_for_shift() {
         warn!(
             "A deletion occurred adjacent to an insertion, so frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id,
+            query_id = query.id(),
             product = product_spec.name
         );
     }
@@ -552,7 +552,7 @@ fn warn_ins_with_flanking_del(ins: &CdsInsertionRange, query: &QueryRecord, prod
     if ins.eligible_for_shift() {
         warn!(
             "An insertion occurred adjacent to a deletion, so frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id,
+            query_id = query.id(),
             product = product_spec.name
         );
     }
@@ -564,7 +564,7 @@ fn warn_leading_insertion(query: &QueryRecord, ins: &CdsInsertionRange, product_
     if ins.eligible_for_shift() {
         warn!(
             "An insertion appeared at the start of the product alignment, so frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id,
+            query_id = query.id(),
             product = product_spec.name
         );
     }
@@ -576,7 +576,7 @@ fn warn_leading_deletion(query: &QueryRecord, del: &CdsDeletionRange, product_sp
     if del.eligible_for_shift() {
         warn!(
             "A deletion appeared at the start of the product alignment, so frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id,
+            query_id = query.id(),
             product = product_spec.name
         );
     }
@@ -588,7 +588,7 @@ fn warn_trailing_insertion(query: &QueryRecord, ins: &CdsInsertionRange, product
     if ins.eligible_for_shift() {
         warn!(
             "An insertion appeared at the end of the product alignment, so frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id,
+            query_id = query.id(),
             product = product_spec.name
         );
     }
@@ -600,7 +600,7 @@ fn warn_trailing_deletion(query: &QueryRecord, del: &CdsDeletionRange, product_s
     if del.eligible_for_shift() {
         warn!(
             "A deletion appeared at the end of the product alignment, so frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id,
+            query_id = query.id(),
             product = product_spec.name
         );
     }
@@ -639,8 +639,6 @@ fn validate_ins_merge(ins1: &CdsInsertionRange, ins2: &CdsInsertionRange) {
     if ins1.cds_index != ins2.cds_index {
         error!("Two adjacent insertions had different CDS indices");
     } else if ins1.query_range.end != ins2.query_range.start {
-        // TODO: We need to make sure to drop insertions shifting to edges
-        // of exons or products
         error!("Two adjacent insertions were not adjacent in the query sequence");
     }
 }
@@ -699,7 +697,7 @@ fn pick_insertion_shift(
     if left_match.cds_range.end != right_match.cds_range.start {
         warn!(
             "An insertion adjacent to a non-coding region was found and will not be shifted.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id,
+            query_id = query.id(),
             product = product_spec.name
         );
         return None;
@@ -789,7 +787,7 @@ fn pick_insertion_shift(
         (false, false) => {
             warn!(
                 "An insertion could not be shifted due to insufficient flanking match state or the presence of overlapping exons.\nQuery: {query_id}\nProduct: {product}",
-                query_id = query.id,
+                query_id = query.id(),
                 product = product_spec.name
             );
             return None;
@@ -797,7 +795,7 @@ fn pick_insertion_shift(
         (true, false) => {
             warn!(
                 "An insertion is forcibly being shifted left (e.g., due to insufficient flanking match state or the presence of overlapping exons).\nQuery: {query_id}\nProduct: {product}",
-                query_id = query.id,
+                query_id = query.id(),
                 product = product_spec.name
             );
             return Some(ShiftDir::Left);
@@ -805,7 +803,7 @@ fn pick_insertion_shift(
         (false, true) => {
             warn!(
                 "An insertion is forcibly being shifted right (e.g., due to insufficient flanking match state or the presence of overlapping exons).\nQuery: {query_id}\nProduct: {product}",
-                query_id = query.id,
+                query_id = query.id(),
                 product = product_spec.name
             );
             return Some(ShiftDir::Right);
@@ -859,7 +857,7 @@ fn pick_deletion_shift(
     if left_match.query_range.end != right_match.query_range.start {
         warn!(
             "A deletion adjacent to or crossing into a non-coding region was found and will not be shifted.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id,
+            query_id = query.id(),
             product = product_spec.name
         );
         return None;
@@ -949,7 +947,7 @@ fn pick_deletion_shift(
         (false, false) => {
             warn!(
                 "A deletion could not be shifted due to insufficient flanking match state or the presence of overlapping exons.\nQuery: {query_id}\nProduct: {product}",
-                query_id = query.id,
+                query_id = query.id(),
                 product = product_spec.name
             );
             return None;
@@ -957,7 +955,7 @@ fn pick_deletion_shift(
         (true, false) => {
             warn!(
                 "A deletion is forcibly being shifted left (e.g., due to insufficient flanking match state or the presence of overlapping exons).\nQuery: {query_id}\nProduct: {product}",
-                query_id = query.id,
+                query_id = query.id(),
                 product = product_spec.name
             );
             return Some(ShiftDir::Left);
@@ -965,7 +963,7 @@ fn pick_deletion_shift(
         (false, true) => {
             warn!(
                 "A deletion is forcibly being shifted right (e.g., due to insufficient flanking match state or the presence of overlapping exons).\nQuery: {query_id}\nProduct: {product}",
-                query_id = query.id,
+                query_id = query.id(),
                 product = product_spec.name
             );
             return Some(ShiftDir::Right);
@@ -981,6 +979,8 @@ fn pick_del_shift_with_stats(
     left_match: &CdsMatchRange, del: &CdsDeletionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,
 ) -> Option<ShiftDir> {
+    let query = query.nucleotides();
+
     // The pivot codon is placed at the left position if a right shift is used
     let pos_left = (del.cds_range.start / 3) + 1;
     // The pivot codon is placed at the right position if a left shift is used
@@ -991,9 +991,9 @@ fn pick_del_shift_with_stats(
     let (pivot, default) = if codon_shift == 1 {
         // We need to shift the deletion left by 1 or right by 2
 
-        let cp1 = query.nucleotides[left_match.query_range.end - 1];
-        let cp2 = query.nucleotides[right_match.query_range.start];
-        let cp3 = query.nucleotides[right_match.query_range.start + 1];
+        let cp1 = query[left_match.query_range.end - 1];
+        let cp2 = query[right_match.query_range.start];
+        let cp3 = query[right_match.query_range.start + 1];
 
         let pivot = codon_from_bases(cp1, cp2, cp3);
 
@@ -1002,9 +1002,9 @@ fn pick_del_shift_with_stats(
     } else if codon_shift == 2 {
         // We need to shift the deletion right by 1 or left by 2
 
-        let cp1 = query.nucleotides[left_match.query_range.end - 2];
-        let cp2 = query.nucleotides[left_match.query_range.end - 1];
-        let cp3 = query.nucleotides[right_match.query_range.start];
+        let cp1 = query[left_match.query_range.end - 2];
+        let cp2 = query[left_match.query_range.end - 1];
+        let cp3 = query[right_match.query_range.start];
 
         let pivot = codon_from_bases(cp1, cp2, cp3);
 
@@ -1014,6 +1014,8 @@ fn pick_del_shift_with_stats(
         return None;
     };
 
+    // Validity: the codon uses the proper encoding since they were formed with
+    // codon_from_bases
     match product_spec.compare_codon_positions(pos_left as u32, pos_right as u32, pivot) {
         Ordering::Less => {
             // pos_right is better for the pivot codon, so shift deletion
@@ -1033,8 +1035,10 @@ fn pick_ins_shift_with_stats(
     left_match: &CdsMatchRange, ins: &CdsInsertionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,
 ) -> Option<ShiftDir> {
+    let query = query.nucleotides();
+
     let codon_position = ins.cds_index.to_aa_idx().right_pos();
-    let insert_seq = &query.nucleotides[ins.query_range.clone()];
+    let insert_seq = &query[ins.query_range.clone()];
 
     let codon_shift = ins.codon_shift();
 
@@ -1045,9 +1049,9 @@ fn pick_ins_shift_with_stats(
             return None;
         };
 
-        let cp1 = query.nucleotides[left_match.query_range.end - 1];
-        let cp2 = query.nucleotides[right_match.query_range.start];
-        let cp3 = query.nucleotides[right_match.query_range.start + 1];
+        let cp1 = query[left_match.query_range.end - 1];
+        let cp2 = query[right_match.query_range.start];
+        let cp3 = query[right_match.query_range.start + 1];
 
         // Codon formed by shifting insertion right 2
         let right_shift_codon = codon_from_bases(cp1, i1, i2);
@@ -1063,9 +1067,9 @@ fn pick_ins_shift_with_stats(
             return None;
         };
 
-        let cp1 = query.nucleotides[left_match.query_range.end - 2];
-        let cp2 = query.nucleotides[left_match.query_range.end - 1];
-        let cp3 = query.nucleotides[right_match.query_range.start];
+        let cp1 = query[left_match.query_range.end - 2];
+        let cp2 = query[left_match.query_range.end - 1];
+        let cp3 = query[right_match.query_range.start];
 
         // Codon formed by shifting insertion left 2
         let left_shift_codon = codon_from_bases(i2, i3, cp3);
@@ -1077,8 +1081,8 @@ fn pick_ins_shift_with_stats(
         return None;
     };
 
-    // TODO: What about N vs X
-
+    // Validity: the codons use the proper encoding since they were formed with
+    // codon_from_bases
     match product_spec.compare_codons(left_shift_codon, right_shift_codon, codon_position as u32) {
         Ordering::Greater => {
             // `left` is more likely, so shift the insertion left
@@ -1252,7 +1256,6 @@ impl ProductSpec {
     /// The `left` and `right` codons must contain unaligned, uppercase IUPAC
     /// bases. `T` must be used instead of `U`.
     fn compare_codons(&self, left: [u8; 3], right: [u8; 3], position: u32) -> Ordering {
-        // Validity: both codons are in uppercase
         self.codon_weights
             .as_ref()
             .and_then(|w| w.compare_codons(left, right, position))

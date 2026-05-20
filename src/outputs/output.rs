@@ -4,7 +4,7 @@ use crate::{
         QueryRecord,
         ranges::{CdsStateRange, InsertionIdx, StateRange},
     },
-    hashing::nt_id,
+    hashing::nt_id_iupac,
     outputs::{ComputedGenome, ComputedGenomeInsertion},
 };
 use std::ops::Range;
@@ -69,10 +69,11 @@ pub struct GenomeAndProductStates<'a> {
 }
 
 impl<'a> GenomeAndProductStates<'a> {
-    // TODO: Validity
     /// Computes the output data for this genome, materializing all ranges into
     /// sequences using `query`.
-    pub fn materialize_genome(&self, query: &Nucleotides) -> ComputedGenome {
+    pub fn materialize_genome(&self, query: &QueryRecord) -> ComputedGenome {
+        let query = query.nucleotides();
+
         let mut genome_seq = Nucleotides::new();
         let mut genome_aln = Nucleotides::from(vec![b'.'; self.leading_ref_unaligned]);
         let mut insertions = Vec::new();
@@ -89,6 +90,8 @@ impl<'a> GenomeAndProductStates<'a> {
                     let slice = &query[ins.query_range.clone()];
                     genome_seq.extend_from_slice(slice);
                     has_insertion = true;
+
+                    // Validity: slice is from QueryRecord
                     insertions.push(ComputedGenomeInsertion::new(ins.ref_index, slice));
                 }
                 StateRange::D(del) => {
@@ -102,10 +105,15 @@ impl<'a> GenomeAndProductStates<'a> {
             let slice = &query[ext_range.clone()];
             genome_seq.extend_from_slice(slice);
             has_insertion = true;
+
+            // Validity: slice is from QueryRecord
             insertions.push(ComputedGenomeInsertion::new(nt_insertion_idx, slice));
         }
 
-        let genome_id = nt_id(&genome_seq);
+        // Validity: genome_seq contains unaligned uppercase IUPAC since
+        // QueryRecord does
+        let genome_id = nt_id_iupac(&genome_seq);
+
         let genome_length = genome_seq.len();
 
         ComputedGenome {

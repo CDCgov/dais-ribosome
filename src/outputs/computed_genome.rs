@@ -15,9 +15,15 @@ pub struct ComputedGenome {
     pub has_insertion:          bool,
     /// The unaligned nucleotide sequence for the genome (with insertions but no
     /// deletions).
+    ///
+    /// This will only contain unaligned uppercase IUPAC. Both `U` and `T` are
+    /// allowed.
     pub genome_seq:             Nucleotides,
     /// The aligned nucleotide sequence for the genome (with `-` for deletions
     /// but no insertions).
+    ///
+    /// This will only contain uppercase IUPAC, padding `.`, and gaps `-`. Both
+    /// `U` and `T` are allowed.
     pub genome_aln:             Nucleotides,
     /// The computed insertions within the genome.
     ///
@@ -43,10 +49,23 @@ pub struct ComputedGenomeInsertion {
     /// _after_ which the insertion occurs.
     pub upstream_nt_pos: usize,
     /// The inserted nucleotides.
+    ///
+    /// This will only contain unaligned uppercase IUPAC. Both `U` and `T` are
+    /// allowed.
     pub inserted_nt:     Nucleotides,
 }
 
 impl ComputedGenomeInsertion {
+    /// Creates a [`ComputedGenomeInsertion`] from raw insertion data and the
+    /// insertion index.
+    ///
+    /// ## Validity
+    ///
+    /// The `inserted` bases must contain unaligned uppercase IUPAC. Both `U`
+    /// and `T` are allowed. This is true for any slice of
+    /// [`QueryRecord::nucleotides`].
+    ///
+    /// [`QueryRecord::nucleotides`]: crate::data::QueryRecord::nucleotides
     pub(crate) fn new(nt_insertion_idx: InsertionIdx, inserted: &[u8]) -> Self {
         ComputedGenomeInsertion {
             upstream_nt_pos: nt_insertion_idx.left_pos(),

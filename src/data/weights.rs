@@ -11,8 +11,11 @@ use std::{
     sync::LazyLock,
 };
 use zoe::{
-    data::err::{ResultWithErrorContext, WithErrorContext},
-    prelude::NucleotidesView,
+    data::{
+        ByteMap,
+        err::{ResultWithErrorContext, WithErrorContext},
+    },
+    prelude::{Nucleotides, NucleotidesView},
 };
 
 /// Map from spec key to codon position weights.
@@ -172,15 +175,15 @@ pub(crate) static DEFAULT_CODON_STATS: LazyLock<HashMap<[u8; 3], u32>> = LazyLoc
 /// `|`) must successfully parse. If any headers fail to parse, an error is
 /// returned with context including the line and the expected format. Each TSV
 /// row must parse successfully, and there should be no duplicate position/codon
-/// pairs.
+/// pairs. Codons must only contains unaligned IUPAC bytes.
 pub fn load_codon_weights(path: &Path) -> std::io::Result<CodonWeightMatrix> {
     let file = File::open(path)?;
     let reader = std::io::BufReader::new(file);
 
     let mut all_matrices = HashMap::new();
     let mut current_weights = CodonPositionWeights::new();
-    let mut current_key: Option<SpecKey> = None;
-    let mut current_raw_codons: HashSet<[u8; 3]> = HashSet::new();
+    let mut current_key = None;
+    let mut current_raw_codons = HashSet::new();
 
     for (line_idx, line) in reader.lines().enumerate() {
         let line = line?;
@@ -217,14 +220,17 @@ pub fn load_codon_weights(path: &Path) -> std::io::Result<CodonWeightMatrix> {
             .parse::<TsvRow>()
             .with_context(format!("Failed to parse line {line_num}: {line}", line_num = line_idx + 1))?;
 
-        // TODO: Validity not quite met Validity: the codon is uppercase with
-        // T instead of U per TsvRow guarantees
+        // Validity: the codon is uppercase IUPAC with U substituted for T
         if let Err(e) = current_weights.insert(row.position, row.codon, row.count) {
             let normalized = row.codon;
-            if let Some(other) = current_raw_codons
-                .into_iter()
-                .find(|raw_codon| normalize_codon(*raw_codon) == normalized)
-            {
+
+            if let Some(other) = current_raw_codons.into_iter().find(|raw_codon| {
+                if let Ok(raw_codon) = normalize_codon(*raw_codon) {
+                    raw_codon == normalized
+                } else {
+                    false
+                }
+            }) {
                 return Err(e
                     .with_context(format!(
                         "Both {} and {} were found in the specs",
@@ -257,8 +263,7 @@ pub fn load_codon_weights(path: &Path) -> std::io::Result<CodonWeightMatrix> {
 struct TsvRow {
     /// The 1-based position of the codon.
     position:  u32,
-    // TODO: DOES NOT MEET IUPAC VALIDITY REQUIREMENT!
-    /// The codon, in uppercase, with `U` substituted for `T`.
+    /// The uppercase IUPAC codon, with `U` substituted for `T`.
     codon:     [u8; 3],
     /// The count of the codon at the specified position.
     count:     u32,
@@ -305,7 +310,8 @@ impl FromStr for TsvRow {
             ))
         })?;
 
-        let codon = normalize_codon(raw_codon);
+        let codon = normalize_codon(raw_codon)
+            .with_context(format!("The codon {codon} is invalid", codon = Nucleotides::from(raw_codon)))?;
 
         let count = count
             .parse::<u32>()
@@ -322,14 +328,30 @@ impl FromStr for TsvRow {
 
 /// Normalizes the codon for use with [`CodonWeightMatrix`].
 ///
-/// This converts all residues to uppercase, as well as `U` to `T`.
-fn normalize_codon(mut codon: [u8; 3]) -> [u8; 3] {
-    // TODO: Use ByteMap?
-    codon.make_ascii_uppercase();
+/// This converts to uppercase IUPAC, including converting `U` to `T`.
+///
+/// ## Errors
+///
+/// An error is returned if a non-IUPAC character is encountered.
+fn normalize_codon(mut codon: [u8; 3]) -> std::io::Result<[u8; 3]> {
+    /// Filters non-IUPAC bytes, and uppercases. Converts `U` to `T`.
+    const SANITIZE: ByteMap = ByteMap::all(0)
+        .preserve(b"ACGTRYSWKMBDHVN")
+        .map(b"acgtryswkmbdhvn", b"ACGTRYSWKMBDHVN")
+        .map_to_one(b"uU", b'T');
+
+    // TODO: Switch to recode_base
     for base in &mut codon {
-        if *base == b'U' {
-            *base = b'T';
+        let new_base = SANITIZE[*base];
+
+        if new_base == 0 {
+            return Err(std::io::Error::other(format!(
+                "The character {base} is not permitted in a codon"
+            )));
+        } else {
+            *base = new_base;
         }
     }
-    codon
+
+    Ok(codon)
 }

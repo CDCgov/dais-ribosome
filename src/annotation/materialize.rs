@@ -2,9 +2,9 @@
 //! [`ComputedProduct`].
 
 use crate::{
-    IteratorExt,
+    IteratorExt, QueryRecord,
     data::ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, CdsStateRange, InsertionIdx},
-    hashing::{nt_id, variant_hash},
+    hashing::{nt_id_iupac, variant_hash_iupac},
     outputs::{ComputedDeletion, ComputedInsertion, ComputedProduct, Product},
     ranges::CdsCoord,
 };
@@ -14,11 +14,7 @@ use zoe::prelude::{AminoAcids, Len, Nucleotides, Slice, Translate};
 impl<'a> Product<'a> {
     /// Computes the output data for this product, materializing all ranges into
     /// sequences using `query`.
-    ///
-    /// ## Validity
-    ///
-    /// The `query` should contain unaligned, uppercase IUPAC bases.
-    pub fn materialize(&self, query: &Nucleotides) -> ComputedProduct<'a> {
+    pub fn materialize(&self, query: &QueryRecord) -> ComputedProduct<'a> {
         // Compute all the fields that rely on incremental updates until the
         // first stop codon
         let incremental = ComputedIncrementalProducts::new(query, self);
@@ -52,9 +48,10 @@ impl<'a> Product<'a> {
 
                 // Extend with non-deleted aligned residues before the insertion
                 let aligned_before_insertion = aa_aln_iter.by_ref().take(num_to_consume).filter(|&b| b != b'-' && b != b'.');
+
                 out.extend(aligned_before_insertion);
 
-                // Extend with the insertion
+                // Validity: ComputedInsertion::inserted_aa is uppercase IUPAC
                 out.extend_from_slice(&insertion.inserted_aa);
 
                 num_consumed += num_to_consume;
@@ -66,9 +63,12 @@ impl<'a> Product<'a> {
             out
         };
 
-        // Get hashes
-        let cds_id = nt_id(&cds_seq);
-        let variant_hash = variant_hash(&aa_seq);
+        // Validity: cds_seq contains unaligned uppercase IUPAC
+        let cds_id = nt_id_iupac(&cds_seq);
+
+        // Validity: aa_seq contains unaligned uppercase IUPAC (since it is
+        // derived from StdGeneticCode with gaps filtered)
+        let variant_hash = variant_hash_iupac(&aa_seq);
 
         ComputedProduct {
             name: &self.product_spec.name,
@@ -98,31 +98,40 @@ impl<'a> Product<'a> {
 ///
 /// [`ComputedProduct`]: crate::outputs::ComputedProduct
 struct ComputedIncrementalProducts {
-    /// See [`ComputedProduct::cds_aln`].
+    /// See [`ComputedProduct::cds_aln`]. This is populated from
+    /// [`IncrementalAccumulator::cds_aln`].
     cds_aln:                Nucleotides,
-    /// See [`ComputedProduct::aa_aln`].
+    /// See [`ComputedProduct::aa_aln`]. This is populated from
+    /// [`IncrementalAccumulator::aa_aln`].
     aa_aln:                 AminoAcids,
-    /// See [`ComputedProduct::cds_seq`].
+    /// See [`ComputedProduct::cds_seq`]. This is populated from
+    /// [`DependentFields::cds_seq`].
     cds_seq:                Nucleotides,
-    /// See [`ComputedProduct::has_insertion`].
+    /// See [`ComputedProduct::has_insertion`]. This is populated from
+    /// [`DependentFields::has_insertion`].
     has_insertion:          bool,
-    /// See [`ComputedProduct::has_shift_indel`].
+    /// See [`ComputedProduct::has_shift_indel`]. This is populated from
+    /// [`DependentFields::has_insertion`].
     has_shift_indel:        bool,
-    /// See [`ComputedProduct::query_coords`].
+    /// See [`ComputedProduct::query_coords`]. This is populated from
+    /// [`DependentFields::query_coords`].
     query_coords:           Vec<Range<usize>>,
-    /// See [`ComputedProduct::cds_coords`].
+    /// See [`ComputedProduct::cds_coords`]. This is populated from
+    /// [`DependentFields::cds_coords`].
     cds_coords:             Vec<CdsCoord>,
-    /// See [`ComputedProduct::insertions`].
+    /// See [`ComputedProduct::insertions`]. This is populated from
+    /// [`DependentFields::insertions`].
     insertions:             Vec<ComputedInsertion>,
-    /// See [`ComputedProduct::deletions`].
+    /// See [`ComputedProduct::deletions`]. This is populated from
+    /// [`DependentFields::deletions`].
     deletions:              Vec<ComputedDeletion>,
-    /// See [`ComputedProduct::trailing_cds_unaligned`]
+    /// See [`ComputedProduct::trailing_cds_unaligned`].
     trailing_cds_unaligned: usize,
 }
 
 impl ComputedIncrementalProducts {
     /// Computes the incremental products from a `query` and `product`.
-    fn new(query: &Nucleotides, product: &Product) -> Self {
+    fn new(query: &QueryRecord, product: &Product) -> Self {
         let range_capacity = product.product_ranges.len();
 
         let mut out = IncrementalAccumulator::new(product.leading_cds_unaligned, range_capacity);
@@ -150,20 +159,30 @@ impl ComputedIncrementalProducts {
 /// [`ComputedIncrementalProducts`] which supports incremental updates for each
 /// range.
 struct IncrementalAccumulator {
-    /// An incremental accumulator for [`ComputedProduct::cds_aln`].
+    /// The field for incrementally building [`ComputedProduct::cds_aln`].
     ///
     /// This is updated eagerly on each call to [`extend_from_match`] or
     /// [`extend_from_deletion`].
+    ///
+    /// ## Validity
+    ///
+    /// This must only contain uppercase IUPAC, padding `.`, and gaps `-`. Both
+    /// `U` and `T` are allowed.
     ///
     /// [`extend_from_match`]: IncrementalAccumulator::extend_from_match
     /// [`extend_from_deletion`]: IncrementalAccumulator::extend_from_deletion
     cds_aln: Nucleotides,
 
-    /// An incremental accumulator for [`ComputedProduct::aa_aln`].
+    /// The field for incrementally building [`ComputedProduct::aa_aln`].
     ///
     /// This is updated from `cds_aln` on each call to [`extend_from_match`] or
     /// when accumulation is complete. This is built incrementally to facilitate
     /// detection of the stop codon.
+    ///
+    /// ## Validity
+    ///
+    /// This must only contain uppercase IUPAC, partial codons, stop codons,
+    /// padding `.`, and gaps `-`.
     ///
     /// [`extend_from_match`]: IncrementalAccumulator::extend_from_match
     aa_aln: AminoAcids,
@@ -197,7 +216,7 @@ impl IncrementalAccumulator {
     /// sequences within the coding sequence.
     ///
     /// This is used in initializing `trailing_cds_unaligned`.
-    fn populate_from(&mut self, query: &Nucleotides, product: &Product) -> usize {
+    fn populate_from(&mut self, query: &QueryRecord, product: &Product) -> usize {
         let ranges = product.product_ranges.iter().enumerate();
 
         // Populate from ranges up to the last
@@ -246,8 +265,9 @@ impl IncrementalAccumulator {
     /// Updates the accumulator with a match range. If a stop codon is reached,
     /// translation halts and the end index in the coding sequence is returned.
     #[must_use]
-    fn extend_from_match(&mut self, query: &Nucleotides, range: &CdsMatchRange) -> Option<usize> {
-        let slice = &query[range.query_range.clone()];
+    fn extend_from_match(&mut self, query: &QueryRecord, range: &CdsMatchRange) -> Option<usize> {
+        let slice = &query.nucleotides()[range.query_range.clone()];
+        // Validity: QueryRecord only contains uppercase IUPAC
         self.cds_aln.extend_from_slice(slice);
 
         self.update_translation();
@@ -274,7 +294,7 @@ impl IncrementalAccumulator {
     }
 
     /// Updates the accumulator with an insertion range.
-    fn extend_from_insertion(&mut self, query: &Nucleotides, range: &CdsInsertionRange) {
+    fn extend_from_insertion(&mut self, query: &QueryRecord, range: &CdsInsertionRange) {
         self.dependent_fields.extend_from_insertion(query, range);
     }
 
@@ -298,6 +318,11 @@ impl IncrementalAccumulator {
 /// sequences, and hence will be truncated if they are truncated.
 struct DependentFields {
     /// The field for incrementally building [`ComputedProduct::cds_seq`].
+    ///
+    /// ## Validity
+    ///
+    /// This must only contain unaligned uppercase IUPAC. Both `U` and `T` are
+    /// allowed.
     cds_seq: Nucleotides,
 
     /// The boolean flag for [`ComputedProduct::has_insertion`], which starts as
@@ -337,8 +362,10 @@ impl DependentFields {
     }
 
     /// Extends the dependent fields from a possibly-truncated match range.
-    fn extend_from_match(&mut self, query: &Nucleotides, range: &CdsMatchRange) {
-        let slice = &query[range.query_range.clone()];
+    fn extend_from_match(&mut self, query: &QueryRecord, range: &CdsMatchRange) {
+        let slice = &query.nucleotides()[range.query_range.clone()];
+
+        // Validity: slice is from QueryRecord, hence meets the requirements
         self.cds_seq.extend_from_slice(slice);
 
         self.query_coords.push(range.query_range.clone());
@@ -346,14 +373,13 @@ impl DependentFields {
     }
 
     /// Extends the dependent fields from a insertion range.
-    fn extend_from_insertion(&mut self, query: &Nucleotides, range: &CdsInsertionRange) {
-        let slice = &query[range.query_range.clone()];
+    fn extend_from_insertion(&mut self, query: &QueryRecord, range: &CdsInsertionRange) {
+        let slice = &query.nucleotides()[range.query_range.clone()];
 
-        // 0-based index after is equivalent to 1-based index
-        // before. Validity: slice is from query, which meets
-        // requirements
+        // Validity: slice is from QueryRecord
         let (computed_insertion, filtered) = ComputedInsertion::new(range.cds_index, slice);
 
+        // Validity: ComputedInsertion::inserted_nt meets validity requirements
         self.cds_seq.extend_from_slice(&computed_insertion.inserted_nt);
 
         if !filtered {
@@ -410,12 +436,16 @@ impl DependentFields {
     }
 
     /// Extends the dependent fields from a stop extension.
-    fn extend_from_stop_extension(&mut self, query: &Nucleotides, ext_range: &Range<usize>, cds_length: usize) {
-        if let Some(slice) = query.get(ext_range.clone()) {
+    fn extend_from_stop_extension(&mut self, query: &QueryRecord, ext_range: &Range<usize>, cds_length: usize) {
+        if let Some(slice) = query.nucleotides().get(ext_range.clone()) {
             let nt_insertion_idx = InsertionIdx::from_right_idx(cds_length);
-            // Validity: slice is from query, which meets validity requirements
+
+            // Validity: slice is from QueryRecord
             let (ins, filtered) = ComputedInsertion::new(nt_insertion_idx, slice);
+
             if !filtered {
+                // Validity: ComputedInsertion::inserted_nt meets validity
+                // requirements
                 self.cds_seq.extend_from_slice(&ins.inserted_nt);
                 self.insertions.push(ins);
             }

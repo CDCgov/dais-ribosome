@@ -15,9 +15,15 @@ pub struct ComputedProduct<'a> {
     pub name:                   &'a str,
     /// The unaligned coding sequence for the protein (with insertions but no
     /// deletions).
+    ///
+    /// This will only contain unaligned uppercase IUPAC. Both `U` and `T` are
+    /// allowed.
     pub cds_seq:                Nucleotides,
     /// The aligned coding sequence for the protein (with `-` for deletions but
     /// no insertions).
+    ///
+    /// This will only contain uppercase IUPAC, padding `.`, and gaps `-`. Both
+    /// `U` and `T` are allowed.
     pub cds_aln:                Nucleotides,
     /// The SHA1 hash of the cleaned coding sequence, or `None` if no DNA data
     /// remained after filtering.
@@ -33,10 +39,16 @@ pub struct ComputedProduct<'a> {
     /// spliced into the amino acid sequence. Partial codons are introduced for
     /// frameshift indels (rather than altering the frame of translation), and
     /// indels in the middle of a codon are spliced before that codon's amino
-    /// acid.  
+    /// acid.
+    ///
+    /// This will only contain unaligned uppercase IUPAC, partial codons, and
+    /// stop codons.
     pub aa_seq:                 AminoAcids,
     /// The aligned amino acid sequence for the protein (with `-` for deletions
     /// but no insertions).
+    ///
+    /// This will only contain uppercase IUPAC, partial codons, stop codons,
+    /// padding `.`, and gaps `-`.
     pub aa_aln:                 AminoAcids,
     /// The MD5 hash of the cleaned amino acid sequence (variant hash), or
     /// `None` if no amino acid data remained after filtering.
@@ -99,11 +111,15 @@ pub struct ComputedInsertion {
     /// _after_ which the insertion occurs.
     pub upstream_nt_pos: usize,
     /// The inserted nucleotides.
+    ///
+    /// This will only contain unaligned uppercase IUPAC. Both `U` and `T` are
+    /// allowed.
     pub inserted_nt:     Nucleotides,
     /// A direct translation of `inserted_nt` to amino acids.
     ///
-    /// A partial codon `~` is added to the end if the length is not a multiple
-    /// of 3.
+    /// This will only contain unaligned uppercase IUPAC, partial codons, and
+    /// stop codons. A partial codon `~` is added to the end if the length is
+    /// not a multiple of 3.
     pub inserted_aa:     AminoAcids,
     /// The codon shift of the insertion, which is the number of bases between
     /// the last codon and the insertion.
@@ -125,8 +141,10 @@ impl ComputedInsertion {
     ///
     /// ## Validity
     ///
-    /// The slice of the query range representing the insertion should contain
-    /// unaligned, uppercase IUPAC bases.
+    /// The `slice` must contain unaligned, uppercase IUPAC. It may contain `U`
+    /// or `T`. This is true for any slice of [`QueryRecord::nucleotides`].
+    ///
+    /// [`QueryRecord::nucleotides`]: crate::data::QueryRecord::nucleotides
     pub(crate) fn new(cds_index: InsertionIdx, slice: &[u8]) -> (Self, bool) {
         let ins_len = slice.len();
         let inserted_nt = Nucleotides::from(slice);

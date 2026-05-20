@@ -59,12 +59,12 @@ impl<W: Write> Writers<W> {
     pub fn write_product_output(&mut self, output: &RibosomeOutput<'_>) -> std::io::Result<()> {
         for state in &output.states {
             for product in &state.products {
-                let computed_product = &product.materialize(&output.query.nucleotides);
+                let computed_product = &product.materialize(&output.query);
 
                 let seq_row = SeqRowView::new(
                     computed_product,
-                    &output.query.id,
-                    &output.query.ctype,
+                    output.query.id(),
+                    output.query.ctype(),
                     state.reference_id,
                     output.formatting,
                 );
@@ -75,8 +75,8 @@ impl<W: Write> Writers<W> {
                     let ins_row = InsRowView::new(
                         insertion,
                         computed_product,
-                        &output.query.id,
-                        &output.query.ctype,
+                        output.query.id(),
+                        output.query.ctype(),
                         state.reference_id,
                     );
 
@@ -87,8 +87,8 @@ impl<W: Write> Writers<W> {
                     let del_row = DelRowView::new(
                         deletion,
                         computed_product,
-                        &output.query.id,
-                        &output.query.ctype,
+                        output.query.id(),
+                        output.query.ctype(),
                         state.reference_id,
                     );
 
@@ -103,12 +103,12 @@ impl<W: Write> Writers<W> {
     /// Writes the genome outputs for a single query to the appropriate writers.
     pub fn write_genome_output(&mut self, output: &RibosomeOutput<'_>) -> std::io::Result<()> {
         for state in &output.states {
-            let genome = state.materialize_genome(&output.query.nucleotides);
+            let genome = state.materialize_genome(&output.query);
 
             let seq_row = GenSeqRowView::new(
                 &genome,
-                &output.query.id,
-                &output.query.ctype,
+                output.query.id(),
+                output.query.ctype(),
                 state.reference_id,
                 output.formatting,
             );
@@ -116,14 +116,14 @@ impl<W: Write> Writers<W> {
             writeln!(self.seq, "{seq_row}")?;
 
             for insertion in &genome.insertions {
-                let ins_row = GenInsRowView::new(insertion, &output.query.id, &output.query.ctype, state.reference_id);
+                let ins_row = GenInsRowView::new(insertion, output.query.id(), output.query.ctype(), state.reference_id);
 
                 writeln!(self.ins, "{ins_row}")?;
             }
 
             for del_range in &state.genome_aln_states {
                 if let StateRange::D(del) = del_range {
-                    let del_row = GenDelRowView::new(del, &output.query.id, &output.query.ctype, state.reference_id);
+                    let del_row = GenDelRowView::new(del, output.query.id(), output.query.ctype(), state.reference_id);
 
                     writeln!(self.del, "{del_row}")?;
                 }

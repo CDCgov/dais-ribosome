@@ -1,5 +1,3 @@
-use zoe::prelude::Nucleotides;
-
 use crate::{
     QueryRecord,
     annotation::fix_frames::{ShiftDir, pick_del_shift_with_stats, pick_ins_shift_with_stats},
@@ -44,11 +42,7 @@ fn shift_ins_left1() {
         cds_range:   1..3,
     };
 
-    let query = QueryRecord {
-        id:          String::from("test_seq"),
-        nucleotides: Nucleotides::from(b"ACGTAC"),
-        ctype:       String::from("test_ctype"),
-    };
+    let query = QueryRecord::new(String::from("test_seq"), b"ACGTAC".to_vec(), String::from("test_ctype")).unwrap();
 
     let dir = pick_ins_shift_with_stats(&left_match, &ins, &right_match, &query, &product_spec);
 
@@ -81,11 +75,7 @@ fn shift_ins_left1_default() {
         cds_range:   1..3,
     };
 
-    let query = QueryRecord {
-        id:          String::from("test_seq"),
-        nucleotides: Nucleotides::from(b"ACGTAC"),
-        ctype:       String::from("test_ctype"),
-    };
+    let query = QueryRecord::new(String::from("test_seq"), b"ACGTAC".to_vec(), String::from("test_ctype")).unwrap();
 
     let dir = pick_ins_shift_with_stats(&left_match, &ins, &right_match, &query, &product_spec);
 
@@ -118,11 +108,7 @@ fn shift_ins_left2() {
         cds_range:   2..3,
     };
 
-    let query = QueryRecord {
-        id:          String::from("test_seq"),
-        nucleotides: Nucleotides::from(b"ACGTAC"),
-        ctype:       String::from("test_ctype"),
-    };
+    let query = QueryRecord::new(String::from("test_seq"), b"ACGTAC".to_vec(), String::from("test_ctype")).unwrap();
 
     let dir = pick_ins_shift_with_stats(&left_match, &ins, &right_match, &query, &product_spec);
 
@@ -155,11 +141,7 @@ fn shift_ins_right1() {
         cds_range:   2..3,
     };
 
-    let query = QueryRecord {
-        id:          String::from("test_seq"),
-        nucleotides: Nucleotides::from(b"ACGTAC"),
-        ctype:       String::from("test_ctype"),
-    };
+    let query = QueryRecord::new(String::from("test_seq"), b"ACGTAC".to_vec(), String::from("test_ctype")).unwrap();
 
     let dir = pick_ins_shift_with_stats(&left_match, &ins, &right_match, &query, &product_spec);
 
@@ -192,11 +174,7 @@ fn shift_ins_right1_default() {
         cds_range:   2..3,
     };
 
-    let query = QueryRecord {
-        id:          String::from("test_seq"),
-        nucleotides: Nucleotides::from(b"ACGTAC"),
-        ctype:       String::from("test_ctype"),
-    };
+    let query = QueryRecord::new(String::from("test_seq"), b"ACGTAC".to_vec(), String::from("test_ctype")).unwrap();
 
     let dir = pick_ins_shift_with_stats(&left_match, &ins, &right_match, &query, &product_spec);
 
@@ -229,11 +207,7 @@ fn shift_ins_right2() {
         cds_range:   1..3,
     };
 
-    let query = QueryRecord {
-        id:          String::from("test_seq"),
-        nucleotides: Nucleotides::from(b"ACGTAC"),
-        ctype:       String::from("test_ctype"),
-    };
+    let query = QueryRecord::new(String::from("test_seq"), b"ACGTAC".to_vec(), String::from("test_ctype")).unwrap();
 
     let dir = pick_ins_shift_with_stats(&left_match, &ins, &right_match, &query, &product_spec);
 
@@ -263,11 +237,7 @@ fn shift_del_left1() {
         cds_range:   4..6,
     };
 
-    let query = QueryRecord {
-        id:          String::from("test_seq"),
-        nucleotides: Nucleotides::from(b"ACG"),
-        ctype:       String::from("test_ctype"),
-    };
+    let query = QueryRecord::new(String::from("test_seq"), b"ACG".to_vec(), String::from("test_ctype")).unwrap();
 
     let dir = pick_del_shift_with_stats(&left_match, &del, &right_match, &query, &product_spec);
 
@@ -297,11 +267,7 @@ fn shift_del_left1_default() {
         cds_range:   4..6,
     };
 
-    let query = QueryRecord {
-        id:          String::from("test_seq"),
-        nucleotides: Nucleotides::from(b"ACG"),
-        ctype:       String::from("test_ctype"),
-    };
+    let query = QueryRecord::new(String::from("test_seq"), b"ACG".to_vec(), String::from("test_ctype")).unwrap();
 
     let dir = pick_del_shift_with_stats(&left_match, &del, &right_match, &query, &product_spec);
 
@@ -331,11 +297,7 @@ fn shift_del_left2() {
         cds_range:   5..6,
     };
 
-    let query = QueryRecord {
-        id:          String::from("test_seq"),
-        nucleotides: Nucleotides::from(b"ACG"),
-        ctype:       String::from("test_ctype"),
-    };
+    let query = QueryRecord::new(String::from("test_seq"), b"ACG".to_vec(), String::from("test_ctype")).unwrap();
 
     let dir = pick_del_shift_with_stats(&left_match, &del, &right_match, &query, &product_spec);
 
@@ -365,11 +327,7 @@ fn shift_del_right1() {
         cds_range:   5..6,
     };
 
-    let query = QueryRecord {
-        id:          String::from("test_seq"),
-        nucleotides: Nucleotides::from(b"ACG"),
-        ctype:       String::from("test_ctype"),
-    };
+    let query = QueryRecord::new(String::from("test_seq"), b"ACG".to_vec(), String::from("test_ctype")).unwrap();
 
     let dir = pick_del_shift_with_stats(&left_match, &del, &right_match, &query, &product_spec);
 
@@ -399,11 +357,7 @@ fn shift_del_right1_default() {
         cds_range:   5..6,
     };
 
-    let query = QueryRecord {
-        id:          String::from("test_seq"),
-        nucleotides: Nucleotides::from(b"ACG"),
-        ctype:       String::from("test_ctype"),
-    };
+    let query = QueryRecord::new(String::from("test_seq"), b"ACG".to_vec(), String::from("test_ctype")).unwrap();
 
     let dir = pick_del_shift_with_stats(&left_match, &del, &right_match, &query, &product_spec);
 
@@ -433,11 +387,7 @@ fn shift_del_right2() {
         cds_range:   4..6,
     };
 
-    let query = QueryRecord {
-        id:          String::from("test_seq"),
-        nucleotides: Nucleotides::from(b"ACG"),
-        ctype:       String::from("test_ctype"),
-    };
+    let query = QueryRecord::new(String::from("test_seq"), b"ACG".to_vec(), String::from("test_ctype")).unwrap();
 
     let dir = pick_del_shift_with_stats(&left_match, &del, &right_match, &query, &product_spec);
 

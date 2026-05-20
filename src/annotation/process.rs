@@ -13,11 +13,7 @@ use crate::{
     outputs::{GenomeAndProductStates, Product, RibosomeOutput},
 };
 use std::ops::Range;
-use zoe::{
-    alignment::Alignment,
-    data::{SanitizeBase, types::nucleotides::CodonExtension},
-    prelude::*,
-};
+use zoe::{alignment::Alignment, data::types::nucleotides::CodonExtension, prelude::*};
 
 impl<'a> AnnotationModule<'a> {
     /// Processes a single query, returning [`RibosomeOutput`] containing all
@@ -26,8 +22,8 @@ impl<'a> AnnotationModule<'a> {
     pub fn process(&self, query: QueryRecord) -> Result<RibosomeOutput<'_>, RibosomeError> {
         // Get the corresponding reference information for the compound type of
         // the query
-        let Some(reference_data) = self.ctype_map.get(&query.ctype) else {
-            return Err(RibosomeError::UnimplementedCtype(query.ctype.into()));
+        let Some(reference_data) = self.ctype_map.get(query.ctype()) else {
+            return Err(RibosomeError::UnimplementedCtype(query.into_ctype().into()));
         };
 
         let mut states = Vec::with_capacity(reference_data.len());
@@ -140,8 +136,7 @@ impl<'a> AnnotationModule<'a> {
     /// [`list_contig_stop_extension`]:
     ///     crate::config::toml::Rules::list_contig_stop_extension
     fn rule_stop_extension(&self, query: &QueryRecord, genome_aln: &Alignment<u32>) -> Option<InsertionRange> {
-        // Note: This contains uppercase IUPAC, possibly with either U or T
-        let query_seq = &query.nucleotides;
+        let query_seq = query.nucleotides();
 
         if self.rules.list_contig_stop_extension
             && genome_aln.uanligned_ref_tail() == 0
@@ -183,15 +178,17 @@ impl<'a> AnnotationModule<'a> {
     fn rule_chew_to_start<'b>(
         &self, query: &'b QueryRecord, ref_id_data: &ReferenceGroup<'_>,
     ) -> (usize, NucleotidesView<'b>) {
+        let query = query.nucleotides();
+
         if self.rules.chew_to_start
-            && query.nucleotides.len() > ref_id_data.length
+            && query.len() > ref_id_data.length
             // Validity: QueryRecord contains uppercase bases
-            && let Some(r) = query.nucleotides.find_substring(b"ATG")
-            && query.nucleotides.len() - r.start >= ref_id_data.length
+            && let Some(r) = query.find_substring(b"ATG")
+            && query.len() - r.start >= ref_id_data.length
         {
-            (r.start, query.nucleotides.slice(r.start..))
+            (r.start, query.slice(r.start..))
         } else {
-            (0, query.nucleotides.as_view())
+            (0, query.as_view())
         }
     }
 
@@ -310,7 +307,7 @@ impl<'a> Product<'a> {
         // We use get_slice since technically an empty match state could cause
         // query_range.start to be out of bounds, but this will never happen
         let Some(mut first_cds_codon) = query
-            .nucleotides
+            .nucleotides()
             .get_slice(start_codon_idx_in_query..)
             .and_then(|slice| slice.get_first_codon())
         else {
@@ -319,7 +316,7 @@ impl<'a> Product<'a> {
         };
 
         // Convert U to T for the purpose of identifying the required start
-        first_cds_codon = first_cds_codon.map(|b| b.recode_base(RecodeDNAStrat::AnyToAcgtnNoGapsUpper));
+        first_cds_codon = first_cds_codon.map(|b| if b == b'U' { b'T' } else { b });
 
         // Check for equality
         first_cds_codon != required
