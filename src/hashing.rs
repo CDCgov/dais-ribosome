@@ -18,7 +18,7 @@ const AA_HASH_FILTER: ByteMap = ByteMap::identity()
 /// [`retain_by_recoding`]: RetainSequence::retain_by_recoding
 const NT_HASH_FILTER: ByteMap = AA_HASH_FILTER.map_to_one(b"~", 0);
 
-/// Returns SHA1 hex of uppercased sequence with `\n\r\t :.~-` removed.
+/// Computes the SHA1 hex of uppercased sequence with `\n\r\t :.~-` removed.
 #[inline]
 pub fn nt_id(seq: &Nucleotides) -> Option<String> {
     let cleaned = filter_nucleotides(seq);

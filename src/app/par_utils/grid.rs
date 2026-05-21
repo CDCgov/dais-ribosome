@@ -441,7 +441,8 @@ impl GridRequestedInfo {
     ///
     /// A custom error is returned with as much context as possible given the
     /// failure conditions, designed to be displayed directly using
-    /// [`JobError::or_fail`]. Any of the following can trigger an error:
+    /// [`JobErrorOrFail::unwrap_or_fail`]. Any of the following can trigger an
+    /// error:
     ///
     /// - The job submission command failing
     /// - Any of the tasks not running to completion, as evidenced by the output
@@ -453,7 +454,6 @@ impl GridRequestedInfo {
     /// [`Slurm`]: GridScheduler::Slurm
     /// [`log_path`]: GridCompatibleArgs::log_path
     /// [`ErrorKind::Other`]: std::io::ErrorKind::Other
-    /// [`unwrap_or_fail`]: zoe::data::err::OrFail::unwrap_or_fail
     pub fn submit_job_sync(&self) -> Result<(), SubmitError> {
         log::ts("started, submitting grid job");
 

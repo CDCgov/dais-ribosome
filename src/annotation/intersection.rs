@@ -65,10 +65,8 @@ pub(crate) fn form_product<'a>(state_ranges: &[StateRange], product_spec: &'a Pr
     }
 }
 
-/// A helper function for [`make_product_ranges`] which computes the
+/// A helper function for [`form_product`] which computes the
 /// `product_ranges` field.
-///
-/// [`make_product_ranges`]: ProductSpec::make_product_ranges
 fn intersect_with_exons(state_ranges: &[StateRange], exons: &Exons) -> Vec<CdsStateRange> {
     // TODO: Is this a good enough capacity? We could end up exceeding it.
     let mut product_ranges = Vec::with_capacity(state_ranges.len());

@@ -14,18 +14,54 @@ use zoe::data::err::ResultWithErrorContext;
 /// The data in a single row of the product deletion file.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct DelRow {
+    /// The ID of the query.
     pub query_id:      String,
+    /// The compound type of the query.
     pub ctype:         String,
+    /// The ID for the reference group which was aligned against.
     pub reference_id:  String,
-    pub protein:       String,
+    /// The protein product name (e.g., `HA`, `HA-signal`).
+    pub product_name:  String,
+    /// The variant hash of the product.
+    ///
+    /// See [`ComputedProduct::variant_hash`].
     pub variant_hash:  Option<String>,
+    /// The start position of the deletion in amino acid coordinates (1-based,
+    /// inclusive).
+    ///
+    /// See [`ComputedDeletion::del_aa_start`].
     pub del_aa_start:  usize,
+    /// The end position of the deletion in amino acid coordinates (1-based,
+    /// inclusive).
+    ///
+    /// See [`ComputedDeletion::del_aa_end`].
     pub del_aa_end:    usize,
+    /// The deletion length in amino acids.
+    ///
+    /// See [`ComputedDeletion::del_aa_len`].
     pub del_aa_len:    usize,
+    /// Whether deletion is in-frame (both the CDS start position and length are
+    /// multiples of 3).
+    ///
+    /// See [`ComputedDeletion::in_frame`].
     pub in_frame:      bool,
+    /// The ID of the coding sequence.
+    ///
+    /// See [`ComputedProduct::cds_id`].
     pub cds_id:        Option<String>,
+    /// The start position of the deletion in coding sequence coordinates
+    /// (1-based, inclusive).
+    ///
+    /// See [`ComputedDeletion::del_cds_start`].
     pub del_cds_start: usize,
+    /// The end position of the deletion in coding sequence coordinates
+    /// (1-based, inclusive).
+    ///
+    /// See [`ComputedDeletion::del_cds_end`].
     pub del_cds_end:   usize,
+    /// The deletion length in nucleotides.
+    ///
+    /// See [`ComputedDeletion::del_cds_len`].
     pub del_cds_len:   usize,
 }
 
@@ -37,7 +73,7 @@ impl<'de> Deserialize<'de> for DelRow {
             query_id,
             ctype,
             reference_id,
-            protein,
+            product_name,
             variant_hash,
             del_aa_start,
             del_aa_end,
@@ -56,7 +92,7 @@ impl<'de> Deserialize<'de> for DelRow {
             query_id,
             ctype,
             reference_id,
-            protein,
+            product_name,
             variant_hash,
             del_aa_start,
             del_aa_end,
@@ -76,7 +112,7 @@ struct DelRowRaw {
     query_id:      String,
     ctype:         String,
     reference_id:  String,
-    protein:       String,
+    product_name:  String,
     variant_hash:  String,
     del_aa_start:  usize,
     del_aa_end:    usize,
@@ -95,18 +131,54 @@ struct DelRowRaw {
 /// clone/allocate each part.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct DelRowView<'a> {
+    /// The ID of the query.
     pub query_id:      &'a str,
+    /// The compound type of the query.
     pub ctype:         &'a str,
+    /// The ID for the reference group which was aligned against.
     pub reference_id:  &'a str,
-    pub protein:       &'a str,
+    /// The protein product name (e.g., `HA`, `HA-signal`).
+    pub product_name:  &'a str,
+    /// The variant hash of the product.
+    ///
+    /// See [`ComputedProduct::variant_hash`].
     pub variant_hash:  Option<&'a str>,
+    /// The start position of the deletion in amino acid coordinates (1-based,
+    /// inclusive).
+    ///
+    /// See [`ComputedDeletion::del_aa_start`].
     pub del_aa_start:  usize,
+    /// The end position of the deletion in amino acid coordinates (1-based,
+    /// inclusive).
+    ///
+    /// See [`ComputedDeletion::del_aa_end`].
     pub del_aa_end:    usize,
+    /// The deletion length in amino acids.
+    ///
+    /// See [`ComputedDeletion::del_aa_len`].
     pub del_aa_len:    usize,
+    /// Whether deletion is in-frame (both the CDS start position and length are
+    /// multiples of 3).
+    ///
+    /// See [`ComputedDeletion::in_frame`].
     pub in_frame:      bool,
+    /// The ID of the coding sequence.
+    ///
+    /// See [`ComputedProduct::cds_id`].
     pub cds_id:        Option<&'a str>,
+    /// The start position of the deletion in coding sequence coordinates
+    /// (1-based, inclusive).
+    ///
+    /// See [`ComputedDeletion::del_cds_start`].
     pub del_cds_start: usize,
+    /// The end position of the deletion in coding sequence coordinates
+    /// (1-based, inclusive).
+    ///
+    /// See [`ComputedDeletion::del_cds_end`].
     pub del_cds_end:   usize,
+    /// The deletion length in nucleotides.
+    ///
+    /// See [`ComputedDeletion::del_cds_len`].
     pub del_cds_len:   usize,
 }
 
@@ -121,7 +193,7 @@ impl<'a> DelRowView<'a> {
             query_id,
             ctype,
             reference_id,
-            protein: product.product_name,
+            product_name: product.name,
             variant_hash: product.variant_hash.as_ref().map(AsRef::as_ref),
             del_aa_start: deletion.del_aa_start,
             del_aa_end: deletion.del_aa_end,
@@ -143,7 +215,7 @@ impl Display for DelRow {
             self.query_id,
             self.ctype,
             self.reference_id,
-            self.protein,
+            self.product_name,
             self.variant_hash.as_ref().map(AsRef::as_ref).unwrap_or(HADOOP_NULL),
             self.del_aa_start,
             self.del_aa_end,
@@ -165,7 +237,7 @@ impl Display for DelRowView<'_> {
             self.query_id,
             self.ctype,
             self.reference_id,
-            self.protein,
+            self.product_name,
             self.variant_hash.as_ref().map(AsRef::as_ref).unwrap_or(HADOOP_NULL),
             self.del_aa_start,
             self.del_aa_end,

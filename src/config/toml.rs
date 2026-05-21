@@ -41,12 +41,14 @@ impl TomlConfig {
     /// Find a module by name, returning it along with the paths to other
     /// modules' references.
     ///
-    /// This is used when forming [`ModuleData`]. The second return value is a
-    /// vector containing tuples with the module names and the paths to the
+    /// This is used when forming [`AnnotationModule`]. The second return value
+    /// is a vector containing tuples with the module names and the paths to the
     /// reference sequences. These are used to populate `other_modules`.
     ///
-    /// [`ModuleData`]: crate::config::module_data::ModuleData
-    pub fn find_module(&self, name: &str, modules_dir: &Path) -> Option<(&ConfiguredModule, Vec<(&String, PathBuf)>)> {
+    /// [`AnnotationModule`]: crate::config::annotation_module::AnnotationModule
+    pub(crate) fn find_module(
+        &self, name: &str, modules_dir: &Path,
+    ) -> Option<(&ConfiguredModule, Vec<(&String, PathBuf)>)> {
         let mut selected = None;
         let mut others = Vec::new();
 

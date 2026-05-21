@@ -50,7 +50,7 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
     for row in reader {
         let TsvRow {
             reference_id,
-            protein,
+            product_name,
             ctype,
             coords,
             required_start,
@@ -95,7 +95,7 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
         };
 
         let key = RefKey::new(reference_id, ctype);
-        cds_specs.entry(key).or_default().push((protein, exons));
+        cds_specs.entry(key).or_default().push((product_name, exons));
     }
 
     if cds_specs.is_empty() {
@@ -115,7 +115,7 @@ struct TsvRow {
     ctype: String,
 
     /// The protein product name in column 3 (e.g., `HA`, `HA-signal`).
-    protein: String,
+    product_name: String,
 
     /// A list of the exon coordinates in column 4 (e.g., `55..1683`,
     /// `1..33;689..1024`).
@@ -160,7 +160,7 @@ impl FromStr for TsvRow {
             return Err(std::io::Error::other("Missing Compound Type field (second field)"));
         };
 
-        let Some(protein) = parts.next() else {
+        let Some(product_name) = parts.next() else {
             return Err(std::io::Error::other("Missing Protein field (third field)"));
         };
 
@@ -170,7 +170,7 @@ impl FromStr for TsvRow {
         let required_start = parts.next();
 
         let reference_id = reference_id.to_string();
-        let protein = protein.to_string();
+        let product_name = product_name.to_string();
         let ctype = ctype.to_string();
 
         // Parse coordinate ranges (e.g., 1..54 or 1..36;692..1027)
@@ -206,7 +206,7 @@ impl FromStr for TsvRow {
 
         Ok(TsvRow {
             reference_id,
-            protein,
+            product_name,
             ctype,
             // Validity: coords is non-empty since parse_exon_coords ensures
             // this

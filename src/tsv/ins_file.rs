@@ -14,15 +14,36 @@ use zoe::{
 /// The data in a single row of the product insertion file.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct InsRow {
-    pub query_id:     String,
-    pub ctype:        String,
-    pub reference_id: String,
-    pub protein:      String,
-    pub aa_pos:       usize,
-    pub inserted_nts: Nucleotides,
-    pub inserted_aas: AminoAcids,
-    pub nt_pos:       usize,
-    pub codon_shift:  usize,
+    /// The ID of the query.
+    pub query_id:        String,
+    /// The compound type of the query.
+    pub ctype:           String,
+    /// The ID for the reference group which was aligned against.
+    pub reference_id:    String,
+    /// The protein product name (e.g., `HA`, `HA-signal`).
+    pub product_name:    String,
+    /// The upstream amino acid position (1-based), which is the position
+    /// _after_ which the insertion occurs.
+    ///
+    /// See [`ComputedInsertion::upstream_aa_pos`].
+    pub upstream_aa_pos: usize,
+    /// The inserted nucleotides.
+    ///
+    /// See [`ComputedInsertion::inserted_nt`].
+    pub inserted_nt:     Nucleotides,
+    /// A direct translation of `inserted_nt` to amino acids.
+    ///
+    /// See [`ComputedInsertion::inserted_aa`].
+    pub inserted_aa:     AminoAcids,
+    /// The upstream nucleotide position (1-based), which is the position
+    /// _after_ which the insertion occurs.
+    ///
+    /// See [`ComputedInsertion::upstream_nt_pos`].
+    pub upstream_nt_pos: usize,
+    /// The codon shift of the insertion.
+    ///
+    /// See [`ComputedInsertion::codon_shift`].
+    pub codon_shift:     usize,
 }
 
 impl<'de> Deserialize<'de> for InsRow {
@@ -33,26 +54,26 @@ impl<'de> Deserialize<'de> for InsRow {
             query_id,
             ctype,
             reference_id,
-            protein,
-            aa_pos,
-            inserted_nts,
-            inserted_aas,
-            nt_pos,
+            product_name,
+            upstream_aa_pos,
+            inserted_nt,
+            inserted_aa,
+            upstream_nt_pos,
             codon_shift,
         } = InsRowRaw::deserialize(deserializer)?;
 
-        let inserted_nts = Nucleotides::from(inserted_nts);
-        let inserted_aas = AminoAcids::from(inserted_aas);
+        let inserted_nt = Nucleotides::from(inserted_nt);
+        let inserted_aa = AminoAcids::from(inserted_aa);
 
         Ok(InsRow {
             query_id,
             ctype,
             reference_id,
-            protein,
-            aa_pos,
-            inserted_nts,
-            inserted_aas,
-            nt_pos,
+            product_name,
+            upstream_aa_pos,
+            inserted_nt,
+            inserted_aa,
+            upstream_nt_pos,
             codon_shift,
         })
     }
@@ -61,15 +82,15 @@ impl<'de> Deserialize<'de> for InsRow {
 /// A helper struct for deserializing [`InsRow`].
 #[derive(Deserialize)]
 struct InsRowRaw {
-    query_id:     String,
-    ctype:        String,
-    reference_id: String,
-    protein:      String,
-    aa_pos:       usize,
-    inserted_nts: String,
-    inserted_aas: String,
-    nt_pos:       usize,
-    codon_shift:  usize,
+    query_id:        String,
+    ctype:           String,
+    reference_id:    String,
+    product_name:    String,
+    upstream_aa_pos: usize,
+    inserted_nt:     String,
+    inserted_aa:     String,
+    upstream_nt_pos: usize,
+    codon_shift:     usize,
 }
 
 /// The data in a single row of the product insertion file, with all fields
@@ -79,15 +100,36 @@ struct InsRowRaw {
 /// clone/allocate each part.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct InsRowView<'a> {
-    pub query_id:     &'a str,
-    pub ctype:        &'a str,
-    pub reference_id: &'a str,
-    pub protein:      &'a str,
-    pub aa_pos:       usize,
-    pub inserted_nts: NucleotidesView<'a>,
-    pub inserted_aas: AminoAcidsView<'a>,
-    pub nt_pos:       usize,
-    pub codon_shift:  usize,
+    /// The ID of the query.
+    pub query_id:        &'a str,
+    /// The compound type of the query.
+    pub ctype:           &'a str,
+    /// The ID for the reference group which was aligned against.
+    pub reference_id:    &'a str,
+    /// The protein product name (e.g., `HA`, `HA-signal`).
+    pub product_name:    &'a str,
+    /// The upstream amino acid position (1-based), which is the position
+    /// _after_ which the insertion occurs.
+    ///
+    /// See [`ComputedInsertion::upstream_aa_pos`].
+    pub upstream_aa_pos: usize,
+    /// The inserted nucleotides.
+    ///
+    /// See [`ComputedInsertion::inserted_nt`].
+    pub inserted_nt:     NucleotidesView<'a>,
+    /// A direct translation of `inserted_nt` to amino acids.
+    ///
+    /// See [`ComputedInsertion::inserted_aa`].
+    pub inserted_aa:     AminoAcidsView<'a>,
+    /// The upstream nucleotide position (1-based), which is the position
+    /// _after_ which the insertion occurs.
+    ///
+    /// See [`ComputedInsertion::upstream_nt_pos`].
+    pub upstream_nt_pos: usize,
+    /// The codon shift of the insertion.
+    ///
+    /// See [`ComputedInsertion::codon_shift`].
+    pub codon_shift:     usize,
 }
 
 impl<'a> InsRowView<'a> {
@@ -101,11 +143,11 @@ impl<'a> InsRowView<'a> {
             query_id,
             ctype,
             reference_id,
-            protein: product.product_name,
-            aa_pos: insertion.upstream_aa_pos,
-            inserted_nts: insertion.inserted_nucleotides.as_view(),
-            inserted_aas: insertion.inserted_residues.as_view(),
-            nt_pos: insertion.upstream_nt_pos,
+            product_name: product.name,
+            upstream_aa_pos: insertion.upstream_aa_pos,
+            inserted_nt: insertion.inserted_nt.as_view(),
+            inserted_aa: insertion.inserted_aa.as_view(),
+            upstream_nt_pos: insertion.upstream_nt_pos,
             codon_shift: insertion.codon_shift,
         }
     }
@@ -114,10 +156,10 @@ impl<'a> InsRowView<'a> {
 impl Display for InsRowView<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(feature = "regression-testing")]
-        let nts = self.inserted_nts.to_string().to_lowercase();
+        let nts = self.inserted_nt.to_string().to_lowercase();
 
         #[cfg(not(feature = "regression-testing"))]
-        let nts = &self.inserted_nts;
+        let nts = &self.inserted_nt;
 
         write!(
             f,
@@ -125,11 +167,11 @@ impl Display for InsRowView<'_> {
             self.query_id,
             self.ctype,
             self.reference_id,
-            self.protein,
-            self.aa_pos,
+            self.product_name,
+            self.upstream_aa_pos,
             nts,
-            self.inserted_aas,
-            self.nt_pos,
+            self.inserted_aa,
+            self.upstream_nt_pos,
             self.codon_shift,
         )
     }

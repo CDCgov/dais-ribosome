@@ -2,7 +2,7 @@
 //! file.
 
 use crate::{
-    outputs::PrecomputedGenomeData,
+    outputs::ComputedGenome,
     toml::Formatting,
     tsv::{HADOOP_NULL, Nullable},
 };
@@ -18,13 +18,34 @@ use zoe::{
 /// The data in a single row of the genome sequence file.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct GenSeqRow {
+    /// The ID of the query.
     pub query_id:      String,
+    /// The compound type of the query.
     pub ctype:         String,
+    /// The ID for the reference group which was aligned against.
     pub reference_id:  String,
+    /// The SHA1 hash of the cleaned genome sequence, or `None` if no DNA data
+    /// remained after filtering.
+    ///
+    /// See [`ComputedGenome::genome_id`].
     pub genome_id:     Option<String>,
+    /// The length of the genome's unaligned nucleotide sequence.
+    ///
+    /// See [`ComputedGenome::genome_length`].
     pub genome_length: usize,
+    /// Whether any insertion exists in the genome.
+    ///
+    /// See [`ComputedGenome::has_insertion`].
     pub has_insertion: bool,
+    /// The unaligned nucleotide sequence for the genome (with insertions but no
+    /// deletions).
+    ///
+    /// See [`ComputedGenome::genome_seq`].
     pub genome_seq:    Nucleotides,
+    /// The aligned nucleotide sequence for the genome (with `-` for deletions
+    /// but no insertions).
+    ///
+    /// See [`ComputedGenome::genome_aln`].
     pub genome_aln:    Nucleotides,
 }
 
@@ -80,23 +101,44 @@ struct GenSeqRowRaw {
 /// clone/allocate each part.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct GenSeqRowView<'a> {
+    /// The ID of the query.
     pub query_id:        &'a str,
+    /// The compound type of the query.
     pub ctype:           &'a str,
+    /// The ID for the reference group which was aligned against.
     pub reference_id:    &'a str,
+    /// The SHA1 hash of the cleaned genome sequence, or `None` if no DNA data
+    /// remained after filtering.
+    ///
+    /// See [`ComputedGenome::genome_id`].
     pub genome_id:       Option<&'a str>,
+    /// The length of the genome's unaligned nucleotide sequence.
+    ///
+    /// See [`ComputedGenome::genome_length`].
     pub genome_length:   usize,
+    /// Whether any insertion exists in the genome.
+    ///
+    /// See [`ComputedGenome::has_insertion`].
     pub has_insertion:   bool,
+    /// The unaligned nucleotide sequence for the genome (with insertions but no
+    /// deletions).
+    ///
+    /// See [`ComputedGenome::genome_seq`].
     pub genome_seq:      NucleotidesView<'a>,
+    /// The aligned nucleotide sequence for the genome (with `-` for deletions
+    /// but no insertions).
+    ///
+    /// See [`ComputedGenome::genome_aln`].
     pub genome_aln:      NucleotidesView<'a>,
+    /// The amount of right padding to apply to `genome_aln`.
     pub genome_aln_rpad: usize,
 }
 
 impl<'a> GenSeqRowView<'a> {
     /// Creates a new [`GenSeqRowView`] by extracting the relevant fields from
-    /// the [`PrecomputedGenomeData`].
+    /// the [`ComputedGenome`].
     pub fn new(
-        genome: &'a PrecomputedGenomeData, query_id: &'a str, ctype: &'a str, reference_id: &'a str,
-        formatting: &'a Formatting,
+        genome: &'a ComputedGenome, query_id: &'a str, ctype: &'a str, reference_id: &'a str, formatting: &'a Formatting,
     ) -> Self {
         let genome_aln_rpad = if formatting.right_pad_gen {
             genome.trailing_ref_unaligned

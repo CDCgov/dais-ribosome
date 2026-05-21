@@ -198,13 +198,13 @@ pub fn load_codon_weights(path: &Path) -> std::io::Result<CodonWeightMatrix> {
             let line = line.trim_start_matches('#').trim_ascii();
             let mut parts = line.split('|').map(|s| s.trim_ascii());
 
-            let (Some(reference_id), Some(protein_product)) = (parts.next(), parts.next()) else {
+            let (Some(reference_id), Some(product_name)) = (parts.next(), parts.next()) else {
                 return Err(std::io::Error::other(format!(
                     "Invalid weight matrix header. Expected reference_id|protein, found {line}"
                 )));
             };
 
-            current_key = Some(SpecKey::new(reference_id, protein_product));
+            current_key = Some(SpecKey::new(reference_id, product_name));
             current_raw_codons = HashSet::new();
 
             continue;

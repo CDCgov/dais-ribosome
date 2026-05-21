@@ -99,15 +99,17 @@ impl InsertionIdx {
         Self { right: self.right / 3 }
     }
 
-    /// The number of amino acids within the insertion's codon that are left of
-    /// the insertion.
+    /// Computes the "codon shift" of the insertion.
+    ///
+    /// See [`ComputedInsertion::codon_shift`].
+    ///
+    /// ## Validity
     ///
     /// This should be called only on [`InsertionIdx`] within a nucleotides
     /// sequence (not an amino acids sequence).
     ///
-    /// 0 means that the insertion occurs in-frame. 1 means that the insertion
-    /// appears after the first base of a codon. 2 means that the insertion
-    /// appears after the second base of a codon.
+    /// [`ComputedInsertion::codon_shift`]:
+    ///     crate::outputs::ComputedInsertion::codon_shift
     pub(crate) fn codon_shift(self) -> usize {
         // right = 0  ->  in frame
         // right = 1  ->  after first base

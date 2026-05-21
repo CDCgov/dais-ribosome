@@ -1,11 +1,5 @@
 //! The [`AnnotationModule`] for containing all data needed to translate and
 //! annotate query sequences, along with helper structs.
-//!
-//! This contains the same data as [`ModuleData`] but regrouped and
-//! denormalized, as well as reference profiles being computed. Redundant
-//! information is stored with references, so that no information is actually
-//! duplicated. This requires both [`ModuleData`] and [`AnnotationModule`] to be
-//! exposed to the users.
 
 use crate::{
     config::{
@@ -63,11 +57,11 @@ impl<'a> AnnotationModule<'a> {
     ///
     /// - The requested `module_name` must be present in the config.
     /// - The reference file in the config must exist within the module's folder
-    ///   and be parsed successfully (see [`load_references`]).
+    ///   and be parsed successfully.
     /// - The codon position weights file must exist within the module's folder
-    ///   and be parsed successfully (see [`load_codon_weights`]).
+    ///   and be parsed successfully.
     /// - The CDS specifications file must exist within the module's folder and
-    ///   be parsed successfully (see [`load_cds_spec`]).
+    ///   be parsed successfully.
     pub fn new(config: &'a TomlConfig, toml_path: &Path, module_name: &str) -> std::io::Result<AnnotationModule<'a>> {
         // Get path to ribosome_res directory
         let modules_dir = toml_path
@@ -198,12 +192,14 @@ pub type AlignmentProfiles<'a> = SharedProfiles<'a, 32, 16, 8, 5>;
 #[derive(Debug)]
 pub(crate) struct ReferenceGroup<'a> {
     /// The shared reference ID of the reference sequences.
-    pub(crate) reference_id: String,
+    pub(crate) reference_id:  String,
     /// The shared length of the reference sequences.
-    pub(crate) length:       usize,
+    pub(crate) length:        usize,
     /// The alignment profiles corresponding to the sequences.
-    pub(crate) profiles:     Vec<AlignmentProfiles<'a>>,
-    pub(crate) proteins:     Vec<ProductSpec>,
+    pub(crate) profiles:      Vec<AlignmentProfiles<'a>>,
+    /// The specifications for all the protein products that can be formed from
+    /// the references.
+    pub(crate) product_specs: Vec<ProductSpec>,
 }
 
 impl<'a> ReferenceGroup<'a> {
@@ -230,14 +226,14 @@ impl<'a> ReferenceGroup<'a> {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let proteins = cds_spec
+        let product_specs = cds_spec
             .remove(ref_key)
             .into_iter()
             .flatten()
-            .map(|(protein_name, exons)| {
-                let spec_key = SpecKey::new(&ref_key.reference_id, &protein_name);
+            .map(|(product_name, exons)| {
+                let spec_key = SpecKey::new(&ref_key.reference_id, &product_name);
                 ProductSpec {
-                    name: protein_name,
+                    name: product_name,
                     exons,
                     codon_weights: codon_weights.remove(&spec_key),
                 }
@@ -248,7 +244,7 @@ impl<'a> ReferenceGroup<'a> {
             reference_id: ref_key.reference_id.to_string(),
             length,
             profiles,
-            proteins,
+            product_specs,
         })
     }
 

@@ -58,9 +58,9 @@ impl<'a> AnnotationModule<'a> {
             // Validity: requirements met based on best_alignment guarantees
             let genome_aln_states = StateRange::state_ranges_from_aligment(&genome_aln);
 
-            let mut products = Vec::with_capacity(ref_id_data.proteins.len());
+            let mut products = Vec::with_capacity(ref_id_data.product_specs.len());
 
-            for product in &ref_id_data.proteins {
+            for product in &ref_id_data.product_specs {
                 // Validity: requirements met based on
                 // state_ranges_from_aligment guarantees
                 let mut product_ranges = intersection::form_product(&genome_aln_states, product);
@@ -201,8 +201,8 @@ impl<'a> AnnotationModule<'a> {
     /// The score of the alignment is not altered. The alignment may have match
     /// states added and soft clipping removed, but no other changes will occur.
     ///
-    /// [`rule_repairable_ends`]:
-    ///     crate::config::toml::Rules::rule_repairable_ends
+    /// [`repairable_end_limit`]:
+    ///     crate::config::toml::Rules::repairable_end_limit
     fn rule_repairable_ends(&self, genome_aln: &mut Alignment<u32>) {
         if let Some(limit) = self.rules.repairable_end_limit {
             let unaligned_pre = genome_aln.query_range.start.min(genome_aln.ref_range.start);

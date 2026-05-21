@@ -10,11 +10,19 @@ use zoe::data::err::ResultWithErrorContext;
 /// The data in a single row of the genome deletion file.
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
 pub struct GenDelRow {
+    /// The ID of the query.
     pub query_id:     String,
+    /// The compound type of the query.
     pub ctype:        String,
+    /// The ID for the reference group which was aligned against.
     pub reference_id: String,
+    /// The start position of the deletion in the nucleotide sequence (1-based,
+    /// inclusive).
     pub del_start:    usize,
+    /// The end position of the deletion in the nucleotide sequence (1-based,
+    /// inclusive).
     pub del_end:      usize,
+    /// The deletion length in nucleotides.
     pub del_len:      usize,
 }
 
@@ -25,11 +33,19 @@ pub struct GenDelRow {
 /// clone/allocate each part.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct GenDelRowView<'a> {
+    /// The ID of the query.
     pub query_id:     &'a str,
+    /// The compound type of the query.
     pub ctype:        &'a str,
+    /// The ID for the reference group which was aligned against.
     pub reference_id: &'a str,
+    /// The start position of the deletion in the nucleotide sequence (1-based,
+    /// inclusive).
     pub del_start:    usize,
+    /// The end position of the deletion in the nucleotide sequence (1-based,
+    /// inclusive).
     pub del_end:      usize,
+    /// The deletion length in nucleotides.
     pub del_len:      usize,
 }
 

@@ -520,7 +520,7 @@ fn warn_adjacent_deletions(del: &CdsDeletionRange, query: &QueryRecord, product_
             "Two deletions within adjacent exons occurred. Because they were separated by a non-coding region, frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
             query_id = query.id,
             product = product_spec.name
-        )
+        );
     }
 }
 
@@ -684,11 +684,11 @@ fn pick_insertion_shift(
     left_match: &CdsMatchRange, ins: &CdsInsertionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,
 ) -> Option<ShiftDir> {
-    let frameshift = ins.frameshift();
+    let codon_shift = ins.codon_shift();
 
-    // Check shift eligibility, equivalent to eligible_for_shift but
-    // allowing us to retain the frameshift.
-    if frameshift == 0 || !ins.len().is_multiple_of(3) {
+    // Check shift eligibility, equivalent to eligible_for_shift but allowing us
+    // to retain the codon shift.
+    if codon_shift == 0 || !ins.len().is_multiple_of(3) {
         return None;
     }
 
@@ -776,9 +776,9 @@ fn pick_insertion_shift(
     };
 
     // Check whether shifts are possible given the frame
-    let (can_shift_left, can_shift_right) = if frameshift == 1 {
+    let (can_shift_left, can_shift_right) = if codon_shift == 1 {
         (max_left_shift >= 1, max_right_shift >= 2)
-    } else if frameshift == 2 {
+    } else if codon_shift == 2 {
         (max_left_shift >= 2, max_right_shift >= 1)
     } else {
         return None;
@@ -845,11 +845,11 @@ fn pick_deletion_shift(
     left_match: &CdsMatchRange, del: &CdsDeletionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,
 ) -> Option<ShiftDir> {
-    let frameshift = del.frameshift();
+    let codon_shift = del.codon_shift();
 
-    // Check shift eligibility, equivalent to eligible_for_shift but
-    // allowing us to retain the frameshift.
-    if frameshift == 0 || !del.len().is_multiple_of(3) {
+    // Check shift eligibility, equivalent to eligible_for_shift but allowing us
+    // to retain the codon shift.
+    if codon_shift == 0 || !del.len().is_multiple_of(3) {
         return None;
     }
 
@@ -936,9 +936,9 @@ fn pick_deletion_shift(
     };
 
     // Check whether shifts are possible given the frame
-    let (can_shift_left, can_shift_right) = if frameshift == 1 {
+    let (can_shift_left, can_shift_right) = if codon_shift == 1 {
         (max_left_shift >= 1, max_right_shift >= 2)
-    } else if frameshift == 2 {
+    } else if codon_shift == 2 {
         (max_left_shift >= 2, max_right_shift >= 1)
     } else {
         return None;
@@ -986,9 +986,9 @@ fn pick_del_shift_with_stats(
     // The pivot codon is placed at the right position if a left shift is used
     let pos_right = ((del.cds_range.end - 1) / 3) + 1;
 
-    let frameshift = del.frameshift();
+    let codon_shift = del.codon_shift();
 
-    let (pivot, default) = if frameshift == 1 {
+    let (pivot, default) = if codon_shift == 1 {
         // We need to shift the deletion left by 1 or right by 2
 
         let cp1 = query.nucleotides[left_match.query_range.end - 1];
@@ -999,7 +999,7 @@ fn pick_del_shift_with_stats(
 
         // Left shift is default since it moves fewer states
         (pivot, ShiftDir::Left)
-    } else if frameshift == 2 {
+    } else if codon_shift == 2 {
         // We need to shift the deletion right by 1 or left by 2
 
         let cp1 = query.nucleotides[left_match.query_range.end - 2];
@@ -1036,9 +1036,9 @@ fn pick_ins_shift_with_stats(
     let codon_position = ins.cds_index.to_aa_idx().right_pos();
     let insert_seq = &query.nucleotides[ins.query_range.clone()];
 
-    let frameshift = ins.frameshift();
+    let codon_shift = ins.codon_shift();
 
-    let (left_shift_codon, right_shift_codon, default) = if frameshift == 1 {
+    let (left_shift_codon, right_shift_codon, default) = if codon_shift == 1 {
         // We need to shift the insertion left by 1 or right by 2
 
         let [i1, i2, .., i3] = *insert_seq else {
@@ -1056,7 +1056,7 @@ fn pick_ins_shift_with_stats(
 
         // Left shift is default since it moves fewer states
         (left_shift_codon, right_shift_codon, ShiftDir::Left)
-    } else if frameshift == 2 {
+    } else if codon_shift == 2 {
         // We need to shift the insertion right by 1 or left by 2
 
         let [i1, .., i2, i3] = *insert_seq else {
@@ -1097,9 +1097,9 @@ fn pick_ins_shift_with_stats(
 fn apply_insertion_shift(
     shift_dir: ShiftDir, left_match: &mut CdsMatchRange, ins: &mut CdsInsertionRange, right_match: &mut CdsMatchRange,
 ) {
-    let frameshift = ins.frameshift();
+    let codon_shift = ins.codon_shift();
 
-    if frameshift == 1 {
+    if codon_shift == 1 {
         match shift_dir {
             ShiftDir::Left => {
                 left_match.cut_end(1);
@@ -1112,7 +1112,7 @@ fn apply_insertion_shift(
                 right_match.cut_start(2);
             }
         }
-    } else if frameshift == 2 {
+    } else if codon_shift == 2 {
         match shift_dir {
             ShiftDir::Left => {
                 left_match.cut_end(2);
@@ -1133,9 +1133,9 @@ fn apply_insertion_shift(
 fn apply_deletion_shift(
     shift_dir: ShiftDir, left_match: &mut CdsMatchRange, del: &mut CdsDeletionRange, right_match: &mut CdsMatchRange,
 ) {
-    let frameshift = del.frameshift();
+    let codon_shift = del.codon_shift();
 
-    if frameshift == 1 {
+    if codon_shift == 1 {
         match shift_dir {
             ShiftDir::Left => {
                 left_match.cut_end(1);
@@ -1148,7 +1148,7 @@ fn apply_deletion_shift(
                 right_match.cut_start(2);
             }
         }
-    } else if frameshift == 2 {
+    } else if codon_shift == 2 {
         match shift_dir {
             ShiftDir::Left => {
                 left_match.cut_end(2);
@@ -1186,21 +1186,26 @@ impl CdsDeletionRange {
         self.cds_range = self.cds_range.add(amount);
     }
 
-    /// The frame shift of the deletion.
-    fn frameshift(&self) -> usize {
+    /// Computes the "codon shift" of the deletion, which is the number of bases
+    /// between the last codon and the start of the deletion.
+    ///
+    /// 0 means that the deletion starts at a codon boundary. 1 means that the
+    /// deletion starts after the first base of a codon. 2 means that the
+    /// deletion starts after the second base of a codon.
+    fn codon_shift(&self) -> usize {
         self.cds_range.start % 3
     }
 
     /// Returns whether a deletion is eligible to be shifted based solely on its
-    /// frame and length.
+    /// codon shift and length.
     ///
     /// The length of the deletion in CDS coordinates must be a multiple of
-    /// three, and frame must be non-zero.
+    /// three, and codon shift must be non-zero.
     ///
     /// Note that the result of this can vary before and after a deletion is
     /// merged with adjacent deletions.
     fn eligible_for_shift(&self) -> bool {
-        self.frameshift() != 0 && self.len().is_multiple_of(3)
+        self.codon_shift() != 0 && self.len().is_multiple_of(3)
     }
 }
 
@@ -1215,18 +1220,23 @@ impl CdsInsertionRange {
         self.query_range = self.query_range.start + amount..self.query_range.end + amount;
     }
 
-    /// The frame shift of the insertion.
-    fn frameshift(&self) -> usize {
+    /// Computes the codon shift of the insertion.
+    ///
+    /// See [`InsertionIdx::codon_shift`].
+    ///
+    /// [`InsertionIdx::codon_shift`]:
+    ///     crate::data::ranges::InsertionIdx::codon_shift
+    fn codon_shift(&self) -> usize {
         self.cds_index.codon_shift()
     }
 
     /// Returns whether an insertion is eligible to be shifted based solely on
-    /// its frame and length.
+    /// its codon shift and length.
     ///
     /// The length of the insertion in CDS coordinates must be a multiple of
-    /// three, and frame must be non-zero.
+    /// three, and the codon shift must be non-zero.
     fn eligible_for_shift(&self) -> bool {
-        self.frameshift() != 0 && self.len().is_multiple_of(3)
+        self.codon_shift() != 0 && self.len().is_multiple_of(3)
     }
 }
 

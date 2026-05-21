@@ -19,19 +19,62 @@ use zoe::{
 /// The data in a single row of the product sequence file.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct SeqRow {
+    /// The ID of the query.
     pub query_id:          String,
+    /// The compound type of the query.
     pub ctype:             String,
+    /// The ID for the reference group which was aligned against.
     pub reference_id:      String,
-    pub protein:           String,
+    /// The protein product name (e.g., `HA`, `HA-signal`).
+    pub product_name:      String,
+    /// The MD5 hash of the cleaned amino acid sequence (variant hash), or
+    /// `None` if no amino acid data remained after filtering.
+    ///
+    /// See [`ComputedProduct::variant_hash`].
     pub variant_hash:      Option<String>,
+    /// The unaligned amino acid sequence for the protein (with insertions but
+    /// no deletions).
+    ///
+    /// See [`ComputedProduct::aa_seq`].
     pub aa_seq:            Option<AminoAcids>,
+    /// The aligned amino acid sequence for the protein (with `-` for deletions
+    /// but no insertions).
+    ///
+    /// See [`ComputedProduct::aa_aln`].
     pub aa_aln:            Option<AminoAcids>,
+    /// The SHA1 hash of the cleaned coding sequence, or `None` if no DNA data
+    /// remained after filtering.
+    ///
+    /// See [`ComputedProduct::cds_id`].
     pub cds_id:            Option<String>,
+    /// Whether any insertion exists in this product.
+    ///
+    /// See [`ComputedProduct::has_insertion`].
     pub has_insertion:     bool,
+    /// Whether any insertion or deletion causes a frameshift (i.e., the length
+    /// is not divisible by 3).
+    ///
+    /// See [`ComputedProduct::has_shift_indel`].
     pub has_shift_indel:   bool,
+    /// The unaligned coding sequence for the protein (with insertions but no
+    /// deletions).
+    ///
+    /// See [`ComputedProduct::cds_seq`].
     pub cds_seq:           Option<Nucleotides>,
+    /// The aligned coding sequence for the protein (with `-` for deletions but
+    /// no insertions).
+    ///
+    /// See [`ComputedProduct::cds_aln`].
     pub cds_aln:           Option<Nucleotides>,
+    /// The coordinates within the original query that were used to form the
+    /// unaligned `cds_seq`.
+    ///
+    /// See [`ComputedProduct::query_coords`].
     pub query_coordinates: Vec<Range<usize>>,
+    /// The coding sequence coordinates corresponding to the
+    /// `query_coordinates`.
+    ///
+    /// See [`ComputedProduct::cds_coords`].
     pub cds_coordinates:   Vec<CdsCoord>,
 }
 
@@ -43,7 +86,7 @@ impl<'de> Deserialize<'de> for SeqRow {
             query_id,
             ctype,
             reference_id,
-            protein,
+            product_name,
             variant_hash,
             aa_seq,
             aa_aln,
@@ -79,7 +122,7 @@ impl<'de> Deserialize<'de> for SeqRow {
             query_id,
             ctype,
             reference_id,
-            protein,
+            product_name,
             variant_hash,
             aa_seq,
             aa_aln,
@@ -100,7 +143,7 @@ struct SeqRowRaw {
     query_id:          String,
     ctype:             String,
     reference_id:      String,
-    protein:           String,
+    product_name:      String,
     variant_hash:      String,
     aa_seq:            String,
     aa_aln:            String,
@@ -120,21 +163,58 @@ struct SeqRowRaw {
 /// clone/allocate each part.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct SeqRowView<'a> {
+    /// The ID of the query.
     pub query_id:          &'a str,
+    /// The compound type of the query.
     pub ctype:             &'a str,
+    /// The ID for the reference group which was aligned against.
     pub reference_id:      &'a str,
-    pub protein:           &'a str,
+    /// The protein product name (e.g., `HA`, `HA-signal`).
+    pub product_name:      &'a str,
+    /// The MD5 hash of the cleaned amino acid sequence (variant hash), or
+    /// `None` if no amino acid data remained after filtering.
     pub variant_hash:      Option<&'a str>,
+    /// The unaligned amino acid sequence for the protein (with insertions but
+    /// no deletions).
+    ///
+    /// See [`ComputedProduct::aa_seq`].
     pub aa_seq:            AminoAcidsView<'a>,
+    /// The aligned amino acid sequence for the protein (with `-` for deletions
+    /// but no insertions).
+    ///
+    /// See [`ComputedProduct::aa_aln`].
     pub aa_aln:            AminoAcidsView<'a>,
+    /// The amount of right padding to apply to `aa_aln`.
     pub aa_aln_rpad:       usize,
+    /// The SHA1 hash of the cleaned coding sequence, or `None` if no DNA data
+    /// remained after filtering.
     pub cds_id:            Option<&'a str>,
+    /// Whether any insertion exists in this product.
     pub has_insertion:     bool,
+    /// Whether any insertion or deletion causes a frameshift (i.e., the length
+    /// is not divisible by 3).
     pub has_shift_indel:   bool,
+    /// The unaligned coding sequence for the protein (with insertions but no
+    /// deletions).
+    ///
+    /// See [`ComputedProduct::cds_seq`].
     pub cds_seq:           NucleotidesView<'a>,
+    /// The aligned coding sequence for the protein (with `-` for deletions but
+    /// no insertions).
+    ///
+    /// See [`ComputedProduct::cds_aln`].
     pub cds_aln:           NucleotidesView<'a>,
+    /// The amount of right padding to apply to `cds_aln`.
     pub cds_aln_rpad:      usize,
+    /// The coordinates within the original query that were used to form the
+    /// unaligned `cds_seq`.
+    ///
+    /// See [`ComputedProduct::query_coords`].
     pub query_coordinates: &'a [Range<usize>],
+    /// The coding sequence coordinates corresponding to the
+    /// `query_coordinates`.
+    ///
+    /// See [`ComputedProduct::cds_coords`].
     pub cds_coordinates:   &'a [CdsCoord],
 }
 
@@ -174,7 +254,7 @@ impl<'a> SeqRowView<'a> {
             query_id,
             ctype,
             reference_id,
-            protein: product.product_name,
+            product_name: product.name,
             variant_hash: product.variant_hash.as_ref().map(AsRef::as_ref),
             aa_seq: product.aa_seq.as_view(),
             aa_aln: product.aa_aln.as_view(),
@@ -196,7 +276,7 @@ impl Display for SeqRow {
         write!(
             f,
             concat!(
-                "{query_id}\t{ctype}\t{reference_id}\t{protein}\t{vh}",
+                "{query_id}\t{ctype}\t{reference_id}\t{product_name}\t{vh}",
                 "\t{aa_seq}\t{aa_aln}",
                 "\t{cds_id}\t{ins}\t{shift}",
                 "\t{cds_seq}\t{cds_aln}",
@@ -205,7 +285,7 @@ impl Display for SeqRow {
             query_id = self.query_id,
             ctype = self.ctype,
             reference_id = self.reference_id,
-            protein = self.protein,
+            product_name = self.product_name,
             vh = self.variant_hash.as_ref().map(AsRef::as_ref).unwrap_or(HADOOP_NULL),
             aa_seq = self
                 .aa_seq
@@ -242,7 +322,7 @@ impl Display for SeqRowView<'_> {
         write!(
             f,
             concat!(
-                "{query_id}\t{ctype}\t{reference_id}\t{protein}\t{vh}",
+                "{query_id}\t{ctype}\t{reference_id}\t{product_name}\t{vh}",
                 "\t{aa_seq}\t{aa_aln}{empty:.<aa_aln_rpad$}",
                 "\t{cds_id}\t{ins}\t{shift}",
                 "\t{cds_seq}\t{cds_aln}{empty:.<cds_aln_rpad$}",
@@ -251,7 +331,7 @@ impl Display for SeqRowView<'_> {
             query_id = self.query_id,
             ctype = self.ctype,
             reference_id = self.reference_id,
-            protein = self.protein,
+            product_name = self.product_name,
             vh = self.variant_hash.unwrap_or(HADOOP_NULL),
             aa_seq = Nullable(self.aa_seq),
             aa_aln = aa_aln,

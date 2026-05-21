@@ -5,11 +5,19 @@ use crate::{
         ranges::{CdsStateRange, InsertionIdx, StateRange},
     },
     hashing::nt_id,
-    outputs::{ComputedGenomeInsertion, PrecomputedGenomeData},
+    outputs::{ComputedGenome, ComputedGenomeInsertion},
 };
 use std::ops::Range;
 use zoe::prelude::*;
 
+/// The genome alignments and products for a single query against all reference
+/// IDs.
+///
+/// The genome information can be materialized into [`ComputedGenome`] with
+/// [`GenomeAndProductStates::materialize_genome`]. Each product can be
+/// materialized into [`ComputedProduct`] with [`Product::materialize`].
+///
+/// [`ComputedProduct`]: crate::outputs::ComputedProduct
 #[derive(Debug)]
 pub struct RibosomeOutput<'a> {
     /// Original query record
@@ -22,35 +30,49 @@ pub struct RibosomeOutput<'a> {
     pub formatting:     &'a Formatting,
 }
 
+/// The genome alignment and products for a single query against a single
+/// reference.
+///
+/// The genome information can be materialized into [`ComputedGenome`] with
+/// [`materialize_genome`]. Each product can be materialized into
+/// [`ComputedProduct`] with [`Product::materialize`].
+///
+/// Many [`GenomeAndProductStates`] are stored in [`RibosomeOutput`], which
+/// holds the alignments for all reference IDs.
+///
+/// [`materialize_genome`]: GenomeAndProductStates::materialize_genome
+/// [`ComputedProduct`]: crate::outputs::ComputedProduct
 #[derive(Debug)]
 pub struct GenomeAndProductStates<'a> {
-    /// Reference ID
+    /// The ID for the reference group which was aligned against.
     pub reference_id: &'a str,
 
     /// The length of the reference sequence.
-    pub(crate) ref_len: usize,
+    pub ref_len: usize,
 
     /// Genome alignment to nucleotide reference sequence expressed as [`StateRange`]
     pub genome_aln_states: Vec<StateRange>,
 
     /// The range of the stop extension within the query, if present.
-    pub(crate) stop_extension_query_range: Option<Range<usize>>,
+    pub stop_extension_query_range: Option<Range<usize>>,
 
     /// The number of bases in the reference sequence that were not aligned
     /// against in the beginning (i.e., not included in `genome_aln_states`).
-    pub(crate) leading_ref_unaligned: usize,
+    pub leading_ref_unaligned: usize,
 
     /// The number of bases in the reference sequence that were not aligned
     /// against at the end (i.e., not included in `genome_aln_states`).
-    pub(crate) trailing_ref_unaligned: usize,
+    pub trailing_ref_unaligned: usize,
 
     /// Contains all relevant product data, including the protein name.
     pub products: Vec<Product<'a>>,
 }
 
 impl<'a> GenomeAndProductStates<'a> {
-    /// Lazily compute and cache genome data from genome alignment states.
-    pub fn materialize_genome(&self, query: &Nucleotides) -> PrecomputedGenomeData {
+    // TODO: Validity
+    /// Computes the output data for this genome, materializing all ranges into
+    /// sequences using `query`.
+    pub fn materialize_genome(&self, query: &Nucleotides) -> ComputedGenome {
         let mut genome_seq = Nucleotides::new();
         let mut genome_aln = Nucleotides::from(vec![b'.'; self.leading_ref_unaligned]);
         let mut insertions = Vec::new();
@@ -86,7 +108,7 @@ impl<'a> GenomeAndProductStates<'a> {
         let genome_id = nt_id(&genome_seq);
         let genome_length = genome_seq.len();
 
-        PrecomputedGenomeData {
+        ComputedGenome {
             genome_id,
             genome_length,
             has_insertion,
@@ -101,14 +123,14 @@ impl<'a> GenomeAndProductStates<'a> {
 /// The aligned ranges for a single query against a single reference, using the
 /// exons for one of the protein products.
 ///
+/// This can be materialized into [`ComputedProduct`] using [`materialize`].
+///
 /// Many [`Product`] values are stored in [`GenomeAndProductStates`], which
 /// holds the alignments for all the protein products. Many of these are stored
 /// in [`RibosomeOutput`], which holds the alignments for all reference IDs.
-/// Many [`RibosomeOutput`] are generated and written in `main.rs` for each
-/// query.
 ///
-/// [`GenomeAndProductStates`]: crate::outputs::GenomeAndProductStates
-/// [`RibosomeOutput`]: crate::outputs::RibosomeOutput
+/// [`materialize`]: Product::materialize
+/// [`ComputedProduct`]: crate::outputs::ComputedProduct
 #[derive(Debug)]
 pub struct Product<'a> {
     /// The information for the protein product being aligned against, including

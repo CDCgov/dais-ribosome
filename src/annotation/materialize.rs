@@ -55,7 +55,7 @@ impl<'a> Product<'a> {
                 out.extend(aligned_before_insertion);
 
                 // Extend with the insertion
-                out.extend_from_slice(&insertion.inserted_residues);
+                out.extend_from_slice(&insertion.inserted_aa);
 
                 num_consumed += num_to_consume;
             }
@@ -71,7 +71,7 @@ impl<'a> Product<'a> {
         let variant_hash = variant_hash(&aa_seq);
 
         ComputedProduct {
-            product_name: &self.product_spec.name,
+            name: &self.product_spec.name,
             cds_seq,
             cds_aln,
             cds_id,
@@ -96,31 +96,27 @@ impl<'a> Product<'a> {
 /// encountered stop codon. From these fields, the rest of [`ComputedProduct`]
 /// can be computed.
 ///
-/// [`ComputedProduct`]: crate::data::products::ComputedProduct
+/// [`ComputedProduct`]: crate::outputs::ComputedProduct
 struct ComputedIncrementalProducts {
-    /// CDS alignment (with `-` for deletions, no insertions)
+    /// See [`ComputedProduct::cds_aln`].
     cds_aln:                Nucleotides,
-    /// Amino acid alignment (with `-` for deletions)
+    /// See [`ComputedProduct::aa_aln`].
     aa_aln:                 AminoAcids,
-    /// CDS sequence (without deletions, includes insertions)
+    /// See [`ComputedProduct::cds_seq`].
     cds_seq:                Nucleotides,
-    /// Whether any insertion exists in this product
+    /// See [`ComputedProduct::has_insertion`].
     has_insertion:          bool,
-    /// Whether any insertion or deletion causes a frameshift (length % 3 != 0)
+    /// See [`ComputedProduct::has_shift_indel`].
     has_shift_indel:        bool,
-    /// Query nucleotide coordinates
+    /// See [`ComputedProduct::query_coords`].
     query_coords:           Vec<Range<usize>>,
-    /// CDS nucleotide coordinates
+    /// See [`ComputedProduct::cds_coords`].
     cds_coords:             Vec<CdsCoord>,
-    /// Computed non-filtered insertions for this product
+    /// See [`ComputedProduct::insertions`].
     insertions:             Vec<ComputedInsertion>,
-    /// Computed deletions for this product
+    /// See [`ComputedProduct::deletions`].
     deletions:              Vec<ComputedDeletion>,
-    /// The number of unaligned bases at the end of the coding sequence that
-    /// were soft clipped or appeared after the first stop codon.
-    ///
-    /// This does not include trailing deletions, so that this field can be used
-    /// to render right padding without double counting deletions.
+    /// See [`ComputedProduct::trailing_cds_unaligned`]
     trailing_cds_unaligned: usize,
 }
 
@@ -154,7 +150,7 @@ impl ComputedIncrementalProducts {
 /// [`ComputedIncrementalProducts`] which supports incremental updates for each
 /// range.
 struct IncrementalAccumulator {
-    /// The aligned coding sequence (with `-` for deletions, no insertions).
+    /// An incremental accumulator for [`ComputedProduct::cds_aln`].
     ///
     /// This is updated eagerly on each call to [`extend_from_match`] or
     /// [`extend_from_deletion`].
@@ -163,9 +159,11 @@ struct IncrementalAccumulator {
     /// [`extend_from_deletion`]: IncrementalAccumulator::extend_from_deletion
     cds_aln: Nucleotides,
 
-    /// The aligned amino acid sequence, updated from `cds_aln` on each call to
-    /// [`extend_from_match`] or when accumulation is complete. This is built
-    /// incrementally to facilitate detection of the stop codon.
+    /// An incremental accumulator for [`ComputedProduct::aa_aln`].
+    ///
+    /// This is updated from `cds_aln` on each call to [`extend_from_match`] or
+    /// when accumulation is complete. This is built incrementally to facilitate
+    /// detection of the stop codon.
     ///
     /// [`extend_from_match`]: IncrementalAccumulator::extend_from_match
     aa_aln: AminoAcids,
@@ -184,7 +182,7 @@ struct IncrementalAccumulator {
 
 impl IncrementalAccumulator {
     /// Initializes an [`IncrementalAccumulator`] containing just the gap
-    /// indicated by `leading_gap_len`.
+    /// indicated by `leading_cds_unaligned`.
     fn new(leading_cds_unaligned: usize, range_capacity: usize) -> Self {
         Self {
             cds_aln:            Nucleotides::from(vec![b'.'; leading_cds_unaligned]),
@@ -194,7 +192,11 @@ impl IncrementalAccumulator {
         }
     }
 
-    /// Populates the [`IncrementalAccumulator`] from all ranges in `product`.
+    /// Populates the [`IncrementalAccumulator`] from all the ranges in
+    /// `product`, returning the exclusive-end index of the accumulated
+    /// sequences within the coding sequence.
+    ///
+    /// This is used in initializing `trailing_cds_unaligned`.
     fn populate_from(&mut self, query: &Nucleotides, product: &Product) -> usize {
         let ranges = product.product_ranges.iter().enumerate();
 
@@ -229,7 +231,6 @@ impl IncrementalAccumulator {
             self.aa_aln.push(b'~');
         }
 
-        // Return the end_cds_index
         product
             .product_ranges
             .iter()
@@ -296,31 +297,33 @@ impl IncrementalAccumulator {
 /// All incrementally computed product fields which are dependent on the aligned
 /// sequences, and hence will be truncated if they are truncated.
 struct DependentFields {
-    /// The unaligned coding sequence (without deletions, includes insertions).
+    /// The field for incrementally building [`ComputedProduct::cds_seq`].
     cds_seq: Nucleotides,
 
-    /// Whether any insertion exists in this product
+    /// The boolean flag for [`ComputedProduct::has_insertion`], which starts as
+    /// `false` and gets set to `true` when an insertion is encountered.
     has_insertion: bool,
 
-    /// Whether any insertion or deletion causes a frameshift (length % 3 != 0)
+    /// The boolean flag for [`ComputedProduct::has_shift_indel`], which starts
+    /// as `false` and gets set to `true` when a shift indel is encountered.
     has_shift_indel: bool,
 
-    /// Query nucleotide coordinates
+    /// The field for incrementally building [`ComputedProduct::query_coords`].
     query_coords: Vec<Range<usize>>,
 
-    /// CDS nucleotide coordinates
+    /// The field for incrementally building [`ComputedProduct::cds_coords`].
     cds_coords: Vec<CdsCoord>,
 
-    /// Computed non-filtered insertions for this product
+    /// The field for incrementally collecting [`ComputedProduct::insertions`].
     insertions: Vec<ComputedInsertion>,
 
-    /// Computed deletions for this product
+    /// The field for incrementally collecting [`ComputedProduct::deletions`].
     deletions: Vec<ComputedDeletion>,
 }
 
 impl DependentFields {
     /// Initializes an empty [`DependentFields`] with the given number of ranges
-    /// as a starting capacity for [`Coords`] fields.
+    /// as a starting capacity for `query_coords` and `cds_coords` fields.
     fn new(range_capacity: usize) -> Self {
         Self {
             cds_seq:         Nucleotides::new(),
@@ -351,7 +354,7 @@ impl DependentFields {
         // requirements
         let (computed_insertion, filtered) = ComputedInsertion::new(range.cds_index, slice);
 
-        self.cds_seq.extend_from_slice(&computed_insertion.inserted_nucleotides);
+        self.cds_seq.extend_from_slice(&computed_insertion.inserted_nt);
 
         if !filtered {
             self.insertions.push(computed_insertion);
@@ -381,8 +384,6 @@ impl DependentFields {
 
         let in_frame = range.cds_range.start.is_multiple_of(3) && range.len().is_multiple_of(3);
 
-        // TODO: this behavior will need regression tested
-
         // The 1-based inclusive start. Floor divide so that
         // deleting any part of a codon deletes the amino acid. Add
         // 1 to make it 1-based.
@@ -394,8 +395,8 @@ impl DependentFields {
         // end.
         let del_aa_end = range.cds_range.end.div_ceil(3);
 
-        // TODO: Modified due to regression tests
-        let del_aa_len = range.cds_range.len().div_ceil(3);
+        let del_cds_len = range.len();
+        let del_aa_len = del_cds_len.div_ceil(3);
 
         self.deletions.push(ComputedDeletion {
             del_aa_start,
@@ -404,7 +405,7 @@ impl DependentFields {
             in_frame,
             del_cds_start: range.cds_range.start + 1,
             del_cds_end: range.cds_range.end,
-            del_cds_len: range.len(),
+            del_cds_len,
         });
     }
 
@@ -415,14 +416,13 @@ impl DependentFields {
             // Validity: slice is from query, which meets validity requirements
             let (ins, filtered) = ComputedInsertion::new(nt_insertion_idx, slice);
             if !filtered {
-                self.cds_seq.extend_from_slice(&ins.inserted_nucleotides);
+                self.cds_seq.extend_from_slice(&ins.inserted_nt);
                 self.insertions.push(ins);
             }
             // TODO: Added based on regression tests:
             self.has_insertion = true;
 
             self.query_coords.push(ext_range.clone());
-
             self.cds_coords.push(CdsCoord::I(nt_insertion_idx));
 
             if !ext_range.len().is_multiple_of(3) {

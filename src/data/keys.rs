@@ -3,10 +3,6 @@
 use std::fmt;
 
 /// A key for reference sequences, combining a reference ID and a compound type.
-///
-/// Used to index into [`ReferenceMap`] to retrieve reference sequences.
-///
-/// [`ReferenceMap`]: crate::data::refs::ReferenceMap
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct RefKey {
     /// The reference ID of the reference sequence (e.g., `ANHUI01`,
@@ -49,29 +45,29 @@ impl fmt::Display for RefKey {
 ///
 /// Used to index into [`CdsSpecMap`] to retrieve exon coordinates.
 ///
-/// [`CdsSpecMap`]: crate::data::spec::CdsSpecMap
+/// [`CdsSpecMap`]: crate::config::cds_spec::CdsSpecMap
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct SpecKey {
     /// The reference ID of the reference sequence (e.g., `A_HA_H7`, `B_HA`).
-    pub reference_id:    String,
-    /// The protein product names (e.g., `HA`, `HA-signal`).
-    pub protein_product: String,
+    pub reference_id: String,
+    /// The protein product name (e.g., `HA`, `HA-signal`).
+    pub product_name: String,
 }
 
 impl SpecKey {
     /// Creates a new [`SpecKey`] by combining a `reference_id` (e.g.,
     /// `ANHUI01`) and `protein_product` (e.g., `HA`).
-    pub fn new(reference_id: impl Into<String>, protein_product: impl Into<String>) -> Self {
+    pub fn new(reference_id: impl Into<String>, product_name: impl Into<String>) -> Self {
         Self {
-            reference_id:    reference_id.into(),
-            protein_product: protein_product.into(),
+            reference_id: reference_id.into(),
+            product_name: product_name.into(),
         }
     }
 }
 
 impl fmt::Display for SpecKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}|{}", self.reference_id, self.protein_product)
+        write!(f, "{}|{}", self.reference_id, self.product_name)
     }
 }
 

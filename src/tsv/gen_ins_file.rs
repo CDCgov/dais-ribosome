@@ -14,11 +14,21 @@ use zoe::{
 /// The data in a single row of the genome insertion file.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct GenInsRow {
-    pub query_id:     String,
-    pub ctype:        String,
-    pub reference_id: String,
-    pub nt_pos:       usize,
-    pub inserted_nts: Nucleotides,
+    /// The ID of the query.
+    pub query_id:        String,
+    /// The compound type of the query.
+    pub ctype:           String,
+    /// The ID for the reference group which was aligned against.
+    pub reference_id:    String,
+    /// The upstream nucleotide position (1-based), which is the position
+    /// _after_ which the insertion occurs.
+    ///
+    /// See [`ComputedGenomeInsertion::upstream_nt_pos`].
+    pub upstream_nt_pos: usize,
+    /// The inserted nucleotides.
+    ///
+    /// See [`ComputedGenomeInsertion::inserted_nt`].
+    pub inserted_nt:     Nucleotides,
 }
 
 impl<'de> Deserialize<'de> for GenInsRow {
@@ -29,18 +39,18 @@ impl<'de> Deserialize<'de> for GenInsRow {
             query_id,
             ctype,
             reference_id,
-            nt_pos,
-            inserted_nts,
+            upstream_nt_pos,
+            inserted_nt,
         } = GenInsRowRaw::deserialize(deserializer)?;
 
-        let inserted_nts = Nucleotides::from(inserted_nts);
+        let inserted_nt = Nucleotides::from(inserted_nt);
 
         Ok(GenInsRow {
             query_id,
             ctype,
             reference_id,
-            nt_pos,
-            inserted_nts,
+            upstream_nt_pos,
+            inserted_nt,
         })
     }
 }
@@ -48,11 +58,11 @@ impl<'de> Deserialize<'de> for GenInsRow {
 /// A helper struct for deserializing [`GenInsRow`].
 #[derive(Deserialize)]
 struct GenInsRowRaw {
-    query_id:     String,
-    ctype:        String,
-    reference_id: String,
-    nt_pos:       usize,
-    inserted_nts: String,
+    query_id:        String,
+    ctype:           String,
+    reference_id:    String,
+    upstream_nt_pos: usize,
+    inserted_nt:     String,
 }
 
 /// The data in a single row of the genome insertion file, with all fields
@@ -62,11 +72,21 @@ struct GenInsRowRaw {
 /// clone/allocate each part.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct GenInsRowView<'a> {
-    pub query_id:     &'a str,
-    pub ctype:        &'a str,
-    pub reference_id: &'a str,
-    pub nt_pos:       usize,
-    pub inserted_nts: NucleotidesView<'a>,
+    /// The ID of the query.
+    pub query_id:        &'a str,
+    /// The compound type of the query.
+    pub ctype:           &'a str,
+    /// The ID for the reference group which was aligned against.
+    pub reference_id:    &'a str,
+    /// The upstream nucleotide position (1-based), which is the position
+    /// _after_ which the insertion occurs.
+    ///
+    /// See [`ComputedGenomeInsertion::upstream_nt_pos`].
+    pub upstream_nt_pos: usize,
+    /// The inserted nucleotides.
+    ///
+    /// See [`ComputedGenomeInsertion::inserted_nt`].
+    pub inserted_nt:     NucleotidesView<'a>,
 }
 
 impl<'a> GenInsRowView<'a> {
@@ -77,8 +97,8 @@ impl<'a> GenInsRowView<'a> {
             query_id,
             ctype,
             reference_id,
-            nt_pos: insertion.upstream_nt_pos,
-            inserted_nts: insertion.inserted_nucleotides.as_view(),
+            upstream_nt_pos: insertion.upstream_nt_pos,
+            inserted_nt: insertion.inserted_nt.as_view(),
         }
     }
 }
@@ -88,7 +108,7 @@ impl Display for GenInsRow {
         write!(
             f,
             "{}\t{}\t{}\t{}\t{}",
-            self.query_id, self.ctype, self.reference_id, self.nt_pos, self.inserted_nts,
+            self.query_id, self.ctype, self.reference_id, self.upstream_nt_pos, self.inserted_nt,
         )
     }
 }
@@ -98,7 +118,7 @@ impl Display for GenInsRowView<'_> {
         write!(
             f,
             "{}\t{}\t{}\t{}\t{}",
-            self.query_id, self.ctype, self.reference_id, self.nt_pos, self.inserted_nts,
+            self.query_id, self.ctype, self.reference_id, self.upstream_nt_pos, self.inserted_nt,
         )
     }
 }
