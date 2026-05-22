@@ -178,10 +178,9 @@ pub struct Rules {
     #[serde(default)]
     pub chew_to_start: bool,
 
-    // TODO: Can we use usize with #[serde(default)]?
     /// If there are soft clipped nucleotides within the specified limit on
     /// either side of the alignment, then extend the alignment with match
-    /// states to add them.
+    /// states to add them. Setting this to 0 disables the rule.
     ///
     /// When mismatches are present near either end of the query/reference,
     /// local alignment can cause the ends of the query/reference to not be
@@ -194,7 +193,8 @@ pub struct Rules {
     /// reference must be at most the specified limit.
     ///
     /// This rule may add back the bases removed by `chew_to_start`.
-    pub repairable_end_limit: Option<usize>,
+    #[serde(default)]
+    pub repairable_end_limit: usize,
 }
 
 /// A helper type for parsing [`AlignmentParams`] that does not impose any

@@ -212,7 +212,9 @@ impl<'a> AnnotationModule<'a> {
     /// [`repairable_end_limit`]:
     ///     crate::config::toml::Rules::repairable_end_limit
     fn rule_repairable_ends(&self, genome_aln: &mut Alignment<u32>) {
-        if let Some(limit) = self.rules.repairable_end_limit {
+        let limit = self.rules.repairable_end_limit;
+
+        if limit > 0 {
             let unaligned_pre = genome_aln.query_range.start.min(genome_aln.ref_range.start);
             if genome_aln.ref_range.start <= limit {
                 genome_aln.extend_left(unaligned_pre);
