@@ -340,7 +340,6 @@ fn normalize_codon(mut codon: [u8; 3]) -> std::io::Result<[u8; 3]> {
         .map(b"acgtryswkmbdhvn", b"ACGTRYSWKMBDHVN")
         .map_to_one(b"uU", b'T');
 
-    // TODO: Switch to recode_base
     for base in &mut codon {
         let new_base = SANITIZE[*base];
 

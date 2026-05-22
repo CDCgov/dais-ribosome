@@ -4,7 +4,6 @@
 use crate::{
     config::ProductSpec,
     data::exons::{ExonCoords, Exons},
-    error,
     outputs::Product,
     ranges::{
         CdsDeletionRange, CdsInsertionRange, CdsMatchRange, CdsStateRange, DeletionRange, InsertionIdx, InsertionRange,
@@ -31,7 +30,7 @@ pub(crate) fn form_product<'a>(state_ranges: &[StateRange], product_spec: &'a Pr
         Some(CdsStateRange::M(m)) => m.cds_range.start,
         Some(CdsStateRange::D(d)) => d.cds_range.start,
         Some(CdsStateRange::I(i)) => {
-            error!("product_ranges cannot begin with an insertion!");
+            // Unreachable in the current algorithm but may change in the future
             i.cds_index.right()
         }
 
@@ -44,7 +43,8 @@ pub(crate) fn form_product<'a>(state_ranges: &[StateRange], product_spec: &'a Pr
             Some(CdsStateRange::M(m)) => m.cds_range.end,
             Some(CdsStateRange::D(d)) => d.cds_range.end,
             Some(CdsStateRange::I(i)) => {
-                error!("product_ranges cannot end with an insertion!");
+                // Unreachable in the current algorithm but may change in the
+                // future
                 i.cds_index.right()
             }
 
@@ -78,7 +78,7 @@ pub(crate) fn form_product<'a>(state_ranges: &[StateRange], product_spec: &'a Pr
 ///
 /// Same validity requirements as [`form_product`].
 fn intersect_with_exons(state_ranges: &[StateRange], exons: &Exons) -> Vec<CdsStateRange> {
-    // TODO: Is this a good enough capacity? We could end up exceeding it.
+    // This capacity may be exceeded, but is a good initial choice
     let mut product_ranges = Vec::with_capacity(state_ranges.len());
 
     // We want product_ranges ordered by coding sequence coordinates so that
@@ -179,7 +179,7 @@ impl InsertionRange {
             // negative, so we need to do additions before substractions to
             // prevent underflow
             let cds_index =
-                InsertionIdx::from_right_idx(self.ref_index.right() + exon.cds_range.start - exon.ref_range.start);
+                InsertionIdx::from_right_idx(exon.cds_range.start + self.ref_index.right() - exon.ref_range.start);
 
             CdsInsertionRange {
                 cds_index,

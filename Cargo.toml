@@ -3,10 +3,6 @@ name = "dais-ribosome"
 version = "2.0.0"
 edition = "2024"
 
-[features]
-default = ["regression-testing"]
-regression-testing = ["log", "env_logger"]
-
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 rayon = "1"
@@ -24,8 +20,6 @@ md5 = "0.8"
 getrandom = "0.4"
 jiff = "0.2.18"
 csv = "1.4.0"
-log = { version = "0.4.29", optional = true, default-features = false }
-env_logger = { version = "0.11.10", optional = true, default-features = false }
 
 [[bin]]
 bench = false

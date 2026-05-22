@@ -28,9 +28,6 @@ pub mod app;
 // const PROGRAM_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " v", env!("CARGO_PKG_VERSION"));
 
 fn main() {
-    #[cfg(feature = "regression-testing")]
-    env_logger::init();
-
     // Parse the arguments, get grid info, adjust paths based on task ID, open
     // writers.
     let (args, grid_info) = Args::parse_maybe_grid().unwrap_or_fail();

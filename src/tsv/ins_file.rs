@@ -155,12 +155,6 @@ impl<'a> InsRowView<'a> {
 
 impl Display for InsRowView<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        #[cfg(feature = "regression-testing")]
-        let nts = self.inserted_nt.to_string().to_lowercase();
-
-        #[cfg(not(feature = "regression-testing"))]
-        let nts = &self.inserted_nt;
-
         write!(
             f,
             "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
@@ -169,7 +163,7 @@ impl Display for InsRowView<'_> {
             self.reference_id,
             self.product_name,
             self.upstream_aa_pos,
-            nts,
+            self.inserted_nt,
             self.inserted_aa,
             self.upstream_nt_pos,
             self.codon_shift,

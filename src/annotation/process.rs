@@ -59,7 +59,8 @@ impl<'a> AnnotationModule<'a> {
                 // state_ranges_from_aligment guarantees
                 let mut product = intersection::form_product(&genome_aln_states, product_spec);
 
-                // Shift indels to fix their frames
+                // Shift indels to fix their frames. Validity: this is called
+                // before condense_deletions.
                 product.fix_frames(&query);
 
                 // Condense any remaining deletions

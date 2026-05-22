@@ -226,25 +226,13 @@ impl<'a> SeqRowView<'a> {
         product: &'a ComputedProduct<'a>, query_id: &'a str, ctype: &'a str, reference_id: &'a str,
         formatting: &'a Formatting,
     ) -> Self {
-        // Regression: always pad CDS, never pad AA, synthesize empty AA alignments.
-        #[cfg(feature = "regression-testing")]
-        let cds_aln_rpad = product.trailing_cds_unaligned;
-        #[cfg(feature = "regression-testing")]
-        let aa_aln_rpad = if product.aa_aln.is_empty() {
-            (product.cds_aln.len() + product.trailing_cds_unaligned) / 3
-        } else {
-            0
-        };
-
-        // Normal: skip padding when there is no data
-        #[cfg(not(feature = "regression-testing"))]
         let cds_aln_rpad = if formatting.right_pad_cds && !product.cds_aln.is_empty() {
             product.trailing_cds_unaligned
         } else {
             0
         };
-        #[cfg(not(feature = "regression-testing"))]
         let aa_aln_rpad = if formatting.right_pad_aa && !product.aa_aln.is_empty() {
+            // Floor divide since any leftover bases are already accounted for with a partial codon
             product.trailing_cds_unaligned / 3
         } else {
             0
@@ -314,11 +302,6 @@ impl Display for SeqRow {
 
 impl Display for SeqRowView<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        #[cfg(feature = "regression-testing")]
-        let aa_aln = self.aa_aln;
-        #[cfg(not(feature = "regression-testing"))]
-        let aa_aln = Nullable(&self.aa_aln);
-
         write!(
             f,
             concat!(
@@ -334,13 +317,13 @@ impl Display for SeqRowView<'_> {
             product_name = self.product_name,
             vh = self.variant_hash.unwrap_or(HADOOP_NULL),
             aa_seq = Nullable(self.aa_seq),
-            aa_aln = aa_aln,
+            aa_aln = Nullable(&self.aa_aln),
             aa_aln_rpad = self.aa_aln_rpad,
             cds_id = self.cds_id.unwrap_or(HADOOP_NULL),
             ins = self.has_insertion,
             shift = self.has_shift_indel,
             cds_seq = Nullable(self.cds_seq),
-            cds_aln = self.cds_aln,
+            cds_aln = Nullable(self.cds_aln),
             cds_aln_rpad = self.cds_aln_rpad,
             query_coordinates = self.query_coordinates.display_inclusive(),
             cds_coordinates = self.cds_coordinates.display_inclusive(),

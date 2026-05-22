@@ -67,10 +67,8 @@ use crate::{
     QueryRecord,
     config::ProductSpec,
     data::weights::DEFAULT_CODON_STATS,
-    error,
     outputs::Product,
     ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, CdsStateRange, RangeExt},
-    warn,
 };
 use std::cmp::Ordering;
 
@@ -82,6 +80,11 @@ impl<'a> Product<'a> {
     ///
     /// See [the module documentation](crate::annotation::fix_frames) for more
     /// details.
+    ///
+    /// ## Validity
+    ///
+    /// This must be called before [`Product::condense_deletions`], otherwise
+    /// deletions may not be shifted properly.
     pub(crate) fn fix_frames(&mut self, query: &QueryRecord) {
         // The index of the current CdsStateRange to correct/handle
         let mut idx = 0;
@@ -221,8 +224,12 @@ fn fix_frame(states: FrameStates, query: &QueryRecord, product_spec: &ProductSpe
             // do not need to handle merging it to the right since our normal
             // deletion-merging branch will handle that.
             (Some(CdsStateRange::M(left_match)), Some(CdsStateRange::M(right_match))) => {
-                let removal = fix_flanked_deletion(states.left2, left_match, del, right_match, query, product_spec);
-                IdxAdjustment { advance: true, removal }
+                if del.eligible_for_shift() {
+                    let removal = fix_flanked_deletion(states.left2, left_match, del, right_match, query, product_spec);
+                    IdxAdjustment { advance: true, removal }
+                } else {
+                    IdxAdjustment::next()
+                }
             }
 
             // A second deletion follows the current deletion, so they need to
@@ -230,7 +237,7 @@ fn fix_frame(states: FrameStates, query: &QueryRecord, product_spec: &ProductSpe
             // same index to allow additional merging, or to allow the deletion
             // to shift.
             (_, Some(CdsStateRange::D(right_del))) => {
-                let removal = fix_adjacent_deletions(del, right_del, query, product_spec);
+                let removal = fix_adjacent_deletions(del, right_del, product_spec);
                 IdxAdjustment {
                     // If no removal (i.e., no merging), then continue
                     advance: removal.is_none(),
@@ -239,33 +246,21 @@ fn fix_frame(states: FrameStates, query: &QueryRecord, product_spec: &ProductSpe
             }
 
             // A deletion is flanked by a deletion to the left (meaning merging
-            // was not possible in the previous branches), so a warning for
-            // failed shifting may be needed.
-            (Some(CdsStateRange::D(_)), Some(CdsStateRange::M(_))) => {
-                warn_adjacent_deletions(del, query, product_spec);
-                IdxAdjustment::next()
-            }
+            // was not possible in the previous branches), so we are unable to
+            // merge and unable to shift
+            (Some(CdsStateRange::D(_)), Some(CdsStateRange::M(_))) => IdxAdjustment::next(),
 
-            // A deletion at the beginning of the product may require a warning
-            // for failed shifting
-            (None, _) => {
-                warn_leading_deletion(query, del, product_spec);
-                IdxAdjustment::next()
-            }
+            // A deletion at the beginning of the product is not current
+            // shifted. TODO: consider whether a forced shift is desirable.
+            (None, _) => IdxAdjustment::next(),
 
-            // A deletion at the end of the product may require a warning for
-            // failed shifting
-            (_, None) => {
-                warn_trailing_deletion(query, del, product_spec);
-                IdxAdjustment::next()
-            }
+            // A deletion at the end of the product is not current shifted.
+            // TODO: consider whether a forced shift is desirable.
+            (_, None) => IdxAdjustment::next(),
 
-            // A deletion is flanked by an insertion to the left or right, so a
-            // warning for failed shifting may be needed.
-            (Some(CdsStateRange::I(_)), _) | (_, Some(CdsStateRange::I(_))) => {
-                warn_del_with_flanking_ins(del, query, product_spec);
-                IdxAdjustment::next()
-            }
+            // A deletion flanked by an insertion is not currently shifted.
+            // TODO: consider whether a forced shift is desirable.
+            (Some(CdsStateRange::I(_)), _) | (_, Some(CdsStateRange::I(_))) => IdxAdjustment::next(),
         },
 
         CdsStateRange::I(ins) => match (states.left1, states.right1) {
@@ -275,37 +270,38 @@ fn fix_frame(states: FrameStates, query: &QueryRecord, product_spec: &ProductSpe
             // indel moving to the edge of the product or exon, in which case it
             // is dropped.
             (Some(CdsStateRange::M(left_match)), Some(CdsStateRange::M(right_match))) => {
-                let removal =
-                    fix_flanked_insertion(states.left2, left_match, ins, right_match, states.right2, query, product_spec);
-                IdxAdjustment { advance: true, removal }
+                if ins.eligible_for_shift() {
+                    let removal = fix_flanked_insertion(
+                        states.left2,
+                        left_match,
+                        ins,
+                        right_match,
+                        states.right2,
+                        query,
+                        product_spec,
+                    );
+                    IdxAdjustment { advance: true, removal }
+                } else {
+                    IdxAdjustment::next()
+                }
             }
 
-            // Two insertions appear adjacent to each other
-            (Some(CdsStateRange::I(_)), _) | (_, Some(CdsStateRange::I(_))) => {
-                warn_adjacent_insertions(query, product_spec);
-                IdxAdjustment::next()
-            }
+            // Two insertions appear adjacent to each other, which should never
+            // happen (if fix_flanked_insertion causes this, it fixes it before
+            // continuing). This could be turned into a hard error.
+            (Some(CdsStateRange::I(_)), _) | (_, Some(CdsStateRange::I(_))) => IdxAdjustment::next(),
 
-            // An insertion at the beginning of the product may require a
-            // warning for failed shifting
-            (None, _) => {
-                warn_leading_insertion(query, ins, product_spec);
-                IdxAdjustment::next()
-            }
+            // An insertion at the beginning of the product is not current
+            // shifted. TODO: consider whether a forced shift is desirable.
+            (None, _) => IdxAdjustment::next(),
 
-            // An insertion at the end of the product may require a warning for
-            // failed shifting
-            (_, None) => {
-                warn_trailing_insertion(query, ins, product_spec);
-                IdxAdjustment::next()
-            }
+            // An insertion at the end of the product is not currently shifted.
+            // TODO: consider whether a forced shift is desirable.
+            (_, None) => IdxAdjustment::next(),
 
-            // An insertion is flanked by a deletion to the left or right, so a
-            // warning for failed shifting may be needed.
-            (Some(CdsStateRange::D(_)), _) | (_, Some(CdsStateRange::D(_))) => {
-                warn_ins_with_flanking_del(ins, query, product_spec);
-                IdxAdjustment::next()
-            }
+            // An insertion flanked by a deletion is not currently shifted.
+            // TODO: consider whether a forced shift is desirable.
+            (Some(CdsStateRange::D(_)), _) | (_, Some(CdsStateRange::D(_))) => IdxAdjustment::next(),
         },
     }
 }
@@ -339,11 +335,11 @@ fn remove_states(product: &mut Product, removal: &StateRemoval, idx: usize) -> u
     (remove_current as usize) + (remove_left1 as usize)
 }
 
-/// Performs the shifting logic for [`fix_frames`] to a deletion flanked by
-/// match states.
+/// Perform the shifting logic for a shift-eligible deletion flanked by match
+/// states.
 ///
-/// This handles checking for shifting eligibility, performing the shift,
-/// dropping empty match states, and merging the deletion left if needed. See
+/// This handles performing the shift, dropping empty match states, and merging
+/// the deletion left if needed. The caller should verify shift eligibility. See
 /// [the module documentation](crate::annotation::fix_frames) for more details.
 ///
 /// [`fix_frames`]: Product::fix_frames
@@ -386,12 +382,12 @@ fn fix_flanked_deletion(
     })
 }
 
-/// Performs the shifting logic for [`fix_frames`] to an insertion flanked by
-/// match states.
+/// Performs the shifting logic for a shift-eligible insertion flanked by match
+/// states.
 ///
-/// This handles checking for shifting eligibility, performing the shift,
-/// dropping empty match states, dropping the insertion if it shifted to
-/// product/exon boundaries, merging the insertion left or right if needed. See
+/// This handles performing the shift, dropping empty match states, dropping the
+/// insertion if it shifted to product/exon boundaries, merging the insertion
+/// left or right if needed. The caller should verify shift eligibility. See
 /// [the module documentation](crate::annotation::fix_frames) for more details.
 ///
 /// [`fix_frames`]: Product::fix_frames
@@ -431,7 +427,11 @@ fn fix_flanked_insertion(
         match left2 {
             // Merge the now-adjacent insertions
             Some(CdsStateRange::I(left_ins)) if !remove_ins => {
-                validate_ins_merge(left_ins, ins);
+                // Validity: adjacent insertions in product_ranges should be
+                // adjacent in query and CDS coordinates
+                debug_assert_eq!(left_ins.cds_index, ins.cds_index);
+                debug_assert_eq!(left_ins.query_range.end, ins.query_range.start);
+
                 left_ins.query_range.end = ins.query_range.end;
                 remove_ins = true;
             }
@@ -451,7 +451,11 @@ fn fix_flanked_insertion(
         match right2 {
             // Merge the now-adjacent insertions
             Some(CdsStateRange::I(right_ins)) if !remove_ins => {
-                validate_ins_merge(ins, right_ins);
+                // Validity: adjacent insertions in product_ranges should be
+                // adjacent in query and CDS coordinates
+                debug_assert_eq!(ins.cds_index, right_ins.cds_index);
+                debug_assert_eq!(ins.query_range.end, right_ins.query_range.start);
+
                 ins.query_range.end = right_ins.query_range.end;
                 remove_right2 = true;
             }
@@ -475,134 +479,28 @@ fn fix_flanked_insertion(
 /// deletions, specifically a deletion occurring to the right of the current
 /// deletion.
 ///
-/// This handles merging the deletions if eligible and issuing a warning with
-/// [`warn_adjacent_deletions`] if not eligible.
-///
 /// [`fix_frames`]: Product::fix_frames
 fn fix_adjacent_deletions(
-    del: &mut CdsDeletionRange, right_del: &mut CdsDeletionRange, query: &QueryRecord, product_spec: &ProductSpec,
+    del: &mut CdsDeletionRange, right_del: &mut CdsDeletionRange, product_spec: &ProductSpec,
 ) -> Option<StateRemoval> {
     // Validity: product_ranges partitions the aligned-against
     // coding sequence, so adjacent deletions in product_ranges are
     // also adjacent in the coding sequence
     debug_assert_eq!(del.cds_range.end, right_del.cds_range.start);
 
-    // Validity: TODO
     if is_valid_del_merge(del, right_del, product_spec) {
         // Extend range to encompass right_range
         del.cds_range.end = right_del.cds_range.end;
 
-        return Some(StateRemoval {
+        Some(StateRemoval {
             remove_left1:   false,
             remove_current: false,
             remove_right1:  true,
             remove_right2:  false,
-        });
-    }
-
-    warn_adjacent_deletions(del, query, product_spec);
-    None
-}
-
-/// Warns about failure to shift a deletion if another adjacent deletion is
-/// present and the current deletion is eligible for shifting.
-///
-/// Notably, if the current deletion has another deletion to its left, this
-/// means the two deletions are not able to be merged (since otherwise they
-/// would've been merged when `idx` was `idx-1` in [`fix_frames`]).
-///
-/// [`fix_frames`]: Product::fix_frames
-fn warn_adjacent_deletions(del: &CdsDeletionRange, query: &QueryRecord, product_spec: &ProductSpec) {
-    // Issue warning if applicable that shift cannot be
-    // performed
-    if del.eligible_for_shift() {
-        warn!(
-            "Two deletions within adjacent exons occurred. Because they were separated by a non-coding region, frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id(),
-            product = product_spec.name
-        );
-    }
-}
-
-/// Warns about two adjacent insertions, which should never occur in the input
-/// product ranges.
-fn warn_adjacent_insertions(query: &QueryRecord, product_spec: &ProductSpec) {
-    error!(
-        "Two insertions occurred adjacent to each other.\nQuery: {query_id}\nProduct: {product}",
-        query_id = query.id(),
-        product = product_spec.name
-    );
-}
-
-/// Warns about a deletion with a flanking insertion, if the deletion is
-/// eligible to be shifted.
-fn warn_del_with_flanking_ins(del: &CdsDeletionRange, query: &QueryRecord, product_spec: &ProductSpec) {
-    if del.eligible_for_shift() {
-        warn!(
-            "A deletion occurred adjacent to an insertion, so frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id(),
-            product = product_spec.name
-        );
-    }
-}
-
-/// Warns about an insertion with a flanking deletion, if the insertion is
-/// eligible to be shifted.
-fn warn_ins_with_flanking_del(ins: &CdsInsertionRange, query: &QueryRecord, product_spec: &ProductSpec) {
-    if ins.eligible_for_shift() {
-        warn!(
-            "An insertion occurred adjacent to a deletion, so frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id(),
-            product = product_spec.name
-        );
-    }
-}
-
-/// Warns about an insertion at the beginning of a product, if the insertion is
-/// eligible to be shifted.
-fn warn_leading_insertion(query: &QueryRecord, ins: &CdsInsertionRange, product_spec: &ProductSpec) {
-    if ins.eligible_for_shift() {
-        warn!(
-            "An insertion appeared at the start of the product alignment, so frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id(),
-            product = product_spec.name
-        );
-    }
-}
-
-/// Warns about a deletion at the beginning of a product, if the deletion is
-/// eligible to be shifted.
-fn warn_leading_deletion(query: &QueryRecord, del: &CdsDeletionRange, product_spec: &ProductSpec) {
-    if del.eligible_for_shift() {
-        warn!(
-            "A deletion appeared at the start of the product alignment, so frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id(),
-            product = product_spec.name
-        );
-    }
-}
-
-/// Warns about an insertion at the end of a product, if the insertion is
-/// eligible to be shifted.
-fn warn_trailing_insertion(query: &QueryRecord, ins: &CdsInsertionRange, product_spec: &ProductSpec) {
-    if ins.eligible_for_shift() {
-        warn!(
-            "An insertion appeared at the end of the product alignment, so frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id(),
-            product = product_spec.name
-        );
-    }
-}
-
-/// Warns about a deletion at the end of a product, if the deletion is eligible
-/// to be shifted.
-fn warn_trailing_deletion(query: &QueryRecord, del: &CdsDeletionRange, product_spec: &ProductSpec) {
-    if del.eligible_for_shift() {
-        warn!(
-            "A deletion appeared at the end of the product alignment, so frame correction cannot be applied. Consider manually adjusting the output alignment.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id(),
-            product = product_spec.name
-        );
+        })
+    } else {
+        // The two adjacent deletions cannot be merged
+        None
     }
 }
 
@@ -612,11 +510,6 @@ fn warn_trailing_deletion(query: &QueryRecord, del: &CdsDeletionRange, product_s
 /// so that the merged deletion does not span such a region. Were a deletion to
 /// span a noncoding region, then shifting it could cause bases in the noncoding
 /// region to be moved into flanking match states.
-///
-/// ## Validity
-///
-/// The two deletions passed must be adjacent in CDS coordinates. They also
-/// should not span any noncoding regions.
 fn is_valid_del_merge(del1: &CdsDeletionRange, del2: &CdsDeletionRange, product_spec: &ProductSpec) -> bool {
     // Validity: product_ranges partitions the aligned-against
     // coding sequence, so adjacent deletions in product_ranges are
@@ -633,16 +526,6 @@ fn is_valid_del_merge(del1: &CdsDeletionRange, del2: &CdsDeletionRange, product_
         .all(|noncoding| del1.cds_range.cmp_ins(&noncoding.cds_index) == del2.cds_range.cmp_ins(&noncoding.cds_index))
 }
 
-/// Performs checking of two adjacent insertions to confirm they are eligible to
-/// be merged, issuing errors if not.
-fn validate_ins_merge(ins1: &CdsInsertionRange, ins2: &CdsInsertionRange) {
-    if ins1.cds_index != ins2.cds_index {
-        error!("Two adjacent insertions had different CDS indices");
-    } else if ins1.query_range.end != ins2.query_range.start {
-        error!("Two adjacent insertions were not adjacent in the query sequence");
-    }
-}
-
 /// The chosen direction to shift an out-of-frame indel.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 enum ShiftDir {
@@ -654,52 +537,40 @@ enum ShiftDir {
     Right,
 }
 
-/// Picks the direction to shift an insertion if it is out of frame, or
-/// returns `None` if the no shift is needed or allowed.
+/// Picks the direction to shift an insertion if it is out of frame, or returns
+/// `None` if the no shift is needed or allowed.
 ///
 /// Formally, this method looks at the constraints for how the insertion is
 /// allowed to shift, and evaluates whether it is eligible to shift left or
-/// right. If both are allowed, then codon usage statistics are used to
-/// determine the direction. If only one is allowed, then that shift
-/// direction is used. If neither are allowed, `None` is returned.
+/// right. If both are allowed, then the codon/position weights are used to
+/// determine the direction. If only one is allowed, then that shift direction
+/// is used. If neither are allowed, `None` is returned.
 ///
 /// ## Insertion Shifting Constraints
 ///
-/// Currently, if an insertion is adjacent to a non-coding region, then no
-/// shift is performed. This could be modified TODO.
+/// Currently, if an insertion is adjacent to a non-coding region, a deletion,
+/// or either end of the product, then no shift is performed.
 ///
-/// The magnitude of the shift is limited by the number of flanking match
-/// states in the direction of the shift, since bases will need to be moved
-/// from the match states into the insert state.
+/// The magnitude of the shift is limited by the number of flanking match states
+/// in the direction of the shift, since bases will need to be moved from the
+/// match states into the insert state.
 ///
-/// If the insertion is strictly contained inside a region where adjacent
-/// exons overlap, then the insertion may not shift (since it actually
-/// appears twice in the CDS).
+/// If the insertion is strictly contained inside a region where adjacent exons
+/// overlap, then the insertion may not shift (since it actually appears twice
+/// in the CDS).
 ///
-/// Similarly, an insertion cannot shift into one of the overlapping
-/// regions.
+/// Similarly, an insertion cannot shift into one of the overlapping regions.
 fn pick_insertion_shift(
     left_match: &CdsMatchRange, ins: &CdsInsertionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,
 ) -> Option<ShiftDir> {
     let codon_shift = ins.codon_shift();
 
-    // Check shift eligibility, equivalent to eligible_for_shift but allowing us
-    // to retain the codon shift.
-    if codon_shift == 0 || !ins.len().is_multiple_of(3) {
-        return None;
-    }
-
     // TODO: Reevaluate whether forced shift is possible. No decision was
     // ever made for this, but I am writing this to mirror deletion case
     //
     // Check adjacency to non-coding region, which prevents shift
     if left_match.cds_range.end != right_match.cds_range.start {
-        warn!(
-            "An insertion adjacent to a non-coding region was found and will not be shifted.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id(),
-            product = product_spec.name
-        );
         return None;
     }
 
@@ -720,11 +591,11 @@ fn pick_insertion_shift(
         max_right_shift = max_right_shift.min(right_match.len());
 
         // Check if the insertion is inside an overlap region
-        let inside_overlap_region = product_spec.exons.overlapped_regions.iter().any(|overlap| {
-            // TODO: Same logic as in InsertionRange::intersect_exon, so
-            // abstract
-            overlap.cds_range().start < ins.cds_index.right() && ins.cds_index.right() < overlap.cds_range().end
-        });
+        let inside_overlap_region = product_spec
+            .exons
+            .overlapped_regions
+            .iter()
+            .any(|overlap| overlap.cds_range().contains_ins(ins.cds_index));
 
         // If we are inside an overlap region, no shift can occur since the
         // insertion is duplicated in the CDS
@@ -785,27 +656,12 @@ fn pick_insertion_shift(
     // Check for forced or impossible shifts
     match (can_shift_left, can_shift_right) {
         (false, false) => {
-            warn!(
-                "An insertion could not be shifted due to insufficient flanking match state or the presence of overlapping exons.\nQuery: {query_id}\nProduct: {product}",
-                query_id = query.id(),
-                product = product_spec.name
-            );
             return None;
         }
         (true, false) => {
-            warn!(
-                "An insertion is forcibly being shifted left (e.g., due to insufficient flanking match state or the presence of overlapping exons).\nQuery: {query_id}\nProduct: {product}",
-                query_id = query.id(),
-                product = product_spec.name
-            );
             return Some(ShiftDir::Left);
         }
         (false, true) => {
-            warn!(
-                "An insertion is forcibly being shifted right (e.g., due to insufficient flanking match state or the presence of overlapping exons).\nQuery: {query_id}\nProduct: {product}",
-                query_id = query.id(),
-                product = product_spec.name
-            );
             return Some(ShiftDir::Right);
         }
         (true, true) => {}
@@ -815,51 +671,40 @@ fn pick_insertion_shift(
     pick_ins_shift_with_stats(left_match, ins, right_match, query, product_spec)
 }
 
-/// Picks the direction to shift a deletion if it is out of frame, or
-/// returns `None` if the no shift is needed or allowed.
+/// Picks the direction to shift a deletion if it is out of frame, or returns
+/// `None` if the no shift is needed or allowed.
 ///
 /// Formally, this method looks at the constraints for how the deletion is
 /// allowed to shift, and evaluates whether it is eligible to shift left or
-/// right. If both are allowed, then codon usage statistics are used to
-/// determine the direction. If only one is allowed, then that shift
-/// direction is used. If neither are allowed, `None` is returned.
+/// right. If both are allowed, then the codon/position weights are used to
+/// determine the direction. If only one is allowed, then that shift direction
+/// is used. If neither are allowed, `None` is returned.
 ///
 /// ## Deletion Shifting Constraints
 ///
-/// Currently, if a deletion is adjacent to a non-coding region, then no
-/// shift is performed. This could be modified TODO.
+/// Currently, if a deletion is adjacent to a non-coding region or an insertion,
+/// then no shift is performed.
 ///
-/// The magnitude of the shift is limited by the number of flanking match
-/// states in the direction of the shift, since bases will need to be moved
-/// from the match states into the delete state.
+/// The magnitude of the shift is limited by the number of flanking match states
+/// in the direction of the shift, since bases will need to be moved from the
+/// match states into the delete state.
 ///
-/// If the deletion crosses over a region where adjacent exons overlap, then
-/// the deletion may not shift in a way that would cause the deletion to no
-/// longer fully span that region.
+/// If the deletion crosses over a region where adjacent exons overlap, then the
+/// deletion may not shift in a way that would cause the deletion to no longer
+/// fully span that region.
 ///
-/// Similarly, a deletion cannot shift in a way that causes it to intersect
-/// one of the overlapping regions when it did not before.
+/// Similarly, a deletion cannot shift in a way that causes it to intersect one
+/// of the overlapping regions when it did not before.
 fn pick_deletion_shift(
     left_match: &CdsMatchRange, del: &CdsDeletionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,
 ) -> Option<ShiftDir> {
     let codon_shift = del.codon_shift();
 
-    // Check shift eligibility, equivalent to eligible_for_shift but allowing us
-    // to retain the codon shift.
-    if codon_shift == 0 || !del.len().is_multiple_of(3) {
-        return None;
-    }
-
     // TODO: Reevaluate whether forced shift is possible for adjacent case.
     //
     // Check adjacency to non-coding region, which prevents shift
     if left_match.query_range.end != right_match.query_range.start {
-        warn!(
-            "A deletion adjacent to or crossing into a non-coding region was found and will not be shifted.\nQuery: {query_id}\nProduct: {product}",
-            query_id = query.id(),
-            product = product_spec.name
-        );
         return None;
     }
 
@@ -945,27 +790,12 @@ fn pick_deletion_shift(
     // Check for forced or impossible shifts
     match (can_shift_left, can_shift_right) {
         (false, false) => {
-            warn!(
-                "A deletion could not be shifted due to insufficient flanking match state or the presence of overlapping exons.\nQuery: {query_id}\nProduct: {product}",
-                query_id = query.id(),
-                product = product_spec.name
-            );
             return None;
         }
         (true, false) => {
-            warn!(
-                "A deletion is forcibly being shifted left (e.g., due to insufficient flanking match state or the presence of overlapping exons).\nQuery: {query_id}\nProduct: {product}",
-                query_id = query.id(),
-                product = product_spec.name
-            );
             return Some(ShiftDir::Left);
         }
         (false, true) => {
-            warn!(
-                "A deletion is forcibly being shifted right (e.g., due to insufficient flanking match state or the presence of overlapping exons).\nQuery: {query_id}\nProduct: {product}",
-                query_id = query.id(),
-                product = product_spec.name
-            );
             return Some(ShiftDir::Right);
         }
         (true, true) => {}
@@ -975,6 +805,16 @@ fn pick_deletion_shift(
     pick_del_shift_with_stats(left_match, del, right_match, query, product_spec)
 }
 
+/// Assuming that the deletion is allowed to shift in either direction, picks a
+/// shifting direction using the codon/position weights.
+///
+/// `None` is returned if `codon_shift` is 0 (should not occur, but makes the
+/// code more readable).
+///
+/// If the deletion shifts left, 3 of the flanking bases around the deletion
+/// will form a codon after the deletion. If the deletion shifts right, the same
+/// codon is formed but before the deletion. So, this method compares whether
+/// the codon is more likely before or after the deletion.
 fn pick_del_shift_with_stats(
     left_match: &CdsMatchRange, del: &CdsDeletionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,
@@ -1031,6 +871,17 @@ fn pick_del_shift_with_stats(
     }
 }
 
+/// Assuming that the insertion is allowed to shift in either direction, picks a
+/// shifting direction using the codon/position weights.
+///
+/// `None` is returned if `codon_shift` is 0 (should not occur, but makes the
+/// code more readable).
+///
+/// Regardless of which direction the insertion shifts, an uninterrupted codon
+/// will be formed from the previously interrupted codon. However, the bases in
+/// that codon will differ depending on which way the insertion shifts (which
+/// bases are treated as inserted, and which as matches). So, this method
+/// compares which codon is more likely at the given position.
 fn pick_ins_shift_with_stats(
     left_match: &CdsMatchRange, ins: &CdsInsertionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,
@@ -1214,11 +1065,19 @@ impl CdsDeletionRange {
 }
 
 impl CdsInsertionRange {
+    /// Shifts the insertion in the alignment to the left by `amount`.
+    ///
+    /// This subtracts `amount` from the start and end of the `query_range`, as
+    /// well as from the `cds_index`.
     fn shift_left(&mut self, amount: usize) {
         *self.cds_index.right_mut() -= amount;
         self.query_range = self.query_range.start - amount..self.query_range.end - amount;
     }
 
+    /// Shifts the insertion in the alignment to the right by `amount`.
+    ///
+    /// This adds `amount` to the start and end of the `query_range`, as well as
+    /// to the `cds_index`.
     fn shift_right(&mut self, amount: usize) {
         *self.cds_index.right_mut() += amount;
         self.query_range = self.query_range.start + amount..self.query_range.end + amount;
