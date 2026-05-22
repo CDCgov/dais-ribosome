@@ -14,6 +14,19 @@ use zoe::prelude::{AminoAcids, Len, Nucleotides, Slice, Translate};
 impl<'a> Product<'a> {
     /// Computes the output data for this product, materializing all ranges into
     /// sequences using `query`.
+    ///
+    /// The following cases describe the length of the output sequences:
+    ///
+    /// - If `product.product_ranges` is empty, then the sequence and coordinate
+    ///   fields will be empty. `trailing_cds_unaligned` will be non-zero.
+    /// - If `product.product_ranges` contains only a deletion, then `cds_aln`
+    ///   and `aa_aln` will be non-empty. `cds_seq`, `aa_seq`, and the
+    ///   coordinate fields will be empty.
+    /// - Otherwise, all the sequence and coordinate fields will be non-empty.
+    ///
+    /// ## Validity
+    ///
+    /// The `query` must be the same record used to form the product.
     pub fn materialize(&self, query: &QueryRecord) -> ComputedProduct<'a> {
         // Compute all the fields that rely on incremental updates until the
         // first stop codon
@@ -131,6 +144,15 @@ struct ComputedIncrementalProducts {
 
 impl ComputedIncrementalProducts {
     /// Computes the incremental products from a `query` and `product`.
+    ///
+    /// The following cases describe the length of the output sequences:
+    ///
+    /// - If `product.product_ranges` is empty, then the sequence and coordinate
+    ///   fields will be empty. `trailing_cds_unaligned` will be non-zero.
+    /// - If `product.product_ranges` contains only a deletion, then `cds_aln`
+    ///   and `aa_aln` will be non-empty, while `cds_seq` and the coordinate
+    ///   fields will be empty.
+    /// - Otherwise, all the sequence and coordinate fields will be non-empty.
     fn new(query: &QueryRecord, product: &Product) -> Self {
         let range_capacity = product.product_ranges.len();
 
@@ -213,14 +235,24 @@ impl IncrementalAccumulator {
 
     /// Populates the [`IncrementalAccumulator`] from all the ranges in
     /// `product`, returning the exclusive-end index of the accumulated
-    /// sequences within the coding sequence.
+    /// sequences within the coding sequence (used in initializing
+    /// `trailing_cds_unaligned`).
     ///
-    /// This is used in initializing `trailing_cds_unaligned`.
+    /// The following cases describe the length of the output sequences:
+    ///
+    /// - If `product.product_ranges` is empty, then the sequence and coordinate
+    ///   fields will be empty.
+    /// - If `product.product_ranges` contains only a deletion, then `cds_aln`
+    ///   and `aa_aln` will be non-empty, while `cds_seq` and the coordinate
+    ///   fields will be empty.
+    /// - Otherwise, all the sequence and coordinate fields will be non-empty.
     fn populate_from(&mut self, query: &QueryRecord, product: &Product) -> usize {
         let ranges = product.product_ranges.iter().enumerate();
 
         // Populate from ranges up to the last
         for (i, state) in ranges {
+            // Validity: product_ranges.len() - 1 will not underflow since it is
+            // non-empty (otherwise the loop wouldn't be running)
             let is_terminal = i == 0 || i == product.product_ranges.len() - 1;
 
             match state {
@@ -264,6 +296,13 @@ impl IncrementalAccumulator {
 
     /// Updates the accumulator with a match range. If a stop codon is reached,
     /// translation halts and the end index in the coding sequence is returned.
+    ///
+    /// This method guarantees that `cds_aln`, `cds_seq`, `query_coords`, and
+    /// `cds_coords` will grow in size.
+    ///
+    /// ## Validity
+    ///
+    /// `range` must have a non-zero length.
     #[must_use]
     fn extend_from_match(&mut self, query: &QueryRecord, range: &CdsMatchRange) -> Option<usize> {
         let slice = &query.nucleotides()[range.query_range.clone()];
@@ -294,11 +333,24 @@ impl IncrementalAccumulator {
     }
 
     /// Updates the accumulator with an insertion range.
+    ///
+    /// This method guarantees that `cds_seq`, `query_coords`, and `cds_coords`
+    /// will grow in size.
+    ///
+    /// ## Validity
+    ///
+    /// `range` must have a non-zero length.
     fn extend_from_insertion(&mut self, query: &QueryRecord, range: &CdsInsertionRange) {
         self.dependent_fields.extend_from_insertion(query, range);
     }
 
     /// Updates the accumulator with a deletion range.
+    ///
+    /// This method guarantees that `cds_aln` will grow in size.
+    ///
+    /// ## Validity
+    ///
+    /// `range` must have a non-zero length.
     fn extend_from_deletion(&mut self, range: &CdsDeletionRange, is_terminal: bool) {
         self.cds_aln.extend(std::iter::repeat_n(b'-', range.len()));
         self.dependent_fields.extend_from_deletion(range, is_terminal);
@@ -334,9 +386,17 @@ struct DependentFields {
     has_shift_indel: bool,
 
     /// The field for incrementally building [`ComputedProduct::query_coords`].
+    ///
+    /// ## Validity
+    ///
+    /// This must be the same length as `cds_coords`.
     query_coords: Vec<Range<usize>>,
 
     /// The field for incrementally building [`ComputedProduct::cds_coords`].
+    ///
+    /// ## Validity
+    ///
+    /// This must be the same length as `query_coords`.
     cds_coords: Vec<CdsCoord>,
 
     /// The field for incrementally collecting [`ComputedProduct::insertions`].
@@ -362,17 +422,32 @@ impl DependentFields {
     }
 
     /// Extends the dependent fields from a possibly-truncated match range.
+    ///
+    /// This method guarantees that `cds_seq`, `query_coords`, and `cds_coords`
+    /// will grow in size.
+    ///
+    /// ## Validity
+    ///
+    /// `range` must have a non-zero length.
     fn extend_from_match(&mut self, query: &QueryRecord, range: &CdsMatchRange) {
         let slice = &query.nucleotides()[range.query_range.clone()];
 
         // Validity: slice is from QueryRecord, hence meets the requirements
         self.cds_seq.extend_from_slice(slice);
 
+        // Validity: we push to query_coords and cds_coords at the same time
         self.query_coords.push(range.query_range.clone());
         self.cds_coords.push(CdsCoord::M(range.cds_range.clone()));
     }
 
     /// Extends the dependent fields from a insertion range.
+    ///
+    /// This method guarantees that `cds_seq`, `query_coords`, and `cds_coords`
+    /// will grow in size.
+    ///
+    /// ## Validity
+    ///
+    /// `range` must have a non-zero length.
     fn extend_from_insertion(&mut self, query: &QueryRecord, range: &CdsInsertionRange) {
         let slice = &query.nucleotides()[range.query_range.clone()];
 
@@ -387,13 +462,9 @@ impl DependentFields {
         }
         self.has_insertion = true;
 
+        // Validity: we push to query_coords and cds_coords at the same time
         self.query_coords.push(range.query_range.clone());
-
-        // If the insertion happens at the beginning of the sequence, do not
-        // include this coordinate in cds_coords.
-        if !range.cds_index.at_start() {
-            self.cds_coords.push(CdsCoord::I(range.cds_index));
-        }
+        self.cds_coords.push(CdsCoord::I(range.cds_index));
 
         if !range.len().is_multiple_of(3) {
             self.has_shift_indel = true;
@@ -401,6 +472,10 @@ impl DependentFields {
     }
 
     /// Extends the dependent fields from a deletion range.
+    ///
+    /// ## Validity
+    ///
+    /// `range` must have a non-zero length.
     fn extend_from_deletion(&mut self, range: &CdsDeletionRange, is_terminal: bool) {
         // Only allow has_shift_indel to be updated for a deletion if it is not
         // at the beginning or end of the ranges for the given exon
@@ -436,28 +511,38 @@ impl DependentFields {
     }
 
     /// Extends the dependent fields from a stop extension.
+    ///
+    /// This method guarantees that `cds_seq`, `query_coords`, and `cds_coords`
+    /// will grow in size.
+    ///
+    /// ## Validity
+    ///
+    /// `ext_range` must be from [`Product::stop_extension_query_range`].
     fn extend_from_stop_extension(&mut self, query: &QueryRecord, ext_range: &Range<usize>, cds_length: usize) {
-        if let Some(slice) = query.nucleotides().get(ext_range.clone()) {
-            let nt_insertion_idx = InsertionIdx::from_right_idx(cds_length);
+        // Validity: This will not be out of bounds due to ext_range being the
+        // field in the product, which was formed using the same query that is
+        // being passed
+        let slice = &query.nucleotides()[ext_range.clone()];
 
-            // Validity: slice is from QueryRecord
-            let (ins, filtered) = ComputedInsertion::new(nt_insertion_idx, slice);
+        let nt_insertion_idx = InsertionIdx::from_right_idx(cds_length);
 
-            if !filtered {
-                // Validity: ComputedInsertion::inserted_nt meets validity
-                // requirements
-                self.cds_seq.extend_from_slice(&ins.inserted_nt);
-                self.insertions.push(ins);
-            }
-            // TODO: Added based on regression tests:
-            self.has_insertion = true;
+        // Validity: slice is from QueryRecord. The insertion cannot be filtered
+        // since it has length at least 3 and ends with indices corresponding to
+        // a stop codon in `query`.
+        let (ins, _) = ComputedInsertion::new(nt_insertion_idx, slice);
 
-            self.query_coords.push(ext_range.clone());
-            self.cds_coords.push(CdsCoord::I(nt_insertion_idx));
+        // Validity: ComputedInsertion::inserted_nt meets validity requirements
+        self.cds_seq.extend_from_slice(&ins.inserted_nt);
+        self.insertions.push(ins);
 
-            if !ext_range.len().is_multiple_of(3) {
-                self.has_shift_indel = true;
-            }
+        self.has_insertion = true;
+
+        // Validity: we push to query_coords and cds_coords at the same time
+        self.query_coords.push(ext_range.clone());
+        self.cds_coords.push(CdsCoord::I(nt_insertion_idx));
+
+        if !ext_range.len().is_multiple_of(3) {
+            self.has_shift_indel = true;
         }
     }
 }

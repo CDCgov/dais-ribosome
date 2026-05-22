@@ -33,8 +33,6 @@ impl<'a> AnnotationModule<'a> {
         for ref_id_data in reference_data.iter() {
             let (query_ori_offset, chewed_query) = self.rule_chew_to_start(&query, ref_id_data);
 
-            // TODO: Do we ever do revcomp alignment?
-
             // Get the alignment to the best reference
             let Some(mut genome_aln) = self.best_alignment(ref_id_data, &chewed_query) else {
                 failed_ref_ids.push(ref_id_data.reference_id.clone());
@@ -56,24 +54,24 @@ impl<'a> AnnotationModule<'a> {
 
             let mut products = Vec::with_capacity(ref_id_data.product_specs.len());
 
-            for product in &ref_id_data.product_specs {
+            for product_spec in &ref_id_data.product_specs {
                 // Validity: requirements met based on
                 // state_ranges_from_aligment guarantees
-                let mut product_ranges = intersection::form_product(&genome_aln_states, product);
+                let mut product = intersection::form_product(&genome_aln_states, product_spec);
 
                 // Shift indels to fix their frames
-                product_ranges.fix_frames(&query);
+                product.fix_frames(&query);
 
                 // Condense any remaining deletions
-                product_ranges.condense_deletions();
+                product.condense_deletions();
 
                 // Validity: the same `query_seq` is passed as was used to form
                 // `genome_aln_states`
-                if product_ranges.missing_required_start(&query) {
+                if product.missing_required_start(&query) {
                     continue;
                 }
 
-                products.push(product_ranges);
+                products.push(product);
             }
 
             // Push stop extension into every product whose last exon ends at
@@ -81,9 +79,19 @@ impl<'a> AnnotationModule<'a> {
             if let Some(ext) = &stop_extension {
                 for product in &mut products {
                     let last_exon = product.product_spec.exons.last();
+
                     // Check whether the last exon ends at the same place the
                     // stop extension "ends" (the index before which it occurs).
                     if last_exon.ref_range.end == ext.ref_index.right() {
+                        // Validity: stop_extension is only Some if the genome
+                        // alignment extended to the end of the reference.
+                        // Trailing indels in the genome alignment are not
+                        // possible, so the last base of the reference has a
+                        // match with the query. This match must intersect the
+                        // final exon (since it is non-empty), so product_ranges
+                        // will end in a match state.
+                        debug_assert!(product.product_ranges.last().and_then(CdsStateRange::match_range).is_some());
+
                         product.stop_extension_query_range = Some(ext.query_range.clone());
                     }
                 }
@@ -132,6 +140,9 @@ impl<'a> AnnotationModule<'a> {
 
     /// Computes the stop extension if the [`list_contig_stop_extension`] rule
     /// is set.
+    ///
+    /// If `Some`, the returned range will have length at least 3. The last
+    /// three indices will correspond to the stop codon in `query`.
     ///
     /// [`list_contig_stop_extension`]:
     ///     crate::config::toml::Rules::list_contig_stop_extension

@@ -156,7 +156,7 @@ pub struct Product<'a> {
     ///
     /// This field does not begin or end with [`CdsStateRange::I`]. This field
     /// may be empty if there is no intersection between the query and the
-    /// exons.
+    /// exons. The contained ranges will have non-zero length.
     pub product_ranges: Vec<CdsStateRange>,
 
     /// The number of bases in the coding sequence that were not aligned against
@@ -175,5 +175,9 @@ pub struct Product<'a> {
 
     /// If this product's last exon ends at the stop extension position, this
     /// holds the query range of the stop extension nucleotides.
+    ///
+    /// If `Some`, the range will have length at least 3. The last three indices
+    /// will correspond to the stop codon in `query`. This can only be set if
+    /// `product_ranges` ends in a match state.
     pub stop_extension_query_range: Option<Range<usize>>,
 }

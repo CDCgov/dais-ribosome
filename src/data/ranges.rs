@@ -189,6 +189,29 @@ pub enum CdsStateRange {
     I(CdsInsertionRange),
 }
 
+impl CdsStateRange {
+    pub fn match_range(&self) -> Option<&CdsMatchRange> {
+        match self {
+            CdsStateRange::M(range) => Some(range),
+            _ => None,
+        }
+    }
+
+    pub fn deletion_range(&self) -> Option<&CdsDeletionRange> {
+        match self {
+            CdsStateRange::D(range) => Some(range),
+            _ => None,
+        }
+    }
+
+    pub fn insertion_range(&self) -> Option<&CdsInsertionRange> {
+        match self {
+            CdsStateRange::I(range) => Some(range),
+            _ => None,
+        }
+    }
+}
+
 /// The range within the query and coding sequence where a contiguous block of
 /// matches occurs.
 ///
@@ -303,6 +326,8 @@ impl StateRange {
     /// Converts an [`Alignment`] to a sequence of [`StateRange`] for coordinate
     /// manipulation.
     ///
+    /// All returned [`StateRange`] entries are guaranteed to be non-empty.
+    ///
     /// ## Validity
     ///
     /// A valid `alignment` must be passed to ensure the output sequence of
@@ -310,8 +335,8 @@ impl StateRange {
     /// without overlap or gap. The alignment must only contain the operations
     /// `MIDS=X`.
     ///
-    /// Furthermore, excluding soft clipping, the first/last `states` must be
-    /// `M`, so that the output also has the first and last states as
+    /// Furthermore, excluding soft clipping, the first/last states must be `M`,
+    /// so that the output also has the first and last states as
     /// [`StateRange::M`].
     pub(crate) fn state_ranges_from_aligment<T>(alignment: &Alignment<T>) -> Vec<Self> {
         // This will be a slight overestimate due to the possible presence of
@@ -323,6 +348,8 @@ impl StateRange {
         let mut query_start = alignment.query_range.start;
         let mut ref_start = alignment.ref_range.start;
 
+        // Validity: inc is nonzero based on guarantees of AlignmentStates, so
+        // all StateRange entries will be non-empty
         for Ciglet { inc, op } in &alignment.states {
             match op {
                 b'M' | b'=' | b'X' => {

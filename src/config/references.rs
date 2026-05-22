@@ -16,6 +16,8 @@ use zoe::{
 /// This function also recodes the sequence to uppercase IUPAC with corrected
 /// gaps, using `N` for anything that cannot be recoded.
 ///
+/// Each `Vec` in the output [`HashMap`] is guaranteed to be non-empty.
+///
 /// ## Errors
 ///
 /// All IO errors are propagated without path context. An error is also returned
@@ -39,5 +41,7 @@ pub fn load_references(path: &Path) -> std::io::Result<HashMap<RefKey, Vec<Nucle
         refs.entry(key).or_insert_with(Vec::new).push(forward);
     }
 
+    // Validity: each value in the output HashMap will be non-empty since we
+    // only insert entries when there is a sequence to push
     Ok(refs)
 }

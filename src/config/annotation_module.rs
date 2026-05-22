@@ -105,7 +105,8 @@ impl<'a> AnnotationModule<'a> {
                 // Update that reference group
                 group.extend(seqs, &ref_key, params)?;
             } else {
-                // Add a new reference group
+                // Add a new reference group. Validity: seqs is non-empty by
+                // guarantees on load_references
                 groups.push(ReferenceGroup::new(
                     &ref_key,
                     seqs,
@@ -160,6 +161,9 @@ impl<'a> AnnotationModule<'a> {
             }
         }
 
+        // Validity: the alignment cannot begin or end with indels since
+        // ReferenceGroup guarantees that either gap_open or gap_extend are
+        // strictly negative
         Some(best_alignment)
     }
 
@@ -196,6 +200,10 @@ pub(crate) struct ReferenceGroup<'a> {
     /// The shared length of the reference sequences.
     pub(crate) length:        usize,
     /// The alignment profiles corresponding to the sequences.
+    ///
+    /// At least one of `gap_open` and `gap_extend` will be strictly negative
+    /// for all profiles, to ensure that optimal local alignments do not begin
+    /// or end with indels.
     pub(crate) profiles:      Vec<AlignmentProfiles<'a>>,
     /// The specifications for all the protein products that can be formed from
     /// the references.
@@ -203,11 +211,25 @@ pub(crate) struct ReferenceGroup<'a> {
 }
 
 impl<'a> ReferenceGroup<'a> {
-    pub fn new(
+    /// Initializes a new [`ReferenceGroup`] containing profiles for the
+    /// specified sequences.
+    ///
+    /// Entries are removed from `cds_spec` and `codon_weights` and used to
+    /// create the [`ProductSpec`] entries held by the [`ReferenceGroup`].
+    ///
+    /// ## Panics
+    ///
+    /// Out-of-bounds indexing will occur if `seqs` is empty.
+    ///
+    /// ## Errors
+    ///
+    /// The lengths of the sequences must all be the same and be non-empty, and
+    /// the profiles must build successfully.
+    fn new(
         ref_key: &RefKey, seqs: Vec<Nucleotides>, params: &'a AlignmentParams, cds_spec: &mut CdsSpecMap,
         codon_weights: &mut CodonWeightMatrix,
     ) -> std::io::Result<Self> {
-        let length = seqs.first().map_or(0, Nucleotides::len);
+        let length = seqs[0].len();
         for seq in &seqs {
             if seq.len() != length {
                 return Err(std::io::Error::other(format!(
@@ -218,6 +240,8 @@ impl<'a> ReferenceGroup<'a> {
             }
         }
 
+        // Validity: gap_open and gap_extend restrictions are met due to
+        // AlignmentParams guarantees
         let profiles = seqs
             .into_iter()
             .map(|seq| {
@@ -248,7 +272,14 @@ impl<'a> ReferenceGroup<'a> {
         })
     }
 
-    pub fn extend(&mut self, seqs: Vec<Nucleotides>, ref_key: &RefKey, params: &'a AlignmentParams) -> std::io::Result<()> {
+    /// Adds additional sequences to the [`ReferenceGroup`].
+    ///
+    /// ## Errors
+    ///
+    /// The lengths of the sequences must equal the lengths of the existing
+    /// sequences in the [`ReferenceGroup`], and the profiles must build
+    /// successfully.
+    fn extend(&mut self, seqs: Vec<Nucleotides>, ref_key: &RefKey, params: &'a AlignmentParams) -> std::io::Result<()> {
         for seq in &seqs {
             if seq.len() != self.length {
                 return Err(std::io::Error::other(format!(
@@ -259,6 +290,8 @@ impl<'a> ReferenceGroup<'a> {
             }
         }
 
+        // Validity: gap_open and gap_extend restrictions are met due to
+        // AlignmentParams guarantees
         let profiles = seqs.into_iter().map(|seq| {
             AlignmentProfiles::new(seq, &params.matrix, params.gap_open, params.gap_extend)
                 .with_context("Failed to build alignment profiles")

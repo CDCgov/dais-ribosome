@@ -74,6 +74,7 @@ pub struct ComputedProduct<'a> {
     /// Each coding sequence coordinate is either a range (corresponding to a
     /// matched region) or an [`InsertionIdx`] (corresponding to an insertion in
     /// the query). Discontinuities in the ranges imply a deletion in the query.
+    /// This vector will be the same length as `query_coords`.
     pub cds_coords:             Vec<CdsCoord>,
     /// The computed insertions within the product.
     ///

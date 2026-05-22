@@ -219,13 +219,30 @@ struct AlignmentParamsRaw {
 }
 
 /// The alignment scoring parameters.
+///
+/// ## Validity
+///
+/// At least one of `gap_open` or `gap_extend` must be nonzero, to ensure that
+/// optimal local alignments do not begin or end with indels.
 #[derive(Debug, Clone)]
 pub struct AlignmentParams {
-    /// The weight matrix for alignment, with a non-positive mismatch score
+    /// The weight matrix for alignment.
+    ///
+    /// ## Validity
+    ///
+    /// The mismatch score must be non-positive, and cannot be -128.
     pub matrix:     WeightMatrix<'static, i8, 5>,
-    /// The score for opening a gap, guaranteed to be non-positive
+    /// The score for opening a gap.
+    ///
+    /// ## Validity
+    ///
+    /// This must be non-positive, and cannot be -128.
     pub gap_open:   i8,
-    /// The score for extending a gap, guaranteed to be non-positive
+    /// The score for extending a gap.
+    ///
+    /// ## Validity
+    ///
+    /// This must be non-positive, and cannot be -128.
     pub gap_extend: i8,
 }
 
@@ -233,8 +250,11 @@ impl<'de> Deserialize<'de> for AlignmentParams {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>, {
+        // Validity: AlignmentParamsRaw handles converting penalties to
+        // non-positive and ensuring they are not -128.
         let raw = AlignmentParamsRaw::deserialize(deserializer)?;
 
+        // Validity: Verify validity requirement on AlignmentParams
         if raw.gap_open == 0 && raw.gap_extend == 0 {
             return Err(D::Error::custom("gap_open and gap_extend cannot both be 0"));
         }
