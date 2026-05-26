@@ -23,23 +23,23 @@ use crate::{
 pub(crate) fn form_product<'a>(state_ranges: &[StateRange], product_spec: &'a ProductSpec) -> Product<'a> {
     let product_ranges = intersect_with_exons(state_ranges, &product_spec.exons);
 
-    let leading_cds_unaligned = match product_ranges.first() {
+    let lpad = match product_ranges.first() {
         Some(CdsStateRange::M(m)) => m.cds_range.start,
         Some(CdsStateRange::D(d)) => d.cds_range.start,
         Some(CdsStateRange::I(i)) => i.cds_index.right(),
 
-        // We put all of the unaligned bases in trailing_cds_unaligned
+        // We put all of the unaligned bases in rpad
         None => 0,
     };
 
-    let trailing_cds_unaligned = {
+    let rpad = {
         let end = match product_ranges.last() {
             Some(CdsStateRange::M(m)) => m.cds_range.end,
             Some(CdsStateRange::D(d)) => d.cds_range.end,
             Some(CdsStateRange::I(i)) => i.cds_index.right(),
 
             // If product_ranges is empty, then the aligned-against region ends
-            // at 0 (resulting in trailing_cds_unaligned being cds_len)
+            // at 0 (resulting in rpad being cds_len)
             None => 0,
         };
 
@@ -49,8 +49,8 @@ pub(crate) fn form_product<'a>(state_ranges: &[StateRange], product_spec: &'a Pr
     Product {
         product_spec,
         product_ranges,
-        leading_cds_unaligned,
-        trailing_cds_unaligned,
+        lpad,
+        rpad,
     }
 }
 

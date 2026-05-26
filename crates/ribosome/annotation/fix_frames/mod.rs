@@ -542,7 +542,7 @@ enum ShiftDir {
 ///
 /// Formally, this method looks at the constraints for how the insertion is
 /// allowed to shift, and evaluates whether it is eligible to shift left or
-/// right. If both are allowed, then the codon/position weights are used to
+/// right. If both are allowed, then the codon-position weights are used to
 /// determine the direction. If only one is allowed, then that shift direction
 /// is used. If neither are allowed, `None` is returned.
 ///
@@ -676,7 +676,7 @@ fn pick_insertion_shift(
 ///
 /// Formally, this method looks at the constraints for how the deletion is
 /// allowed to shift, and evaluates whether it is eligible to shift left or
-/// right. If both are allowed, then the codon/position weights are used to
+/// right. If both are allowed, then the codon-position weights are used to
 /// determine the direction. If only one is allowed, then that shift direction
 /// is used. If neither are allowed, `None` is returned.
 ///
@@ -806,7 +806,7 @@ fn pick_deletion_shift(
 }
 
 /// Assuming that the deletion is allowed to shift in either direction, picks a
-/// shifting direction using the codon/position weights.
+/// shifting direction using the codon-position weights.
 ///
 /// `None` is returned if `codon_shift` is 0 (should not occur, but makes the
 /// code more readable).
@@ -872,7 +872,7 @@ fn pick_del_shift_with_stats(
 }
 
 /// Assuming that the insertion is allowed to shift in either direction, picks a
-/// shifting direction using the codon/position weights.
+/// shifting direction using the codon-position weights.
 ///
 /// `None` is returned if `codon_shift` is 0 (should not occur, but makes the
 /// code more readable).

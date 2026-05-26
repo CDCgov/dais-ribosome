@@ -6,40 +6,40 @@ use zoe::prelude::Nucleotides;
 pub struct ComputedGenome {
     /// The SHA1 hash of the cleaned genome sequence, or `None` if no DNA data
     /// remained after filtering.
-    pub genome_id:              Option<String>,
+    pub genome_id:       Option<String>,
     /// The length of the genome's unaligned nucleotide sequence.
     ///
     /// This is equivalent to `genome_seq.len()`.
-    pub genome_length:          usize,
+    pub genome_length:   usize,
     /// Whether any insertion exists in the genome.
-    pub has_insertion:          bool,
+    pub has_insertion:   bool,
     /// The unaligned nucleotide sequence for the genome (with insertions but no
     /// deletions).
     ///
     /// This will only contain unaligned uppercase IUPAC. Both `U` and `T` are
     /// allowed.
-    pub genome_seq:             Nucleotides,
+    pub genome_seq:      Nucleotides,
     /// The aligned nucleotide sequence for the genome (with `-` for deletions
     /// but no insertions).
     ///
-    /// This will only contain uppercase IUPAC, padding `.`, and gaps `-`. Both
-    /// `U` and `T` are allowed.
-    pub genome_aln:             Nucleotides,
+    /// This will only contain uppercase IUPAC, left padding `.`, and gaps `-`.
+    /// Both `U` and `T` are allowed. Right padding is not included, but the
+    /// length of it can be obtained from [`ComputedGenome::genome_aln_rpad`].
+    pub genome_aln:      Nucleotides,
     /// The computed insertions within the genome.
     ///
     /// Unlike [`ComputedProduct::insertions`], no insertions are filtered.
     ///
     /// [`ComputedProduct::insertions`]:
     ///     crate::outputs::ComputedProduct::insertions
-    pub insertions:             Vec<ComputedGenomeInsertion>,
-    /// The number of bases in the reference sequence that were not aligned
-    /// against at the end.
+    pub insertions:      Vec<ComputedGenomeInsertion>,
+    /// The amount of right padding that occurs after `genome_aln`.
     ///
-    /// See [`GenomeAndProductStates::trailing_ref_unaligned`].
-    ///
-    /// [`GenomeAndProductStates::trailing_ref_unaligned`]:
-    ///     crate::outputs::GenomeAndProductStates::trailing_ref_unaligned
-    pub trailing_ref_unaligned: usize,
+    /// Padding of this length can be added to the end of `genome_aln` to get an
+    /// aligned sequence spanning the full reference length. This does not
+    /// include trailing deletions, since these are present in `genome_aln`
+    /// already.
+    pub genome_aln_rpad: usize,
 }
 
 /// Genome-level insertion for `.gen.ins` output.

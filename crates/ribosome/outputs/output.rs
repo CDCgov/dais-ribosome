@@ -56,13 +56,18 @@ pub struct GenomeAndProductStates<'a> {
     /// The range of the stop extension within the query, if present.
     pub stop_extension_query_range: Option<Range<usize>>,
 
-    /// The number of bases in the reference sequence that were not aligned
-    /// against in the beginning (i.e., not included in `genome_aln_states`).
-    pub leading_ref_unaligned: usize,
+    /// The amount of left padding in the genome alignment.
+    ///
+    /// This is the number of bases in the reference sequence that were not
+    /// aligned against at the beginning (i.e., not included in
+    /// `genome_aln_states`).
+    pub lpad: usize,
 
-    /// The number of bases in the reference sequence that were not aligned
-    /// against at the end (i.e., not included in `genome_aln_states`).
-    pub trailing_ref_unaligned: usize,
+    /// The amount of right padding in the genome alignment.
+    ///
+    /// This is the number of bases in the reference sequence that were not
+    /// aligned against at the end (i.e., not included in `genome_aln_states`).
+    pub rpad: usize,
 
     /// Contains all relevant product data, including the protein name.
     pub products: Vec<Product<'a>>,
@@ -75,7 +80,7 @@ impl<'a> GenomeAndProductStates<'a> {
         let query = query.nucleotides();
 
         let mut genome_seq = Nucleotides::new();
-        let mut genome_aln = Nucleotides::from(vec![b'.'; self.leading_ref_unaligned]);
+        let mut genome_aln = Nucleotides::from(vec![b'.'; self.lpad]);
         let mut insertions = Vec::new();
         let mut has_insertion = false;
 
@@ -123,7 +128,7 @@ impl<'a> GenomeAndProductStates<'a> {
             genome_seq,
             genome_aln,
             insertions,
-            trailing_ref_unaligned: self.trailing_ref_unaligned,
+            genome_aln_rpad: self.rpad,
         }
     }
 }
@@ -160,17 +165,21 @@ pub struct Product<'a> {
     /// and the exons. The contained ranges will have non-zero length.
     pub product_ranges: Vec<CdsStateRange>,
 
-    /// The number of bases in the coding sequence that were not aligned against
-    /// in the beginning (i.e., not included in `product_ranges`).
+    /// The amount of left padding in CDS coordinates for the product.
+    ///
+    /// This is the number of bases in the coding sequence that were not aligned
+    /// against in the beginning (i.e., not included in `product_ranges`).
     ///
     /// If `product_ranges` is empty, then this field is 0, and the unaligned
-    /// bases are counted in `trailing_cds_unaligned`.
-    pub leading_cds_unaligned: usize,
+    /// bases are counted in `rpad`.
+    pub lpad: usize,
 
-    /// The number of bases in the coding sequence that were not aligned against
-    /// at the end (i.e., not included in `product_ranges`).
+    /// The amount of right padding in CDS coordinates for the product.
+    ///
+    /// This is the number of bases in the coding sequence that were not aligned
+    /// against at the end (i.e., not included in `product_ranges`).
     ///
     /// Materialization may use an _increased_ version of this if it truncates
     /// the alignment at the first stop codon encountered.
-    pub trailing_cds_unaligned: usize,
+    pub rpad: usize,
 }

@@ -63,7 +63,8 @@ pub struct SeqRow {
     /// The aligned coding sequence for the protein (with `-` for deletions but
     /// no insertions).
     ///
-    /// See [`ComputedProduct::cds_aln`].
+    /// See [`ComputedProduct::cds_aln`], except that this may also contain
+    /// right padding.
     pub cds_aln:           Option<Nucleotides>,
     /// The coordinates within the original query that were used to form the
     /// unaligned `cds_seq`.
@@ -183,7 +184,10 @@ pub struct SeqRowView<'a> {
     ///
     /// See [`ComputedProduct::aa_aln`].
     pub aa_aln:            AminoAcidsView<'a>,
-    /// The amount of right padding to apply to `aa_aln`.
+    /// The amount of right padding to apply to `aa_aln` when displaying it.
+    ///
+    /// For example, if [`Formatting::right_pad_aa`] is false or the product is
+    /// empty, then this is set to 0 by [`SeqRowView::new`].
     pub aa_aln_rpad:       usize,
     /// The SHA1 hash of the cleaned coding sequence, or `None` if no DNA data
     /// remained after filtering.
@@ -203,7 +207,10 @@ pub struct SeqRowView<'a> {
     ///
     /// See [`ComputedProduct::cds_aln`].
     pub cds_aln:           NucleotidesView<'a>,
-    /// The amount of right padding to apply to `cds_aln`.
+    /// The amount of right padding to apply to `cds_aln` when displaying it.
+    ///
+    /// For example, if [`Formatting::right_pad_cds`] is false or the product is
+    /// empty, then this is set to 0 by [`SeqRowView::new`].
     pub cds_aln_rpad:      usize,
     /// The coordinates within the original query that were used to form the
     /// unaligned `cds_seq`.
@@ -220,19 +227,17 @@ pub struct SeqRowView<'a> {
 impl<'a> SeqRowView<'a> {
     /// Creates a new [`SeqRowView`] by extracting the relevant fields from the
     /// [`ComputedProduct`].
-    #[allow(unused_variables)]
     pub fn new(
         product: &'a ComputedProduct<'a>, query_id: &'a str, ctype: &'a str, reference_id: &'a str,
         formatting: &'a Formatting,
     ) -> Self {
         let cds_aln_rpad = if formatting.right_pad_cds && !product.cds_aln.is_empty() {
-            product.trailing_cds_unaligned
+            product.cds_aln_rpad
         } else {
             0
         };
         let aa_aln_rpad = if formatting.right_pad_aa && !product.aa_aln.is_empty() {
-            // Floor divide since any leftover bases are already accounted for with a partial codon
-            product.trailing_cds_unaligned / 3
+            product.aa_aln_rpad()
         } else {
             0
         };

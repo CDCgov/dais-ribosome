@@ -82,7 +82,7 @@ impl<'a> AnnotationModule<'a> {
                     // exons extend to the end of the reference. Hence, the
                     // product alignment (intersection of the two) will extend
                     // to the end of the reference.
-                    debug_assert_eq!(product.trailing_cds_unaligned, 0);
+                    debug_assert_eq!(product.rpad, 0);
 
                     let stop_extension = CdsInsertionRange {
                         cds_index:   InsertionIdx::from_right_idx(product.product_spec.exons.cds_len()),
@@ -97,7 +97,7 @@ impl<'a> AnnotationModule<'a> {
 
             let ref_len = ref_id_data.length;
 
-            let leading_ref_unaligned = genome_aln_states
+            let lpad = genome_aln_states
                 .iter()
                 .find_map(|s| match s {
                     StateRange::M(m) => Some(m.ref_range.start),
@@ -106,7 +106,7 @@ impl<'a> AnnotationModule<'a> {
                 })
                 .unwrap_or(0);
 
-            let trailing_ref_unaligned = ref_len
+            let rpad = ref_len
                 - genome_aln_states
                     .iter()
                     .rev()
@@ -121,8 +121,8 @@ impl<'a> AnnotationModule<'a> {
                 reference_id: &ref_id_data.reference_id,
                 ref_len,
                 genome_aln_states,
-                leading_ref_unaligned,
-                trailing_ref_unaligned,
+                lpad,
+                rpad,
                 products,
                 stop_extension_query_range: stop_extension.map(|ins| ins.query_range),
             });

@@ -44,7 +44,8 @@ pub struct GenSeqRow {
     /// The aligned nucleotide sequence for the genome (with `-` for deletions
     /// but no insertions).
     ///
-    /// See [`ComputedGenome::genome_aln`].
+    /// See [`ComputedGenome::genome_aln`], except that this may also contain
+    /// right padding.
     pub genome_aln:    Nucleotides,
 }
 
@@ -129,7 +130,10 @@ pub struct GenSeqRowView<'a> {
     ///
     /// See [`ComputedGenome::genome_aln`].
     pub genome_aln:      NucleotidesView<'a>,
-    /// The amount of right padding to apply to `genome_aln`.
+    /// The amount of right padding to apply to `genome_aln` when displaying it.
+    ///
+    /// For example, if [`Formatting::right_pad_gen`] is false, then this is set
+    /// to 0 by [`GenSeqRowView::new`].
     pub genome_aln_rpad: usize,
 }
 
@@ -139,11 +143,7 @@ impl<'a> GenSeqRowView<'a> {
     pub fn new(
         genome: &'a ComputedGenome, query_id: &'a str, ctype: &'a str, reference_id: &'a str, formatting: &'a Formatting,
     ) -> Self {
-        let genome_aln_rpad = if formatting.right_pad_gen {
-            genome.trailing_ref_unaligned
-        } else {
-            0
-        };
+        let genome_aln_rpad = if formatting.right_pad_gen { genome.genome_aln_rpad } else { 0 };
 
         Self {
             query_id,

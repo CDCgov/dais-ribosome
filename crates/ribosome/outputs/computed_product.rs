@@ -9,25 +9,26 @@ use zoe::prelude::*;
 /// any residues after it. Stop codons inside insertions do not truncate the
 /// product, so if a stop codon appears in the middle of `aa_seq`, this is the
 /// cause.
-#[derive(Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct ComputedProduct<'a> {
     /// The protein product name (e.g., `HA`, `HA-signal`).
-    pub name:                   &'a str,
+    pub name:            &'a str,
     /// The unaligned coding sequence for the protein (with insertions but no
     /// deletions).
     ///
     /// This will only contain unaligned uppercase IUPAC. Both `U` and `T` are
     /// allowed.
-    pub cds_seq:                Nucleotides,
+    pub cds_seq:         Nucleotides,
     /// The aligned coding sequence for the protein (with `-` for deletions but
     /// no insertions).
     ///
-    /// This will only contain uppercase IUPAC, padding `.`, and gaps `-`. Both
-    /// `U` and `T` are allowed.
-    pub cds_aln:                Nucleotides,
-    /// The SHA1 hash of the cleaned coding sequence, or `None` if no DNA data
-    /// remained after filtering.
-    pub cds_id:                 Option<String>,
+    /// This will only contain uppercase IUPAC, left padding `.`, and gaps `-`.
+    /// Both `U` and `T` are allowed. Right padding is not included, but the
+    /// length of it can be obtained from [`ComputedProduct::cds_aln_rpad`].
+    pub cds_aln:         Nucleotides,
+    /// The SHA1 hash of the unaligned coding sequence (`cds_seq`), or `None` if
+    /// no DNA data remained after filtering.
+    pub cds_id:          Option<String>,
     /// The unaligned amino acid sequence for the protein (with insertions but
     /// no deletions).
     ///
@@ -43,31 +44,34 @@ pub struct ComputedProduct<'a> {
     ///
     /// This will only contain unaligned uppercase IUPAC, partial codons, and
     /// stop codons.
-    pub aa_seq:                 AminoAcids,
+    pub aa_seq:          AminoAcids,
     /// The aligned amino acid sequence for the protein (with `-` for deletions
     /// but no insertions).
     ///
     /// This will only contain uppercase IUPAC, partial codons, stop codons,
-    /// padding `.`, and gaps `-`.
-    pub aa_aln:                 AminoAcids,
-    /// The MD5 hash of the cleaned amino acid sequence (variant hash), or
-    /// `None` if no amino acid data remained after filtering.
-    pub variant_hash:           Option<String>,
+    /// left padding `.`, and gaps `-`. Right padding is not included, but the
+    /// length of it can be obtained from [`ComputedProduct::aa_aln_rpad`].
+    pub aa_aln:          AminoAcids,
+    /// The MD5 hash of the unaligned amino acid sequence (`aa_seq`), or `None`
+    /// if no amino acid data remained after filtering.
+    pub variant_hash:    Option<String>,
     /// Whether any insertion exists in this product.
     ///
     /// This includes insertions that were filtered, so it is possible that
     /// `has_insertions` is true but `insertions` is empty. A stop extension (if
     /// present) is also counted as an insertion.
-    pub has_insertion:          bool,
+    pub has_insertion:   bool,
     /// Whether any insertion or deletion causes a frameshift (i.e., the length
     /// is not divisible by 3).
-    pub has_shift_indel:        bool,
+    ///
+    /// Flanking indels at either end of the product are not counted.
+    pub has_shift_indel: bool,
     /// The coordinates within the original query that were used to form the
     /// unaligned `cds_seq`.
     ///
     /// After sanitizing the original query, slicing the original query at these
     /// indices and concatenating the results will yield `cds_seq`.
-    pub query_coords:           Vec<Range<usize>>,
+    pub query_coords:    Vec<Range<usize>>,
     /// The coding sequence coordinates corresponding to the
     /// `query_coordinates`.
     ///
@@ -75,30 +79,44 @@ pub struct ComputedProduct<'a> {
     /// matched region) or an [`InsertionIdx`] (corresponding to an insertion in
     /// the query). Discontinuities in the ranges imply a deletion in the query.
     /// This vector will be the same length as `query_coords`.
-    pub cds_coords:             Vec<CdsCoord>,
+    pub cds_coords:      Vec<CdsCoord>,
     /// The computed insertions within the product.
     ///
     /// Only insertions that have a length at least 3 are included. Insertions
     /// solely containing `N` are excluded. If it meets the criteria, a stop
     /// extension is included as an insertion.
-    pub insertions:             Vec<ComputedInsertion>,
+    pub insertions:      Vec<ComputedInsertion>,
     /// The computed deletions within the product.
     ///
     /// Unlike `insertions`, deletions of any length are included.
-    pub deletions:              Vec<ComputedDeletion>,
-    /// The number of unaligned bases at the end of the coding sequence that
-    /// were soft clipped or appeared after the first stop codon.
+    pub deletions:       Vec<ComputedDeletion>,
+    /// The amount of right padding that occurs after `cds_aln`.
     ///
-    /// This does not include trailing deletions, so that this field can be used
-    /// to render right padding without double counting deletions.
-    pub trailing_cds_unaligned: usize,
+    /// Padding of this length can be added to the end of `cds_aln` to get an
+    /// aligned sequence spanning the full coding sequence length. This does not
+    /// include trailing deletions, since these are present in `cds_aln`
+    /// already.
+    pub cds_aln_rpad:    usize,
+}
+
+impl ComputedProduct<'_> {
+    /// The amount of right padding that occurs after `aa_aln`.
+    ///
+    /// Padding of this length can be added to the end of `aa_aln` to get an
+    /// aligned sequence spanning the full coding protein length. This does not
+    /// include trailing deletions, since these are present in `aa_aln` already.
+    pub fn aa_aln_rpad(&self) -> usize {
+        // Floor divide since any leftover bases are already accounted for with
+        // a partial codon
+        self.cds_aln_rpad / 3
+    }
 }
 
 /// A computed insertion, with materialized nucleotide and amino acid sequences.
 ///
 /// Even if a stop codon occurs within the insertion, the sequence fields will
 /// contain the full insertion.
-#[derive(Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct ComputedInsertion {
     /// The upstream amino acid position (1-based), which is the position
     /// _after_ which the insertion occurs.
@@ -175,7 +193,7 @@ impl ComputedInsertion {
 }
 
 /// A computed deletion.
-#[derive(Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct ComputedDeletion {
     /// The start position of the deletion in amino acid coordinates (1-based,
     /// inclusive).

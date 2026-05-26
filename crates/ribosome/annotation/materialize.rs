@@ -18,7 +18,7 @@ impl<'a> Product<'a> {
     /// The following cases describe the length of the output sequences:
     ///
     /// - If `product.product_ranges` is empty, then the sequence and coordinate
-    ///   fields will be empty. `trailing_cds_unaligned` will be non-zero.
+    ///   fields will be empty. `cds_aln_rpad` will be non-zero.
     /// - If `product.product_ranges` contains only a deletion, then `cds_aln`
     ///   and `aa_aln` will be non-empty. `cds_seq`, `aa_seq`, and the
     ///   coordinate fields will be empty.
@@ -42,7 +42,7 @@ impl<'a> Product<'a> {
             cds_coords,
             insertions,
             deletions,
-            trailing_cds_unaligned,
+            cds_aln_rpad,
         } = incremental;
 
         // Form aa_seq by splicing insertions into aa_aln (and removing
@@ -97,7 +97,7 @@ impl<'a> Product<'a> {
             cds_coords,
             insertions,
             deletions,
-            trailing_cds_unaligned,
+            cds_aln_rpad,
         }
     }
 }
@@ -113,33 +113,33 @@ impl<'a> Product<'a> {
 struct ComputedIncrementalProducts {
     /// See [`ComputedProduct::cds_aln`]. This is populated from
     /// [`IncrementalAccumulator::cds_aln`].
-    cds_aln:                Nucleotides,
+    cds_aln:         Nucleotides,
     /// See [`ComputedProduct::aa_aln`]. This is populated from
     /// [`IncrementalAccumulator::aa_aln`].
-    aa_aln:                 AminoAcids,
+    aa_aln:          AminoAcids,
     /// See [`ComputedProduct::cds_seq`]. This is populated from
     /// [`DependentFields::cds_seq`].
-    cds_seq:                Nucleotides,
+    cds_seq:         Nucleotides,
     /// See [`ComputedProduct::has_insertion`]. This is populated from
     /// [`DependentFields::has_insertion`].
-    has_insertion:          bool,
+    has_insertion:   bool,
     /// See [`ComputedProduct::has_shift_indel`]. This is populated from
-    /// [`DependentFields::has_insertion`].
-    has_shift_indel:        bool,
+    /// [`DependentFields::has_shift_indel`].
+    has_shift_indel: bool,
     /// See [`ComputedProduct::query_coords`]. This is populated from
     /// [`DependentFields::query_coords`].
-    query_coords:           Vec<Range<usize>>,
+    query_coords:    Vec<Range<usize>>,
     /// See [`ComputedProduct::cds_coords`]. This is populated from
     /// [`DependentFields::cds_coords`].
-    cds_coords:             Vec<CdsCoord>,
+    cds_coords:      Vec<CdsCoord>,
     /// See [`ComputedProduct::insertions`]. This is populated from
     /// [`DependentFields::insertions`].
-    insertions:             Vec<ComputedInsertion>,
+    insertions:      Vec<ComputedInsertion>,
     /// See [`ComputedProduct::deletions`]. This is populated from
     /// [`DependentFields::deletions`].
-    deletions:              Vec<ComputedDeletion>,
-    /// See [`ComputedProduct::trailing_cds_unaligned`].
-    trailing_cds_unaligned: usize,
+    deletions:       Vec<ComputedDeletion>,
+    /// See [`ComputedProduct::cds_aln_rpad`].
+    cds_aln_rpad:    usize,
 }
 
 impl ComputedIncrementalProducts {
@@ -148,7 +148,7 @@ impl ComputedIncrementalProducts {
     /// The following cases describe the length of the output sequences:
     ///
     /// - If `product.product_ranges` is empty, then the sequence and coordinate
-    ///   fields will be empty. `trailing_cds_unaligned` will be non-zero.
+    ///   fields will be empty. `cds_aln_rpad` will be non-zero.
     /// - If `product.product_ranges` contains only a deletion, then `cds_aln`
     ///   and `aa_aln` will be non-empty, while `cds_seq` and the coordinate
     ///   fields will be empty.
@@ -156,11 +156,11 @@ impl ComputedIncrementalProducts {
     fn new(query: &QueryRecord, product: &Product) -> Self {
         let range_capacity = product.product_ranges.len();
 
-        let mut out = IncrementalAccumulator::new(product.leading_cds_unaligned, range_capacity);
+        let mut out = IncrementalAccumulator::new(product.lpad, range_capacity);
 
         let end_cds_index = out.populate_from(query, product);
 
-        let trailing_cds_unaligned = product.product_spec.exons.cds_len() - end_cds_index;
+        let cds_aln_rpad = product.product_spec.exons.cds_len() - end_cds_index;
 
         Self {
             cds_aln: out.cds_aln,
@@ -172,7 +172,7 @@ impl ComputedIncrementalProducts {
             cds_coords: out.dependent_fields.cds_coords,
             insertions: out.dependent_fields.insertions,
             deletions: out.dependent_fields.deletions,
-            trailing_cds_unaligned,
+            cds_aln_rpad,
         }
     }
 }
@@ -222,11 +222,11 @@ struct IncrementalAccumulator {
 }
 
 impl IncrementalAccumulator {
-    /// Initializes an [`IncrementalAccumulator`] containing just the gap
-    /// indicated by `leading_cds_unaligned`.
-    fn new(leading_cds_unaligned: usize, range_capacity: usize) -> Self {
+    /// Initializes an [`IncrementalAccumulator`] containing just the padding
+    /// indicated by `cds_aln_lpad`.
+    fn new(cds_aln_lpad: usize, range_capacity: usize) -> Self {
         Self {
-            cds_aln:            Nucleotides::from(vec![b'.'; leading_cds_unaligned]),
+            cds_aln:            Nucleotides::from(vec![b'.'; cds_aln_lpad]),
             aa_aln:             AminoAcids::new(),
             untranslated_start: 0,
             dependent_fields:   DependentFields::new(range_capacity),
@@ -236,7 +236,7 @@ impl IncrementalAccumulator {
     /// Populates the [`IncrementalAccumulator`] from all the ranges in
     /// `product`, returning the exclusive-end index of the accumulated
     /// sequences within the coding sequence (used in initializing
-    /// `trailing_cds_unaligned`).
+    /// `cds_aln_rpad`).
     ///
     /// The following cases describe the length of the output sequences:
     ///
@@ -459,6 +459,9 @@ impl DependentFields {
         self.query_coords.push(range.query_range.clone());
         self.cds_coords.push(CdsCoord::I(range.cds_index));
 
+        // An is_terminal check could be put here, but isn't necessary. Leading
+        // insertions are impossible, and trailing insertions are only possible
+        // for stop extensions which are always a multiple of 3
         if !range.len().is_multiple_of(3) {
             self.has_shift_indel = true;
         }
