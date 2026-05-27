@@ -4,7 +4,10 @@
 use crate::{
     AlignmentStatesExt,
     annotation::intersection,
-    config::annotation_module::{AnnotationModule, ReferenceGroup},
+    config::{
+        ProductSpec,
+        annotation_module::{AnnotationModule, ReferenceGroup},
+    },
     data::{
         QueryRecord,
         ranges::{CdsStateRange, InsertionIdx, InsertionRange, RangeExt, StateRange},
@@ -47,7 +50,8 @@ impl<'a> AnnotationModule<'a> {
             // Extend the left and right side of the alignments
             self.rule_repairable_ends(&mut genome_aln);
 
-            // Compute the stop extension
+            // Compute the stop extension, which requires that the genome
+            // alignment extended to the end of the reference
             let stop_extension = self.rule_stop_extension(&query, &genome_aln);
 
             // Validity: requirements met based on best_alignment guarantees
@@ -62,30 +66,27 @@ impl<'a> AnnotationModule<'a> {
 
                 // Shift indels to fix their frames. Validity: this is called
                 // before condense_deletions.
-                product.fix_frames(&query);
+                product.fix_frames(&query, product_spec);
 
                 // Condense any remaining deletions
                 product.condense_deletions();
 
                 // Validity: the same `query_seq` is passed as was used to form
                 // `genome_aln_states`
-                if product.missing_required_start(&query) {
+                if product.missing_required_start(&query, product_spec) {
                     continue;
                 }
 
-                // Add the stop extension if applicable
+                // Add stop extension from genome alignment if applicable
                 if let Some(ext) = &stop_extension
-                    && product.product_spec.exons.last().ref_range.end == ext.ref_index.right()
+                    && product_spec.exons.last().ref_range.end == ext.ref_index.right()
                 {
-                    // stop_extension is only Some if the genome alignment
-                    // extends to the end of the reference. Above we ensure the
-                    // exons extend to the end of the reference. Hence, the
-                    // product alignment (intersection of the two) will extend
-                    // to the end of the reference.
+                    // If the genome alignment and the exons both extends to the
+                    // end of the reference, so should the product alignment
                     debug_assert_eq!(product.rpad, 0);
 
                     let stop_extension = CdsInsertionRange {
-                        cds_index:   InsertionIdx::from_right_idx(product.product_spec.exons.cds_len()),
+                        cds_index:   InsertionIdx::from_right_idx(product_spec.exons.cds_len()),
                         query_range: ext.query_range.clone(),
                     };
 
@@ -95,6 +96,8 @@ impl<'a> AnnotationModule<'a> {
                 products.push(product);
             }
 
+            // Validity: requirements met based on state_ranges_from_aligment
+            // guarantees
             states.push(GenomeAndProductStates::new(
                 ref_id_data,
                 genome_aln_states,
@@ -270,8 +273,8 @@ impl<'a> Product<'a> {
     ///
     /// The `query` should be the same query which the alignment used to create
     /// `self` was formed from.
-    pub(crate) fn missing_required_start(&self, query: &QueryRecord) -> bool {
-        let Some(required) = self.product_spec.exons.required_start else {
+    pub(crate) fn missing_required_start(&self, query: &QueryRecord, product_spec: &ProductSpec) -> bool {
+        let Some(required) = product_spec.exons.required_start else {
             // The specs do not require a start codon, so return false
             return false;
         };

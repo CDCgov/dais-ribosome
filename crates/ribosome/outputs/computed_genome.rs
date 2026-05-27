@@ -4,9 +4,8 @@ use zoe::prelude::Nucleotides;
 /// A computed genome, with materialized nucleotide and amino acid sequences.
 #[derive(Debug)]
 pub struct ComputedGenome {
-    /// The SHA1 hash of the cleaned genome sequence, or `None` if no DNA data
-    /// remained after filtering.
-    pub genome_id:       Option<String>,
+    /// The SHA1 hash of the cleaned genome sequence.
+    pub genome_id:       String,
     /// The length of the genome's unaligned nucleotide sequence.
     ///
     /// This is equivalent to `genome_seq.len()`.
@@ -17,14 +16,15 @@ pub struct ComputedGenome {
     /// deletions).
     ///
     /// This will only contain unaligned uppercase IUPAC. Both `U` and `T` are
-    /// allowed.
+    /// allowed. This will be non-empty.
     pub genome_seq:      Nucleotides,
     /// The aligned nucleotide sequence for the genome (with `-` for deletions
     /// but no insertions).
     ///
     /// This will only contain uppercase IUPAC, left padding `.`, and gaps `-`.
-    /// Both `U` and `T` are allowed. Right padding is not included, but the
-    /// length of it can be obtained from [`ComputedGenome::genome_aln_rpad`].
+    /// Both `U` and `T` are allowed. This will be non-empty. Right padding is
+    /// not included, but the length of it can be obtained from
+    /// [`ComputedGenome::genome_aln_rpad`].
     pub genome_aln:      Nucleotides,
     /// The computed insertions within the genome.
     ///

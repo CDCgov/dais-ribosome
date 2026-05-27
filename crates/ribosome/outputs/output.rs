@@ -1,5 +1,5 @@
 use crate::{
-    config::{ProductSpec, annotation_module::ReferenceGroup, toml::Formatting},
+    config::{annotation_module::ReferenceGroup, toml::Formatting},
     data::{
         QueryRecord,
         ranges::{CdsStateRange, InsertionIdx, StateRange},
@@ -51,8 +51,9 @@ pub struct GenomeAndProductStates<'a> {
     /// The length of the reference sequence.
     pub ref_len: usize,
 
-    /// Genome alignment to nucleotide reference sequence expressed as
-    /// [`StateRange`].
+    /// The genome alignment to the nucleotide reference sequence.
+    ///
+    /// This will begin and end with match states.
     pub genome_aln_states: Vec<StateRange>,
 
     /// The range of the stop extension within the query, if present.
@@ -163,7 +164,8 @@ impl<'a> GenomeAndProductStates<'a> {
         }
 
         // Validity: genome_seq contains unaligned uppercase IUPAC since
-        // QueryRecord does
+        // QueryRecord does. It is non-empty since genome_aln_states begins with
+        // a match state.
         let genome_id = nt_id_iupac(&genome_seq);
 
         let genome_length = genome_seq.len();
@@ -195,7 +197,7 @@ impl<'a> GenomeAndProductStates<'a> {
 pub struct Product<'a> {
     /// The information for the protein product being aligned against, including
     /// the name and exons.
-    pub(crate) product_spec: &'a ProductSpec,
+    pub name: &'a str,
 
     /// The ranges within the exons that the query covers. This is initially
     /// formed by intersecting the query ranges with the exon ranges, then is
@@ -221,6 +223,10 @@ pub struct Product<'a> {
     /// bases are counted in `rpad`.
     pub lpad: usize,
 
+    /// The number of bases in the coding sequence that were aligned against
+    /// (i.e., included in `product_ranges`).
+    pub cds_aligned_len: usize,
+
     /// The amount of right padding in CDS coordinates for the product.
     ///
     /// This is the number of bases in the coding sequence that were not aligned
@@ -229,4 +235,12 @@ pub struct Product<'a> {
     /// Materialization may use an _increased_ version of this if it truncates
     /// the alignment at the first stop codon encountered.
     pub rpad: usize,
+}
+
+impl Product<'_> {
+    /// Returns the length of the full coding sequence as specified in the
+    /// corresponding [`ProductSpec`].
+    pub(crate) fn full_cds_len(&self) -> usize {
+        self.lpad + self.cds_aligned_len + self.rpad
+    }
 }

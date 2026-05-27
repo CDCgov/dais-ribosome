@@ -2,7 +2,7 @@
 //! file.
 
 use crate::{
-    outputs::{ComputedDeletion, ComputedProduct},
+    outputs::{ComputedDeletion, ComputedProduct, DeletedProduct},
     tsv::{HADOOP_NULL, Nullable},
 };
 use csv::{Reader, ReaderBuilder};
@@ -84,20 +84,17 @@ impl<'de> Deserialize<'de> for DelRow {
             del_cds_len,
         } = DelRowRaw::deserialize(deserializer)?;
 
-        let variant_hash = Nullable::from(variant_hash).into_option();
-        let cds_id = Nullable::from(cds_id).into_option();
-
         Ok(DelRow {
             query_id,
             ctype,
             reference_id,
             product_name,
-            variant_hash,
+            variant_hash: variant_hash.into_option(),
             del_aa_start,
             del_aa_end,
             del_aa_len,
             in_frame,
-            cds_id,
+            cds_id: cds_id.into_option(),
             del_cds_start,
             del_cds_end,
             del_cds_len,
@@ -112,12 +109,12 @@ struct DelRowRaw {
     ctype:         String,
     reference_id:  String,
     product_name:  String,
-    variant_hash:  String,
+    variant_hash:  Nullable<String>,
     del_aa_start:  usize,
     del_aa_end:    usize,
     del_aa_len:    usize,
     in_frame:      bool,
-    cds_id:        String,
+    cds_id:        Nullable<String>,
     del_cds_start: usize,
     del_cds_end:   usize,
     del_cds_len:   usize,
@@ -184,6 +181,8 @@ pub struct DelRowView<'a> {
 impl<'a> DelRowView<'a> {
     /// Creates a new [`DelRowView`] by extracting the relevant fields from the
     /// [`ComputedDeletion`] and [`ComputedProduct`].
+    ///
+    /// The `variant_hash` and `cds_id` fields will be `Some`.
     pub fn new(
         deletion: &'a ComputedDeletion, product: &'a ComputedProduct<'a>, query_id: &'a str, ctype: &'a str,
         reference_id: &'a str,
@@ -193,12 +192,38 @@ impl<'a> DelRowView<'a> {
             ctype,
             reference_id,
             product_name: product.name,
-            variant_hash: product.variant_hash.as_ref().map(AsRef::as_ref),
+            variant_hash: Some(&product.variant_hash),
             del_aa_start: deletion.del_aa_start,
             del_aa_end: deletion.del_aa_end,
             del_aa_len: deletion.del_aa_len,
             in_frame: deletion.in_frame,
-            cds_id: product.cds_id.as_ref().map(AsRef::as_ref),
+            cds_id: Some(&product.cds_id),
+            del_cds_start: deletion.del_cds_start,
+            del_cds_end: deletion.del_cds_end,
+            del_cds_len: deletion.del_cds_len,
+        }
+    }
+
+    /// Creates a new [`DelRowView`] by extracting the relevant fields from the
+    /// [`DeletedProduct`].
+    ///
+    /// The `variant_hash` and `cds_id` fields will be `None`.
+    pub fn from_deleted_product(
+        product: &'a DeletedProduct<'a>, query_id: &'a str, ctype: &'a str, reference_id: &'a str,
+    ) -> Self {
+        let deletion = &product.deletion;
+
+        Self {
+            query_id,
+            ctype,
+            reference_id,
+            product_name: product.name,
+            variant_hash: None,
+            del_aa_start: deletion.del_aa_start,
+            del_aa_end: deletion.del_aa_end,
+            del_aa_len: deletion.del_aa_len,
+            in_frame: deletion.in_frame,
+            cds_id: None,
             del_cds_start: deletion.del_cds_start,
             del_cds_end: deletion.del_cds_end,
             del_cds_len: deletion.del_cds_len,

@@ -1,11 +1,9 @@
 //! A [`Writers`] struct along with functions for writing all the TSV records
 //! from DAIS-ribosome output.
 
-use zoe::data::err::ResultWithErrorContext;
-
 use crate::{
     data::ranges::StateRange,
-    outputs::RibosomeOutput,
+    outputs::{MaybeComputedProduct, RibosomeOutput},
     tsv::{DelRowView, GenDelRowView, GenInsRowView, GenSeqRowView, InsRowView, SeqRowView},
 };
 use std::{
@@ -13,6 +11,7 @@ use std::{
     io::{BufWriter, Write},
     path::Path,
 };
+use zoe::data::err::ResultWithErrorContext;
 
 /// A set of three writers for sequence data, insertion data, and deletion data.
 ///
@@ -70,6 +69,21 @@ impl<W: Write> Writers<W> {
                 );
 
                 writeln!(self.seq, "{seq_row}")?;
+
+                let computed_product = match computed_product {
+                    MaybeComputedProduct::Ok(computed_product) => computed_product,
+                    MaybeComputedProduct::Empty(_) => continue,
+                    MaybeComputedProduct::Deleted(deleted_product) => {
+                        let del_row = DelRowView::from_deleted_product(
+                            deleted_product,
+                            output.query.id(),
+                            output.query.ctype(),
+                            state.reference_id,
+                        );
+                        writeln!(self.del, "{del_row}")?;
+                        continue;
+                    }
+                };
 
                 for insertion in &computed_product.insertions {
                     let ins_row = InsRowView::new(

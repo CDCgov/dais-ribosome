@@ -1,32 +1,32 @@
 //! Sequence hashing utilities ported from `Omics::Nucleotide` and
 //! `Omics::AminoAcids` in `ifx-perl`
 
-use zoe::{
-    data::{nucleotides::Nucleotides, types::amino_acids::AminoAcids},
-    prelude::Len,
-};
+use zoe::data::{nucleotides::Nucleotides, types::amino_acids::AminoAcids};
 
 /// Computes the SHA1 hex of the unaligned nucleotide sequence.
+///
+/// This is a wrapper around [`sha1_hex`].
 ///
 /// ## Validity
 ///
 /// This must only contain unaligned uppercase IUPAC. Both `U` and `T` are
-/// allowed.
+/// allowed. `seq` must be non-empty.
 #[inline]
-pub(crate) fn nt_id_iupac(seq: &Nucleotides) -> Option<String> {
-    (!seq.is_empty()).then(|| sha1_hex(seq.as_bytes()))
+pub(crate) fn nt_id_iupac(seq: &Nucleotides) -> String {
+    sha1_hex(seq.as_bytes())
 }
 
-/// Returns MD5 hex of uppercased sequence with `\n\r\t :.-` removed (keeps
-/// `~`).
+/// Returns MD5 hex of the unaligned amino acid sequence.
+///
+/// This is a wrapper around [`md5_hex`].
 ///
 /// ## Validity
 ///
 /// This must only contain unaligned uppercase IUPAC, partial codons, and stop
-/// codons.
+/// codons. `seq` must be non-empty.
 #[inline]
-pub(crate) fn variant_hash_iupac(seq: &AminoAcids) -> Option<String> {
-    (!seq.is_empty()).then(|| md5_hex(seq.as_bytes()))
+pub(crate) fn variant_hash_iupac(seq: &AminoAcids) -> String {
+    md5_hex(seq.as_bytes())
 }
 
 /// Compute SHA1 hex digest of byte slice.
@@ -52,24 +52,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_nt_id_empty() {
-        let seq = Nucleotides::new();
-        assert!(nt_id_iupac(&seq).is_none());
-    }
-
-    #[test]
     fn test_variant_hash_basic() {
         let seq: AminoAcids = b"ACDE".into();
-        let hash = variant_hash_iupac(&seq).unwrap();
+        let hash = variant_hash_iupac(&seq);
 
         assert_eq!(hash.len(), 32);
         assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
-    }
-
-    #[test]
-    fn test_variant_hash_empty() {
-        let seq = AminoAcids::new();
-        assert!(variant_hash_iupac(&seq).is_none());
     }
 
     #[test]

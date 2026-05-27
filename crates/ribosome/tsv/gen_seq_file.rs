@@ -1,11 +1,7 @@
 //! Row structs, parsers, and display implementations for the genome sequence
 //! file.
 
-use crate::{
-    outputs::ComputedGenome,
-    toml::Formatting,
-    tsv::{HADOOP_NULL, Nullable},
-};
+use crate::{outputs::ComputedGenome, toml::Formatting};
 use csv::{Reader, ReaderBuilder};
 use serde::Deserialize;
 use std::{fmt::Display, fs::File, io::Read, path::Path};
@@ -23,11 +19,10 @@ pub struct GenSeqRow {
     pub ctype:         String,
     /// The ID for the reference group which was aligned against.
     pub reference_id:  String,
-    /// The SHA1 hash of the cleaned genome sequence, or `None` if no DNA data
-    /// remained after filtering.
+    /// The SHA1 hash of the cleaned genome sequence.
     ///
     /// See [`ComputedGenome::genome_id`].
-    pub genome_id:     Option<String>,
+    pub genome_id:     String,
     /// The length of the genome's unaligned nucleotide sequence.
     ///
     /// See [`ComputedGenome::genome_length`].
@@ -64,7 +59,6 @@ impl<'de> Deserialize<'de> for GenSeqRow {
             genome_aln,
         } = GenSeqRowRaw::deserialize(deserializer)?;
 
-        let genome_id = Nullable::from(genome_id).into_option();
         let genome_seq = Nucleotides::from(genome_seq);
         let genome_aln = Nucleotides::from(genome_aln);
 
@@ -111,7 +105,7 @@ pub struct GenSeqRowView<'a> {
     /// remained after filtering.
     ///
     /// See [`ComputedGenome::genome_id`].
-    pub genome_id:       Option<&'a str>,
+    pub genome_id:       &'a str,
     /// The length of the genome's unaligned nucleotide sequence.
     ///
     /// See [`ComputedGenome::genome_length`].
@@ -149,7 +143,7 @@ impl<'a> GenSeqRowView<'a> {
             query_id,
             ctype,
             reference_id,
-            genome_id: genome.genome_id.as_ref().map(AsRef::as_ref),
+            genome_id: &genome.genome_id,
             genome_length: genome.genome_length,
             has_insertion: genome.has_insertion,
             genome_seq: genome.genome_seq.as_view(),
@@ -161,44 +155,60 @@ impl<'a> GenSeqRowView<'a> {
 
 impl Display for GenSeqRow {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            concat!(
-                "{query_id}\t{ctype}\t{reference_id}\t{genome_id}",
-                "\t{genome_length}\t{has_insertion}\t{genome_seq}\t{genome_aln}",
-            ),
-            query_id = self.query_id,
-            ctype = self.ctype,
-            reference_id = self.reference_id,
-            genome_id = self.genome_id.as_ref().map(AsRef::as_ref).unwrap_or(HADOOP_NULL),
-            genome_length = self.genome_length,
-            has_insertion = self.has_insertion,
-            genome_seq = self.genome_seq,
-            genome_aln = self.genome_aln,
-        )
+        let GenSeqRow {
+            query_id,
+            ctype,
+            reference_id,
+            genome_id,
+            genome_length,
+            has_insertion,
+            genome_seq,
+            genome_aln,
+        } = self;
+
+        let display = GenSeqRowDisplay {
+            query_id,
+            ctype,
+            reference_id,
+            genome_id,
+            genome_length: *genome_length,
+            has_insertion: *has_insertion,
+            genome_seq: genome_seq.as_view(),
+            genome_aln: genome_aln.as_view(),
+            genome_aln_rpad: 0,
+        };
+
+        display.fmt(f)
     }
 }
 
 impl Display for GenSeqRowView<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            concat!(
-                "{query_id}\t{ctype}\t{reference_id}\t{genome_id}",
-                "\t{genome_length}\t{has_insertion}\t{genome_seq}",
-                "\t{genome_aln}{empty:.<genome_aln_rpad$}"
-            ),
-            query_id = self.query_id,
-            ctype = self.ctype,
-            reference_id = self.reference_id,
-            genome_id = self.genome_id.as_ref().map(AsRef::as_ref).unwrap_or(HADOOP_NULL),
-            genome_length = self.genome_length,
-            has_insertion = self.has_insertion,
-            genome_seq = self.genome_seq,
-            genome_aln = self.genome_aln,
-            empty = "",
-            genome_aln_rpad = self.genome_aln_rpad,
-        )
+        let GenSeqRowView {
+            query_id,
+            ctype,
+            reference_id,
+            genome_id,
+            genome_length,
+            has_insertion,
+            genome_seq,
+            genome_aln,
+            genome_aln_rpad,
+        } = *self;
+
+        let display = GenSeqRowDisplay {
+            query_id,
+            ctype,
+            reference_id,
+            genome_id,
+            genome_length,
+            has_insertion,
+            genome_seq,
+            genome_aln,
+            genome_aln_rpad,
+        };
+
+        display.fmt(f)
     }
 }
 
@@ -234,5 +244,44 @@ impl<R: Read> Iterator for GenSeqFileParser<R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.reader.deserialize().next()
+    }
+}
+
+/// A helper struct for displaying genome sequence-related TSV output.
+///
+/// This struct is used to remove redundant [`Display`] implementations and
+/// ensure greater correctness.
+struct GenSeqRowDisplay<'a> {
+    query_id:        &'a str,
+    ctype:           &'a str,
+    reference_id:    &'a str,
+    genome_id:       &'a str,
+    genome_length:   usize,
+    has_insertion:   bool,
+    genome_seq:      NucleotidesView<'a>,
+    genome_aln:      NucleotidesView<'a>,
+    genome_aln_rpad: usize,
+}
+
+impl Display for GenSeqRowDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            concat!(
+                "{query_id}\t{ctype}\t{reference_id}\t{genome_id}",
+                "\t{genome_length}\t{has_insertion}\t{genome_seq}",
+                "\t{genome_aln}{empty:.<genome_aln_rpad$}"
+            ),
+            query_id = self.query_id,
+            ctype = self.ctype,
+            reference_id = self.reference_id,
+            genome_id = self.genome_id,
+            genome_length = self.genome_length,
+            has_insertion = self.has_insertion,
+            genome_seq = self.genome_seq,
+            genome_aln = self.genome_aln,
+            genome_aln_rpad = self.genome_aln_rpad,
+            empty = "",
+        )
     }
 }

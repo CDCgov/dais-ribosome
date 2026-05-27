@@ -32,6 +32,8 @@ pub(crate) fn form_product<'a>(state_ranges: &[StateRange], product_spec: &'a Pr
         None => 0,
     };
 
+    let cds_aligned_len = product_ranges.iter().map(CdsStateRange::cds_len).sum();
+
     let rpad = {
         let end = match product_ranges.last() {
             Some(CdsStateRange::M(m)) => m.cds_range.end,
@@ -46,12 +48,17 @@ pub(crate) fn form_product<'a>(state_ranges: &[StateRange], product_spec: &'a Pr
         product_spec.exons.cds_len() - end
     };
 
-    Product {
-        product_spec,
+    let product = Product {
+        name: &product_spec.name,
         product_ranges,
         lpad,
+        cds_aligned_len,
         rpad,
-    }
+    };
+
+    debug_assert_eq!(product.full_cds_len(), product_spec.exons.cds_len());
+
+    product
 }
 
 /// A helper function for [`form_product`] which computes the `product_ranges`

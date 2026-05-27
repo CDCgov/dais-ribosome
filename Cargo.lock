@@ -60,9 +60,9 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "bitflags"
-version = "2.12.1"
+version = "2.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84d7ced0ae9557296835c32bf1b1e02b44c746701f898460fb000d7eaa84f00a"
+checksum = "b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8"
 
 [[package]]
 name = "cfg-if"
@@ -171,7 +171,7 @@ dependencies = [
  "serde",
  "sha1_smol",
  "toml",
- "zoe 0.0.29",
+ "zoe 0.0.30-dev",
 ]
 
 [[package]]
@@ -185,7 +185,7 @@ dependencies = [
  "num_cpus",
  "rayon",
  "sswsort",
- "zoe 0.0.29",
+ "zoe 0.0.30-dev",
 ]
 
 [[package]]
@@ -337,9 +337,9 @@ checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
 name = "log"
-version = "0.4.31"
+version = "0.4.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "113b30b4cd05f7c06868fdb2854f66a7b9fece9a48425351cd532e810d74024f"
+checksum = "953f07c43838f8e6f9758cab68bf5bed85465e7587ebe0b823f1bcd81978ad3a"
 
 [[package]]
 name = "md5"
@@ -829,9 +829,8 @@ dependencies = [
 
 [[package]]
 name = "zoe"
-version = "0.0.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b653fc88ae9f3d6bf99c435edabdf793fb194a5e47a581c8b5b36f50e513a86c"
+version = "0.0.30-dev"
+source = "git+https://github.com/CDCgov/zoe.git#1faf8285f2821dfc79b052efd420e78acf33436d"
 dependencies = [
  "multiversion",
  "rand",

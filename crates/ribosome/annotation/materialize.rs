@@ -5,7 +5,9 @@ use crate::{
     IteratorExt, QueryRecord,
     data::ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, CdsStateRange},
     hashing::{nt_id_iupac, variant_hash_iupac},
-    outputs::{ComputedDeletion, ComputedInsertion, ComputedProduct, Product},
+    outputs::{
+        ComputedDeletion, ComputedInsertion, ComputedProduct, DeletedProduct, EmptyProduct, MaybeComputedProduct, Product,
+    },
     ranges::CdsCoord,
 };
 use std::ops::Range;
@@ -14,6 +16,8 @@ use zoe::prelude::{AminoAcids, Len, Nucleotides, Slice, Translate};
 impl<'a> Product<'a> {
     /// Computes the output data for this product, materializing all ranges into
     /// sequences using `query`.
+    ///
+    /// Three cases can TODO
     ///
     /// The following cases describe the length of the output sequences:
     ///
@@ -27,7 +31,42 @@ impl<'a> Product<'a> {
     /// ## Validity
     ///
     /// The `query` must be the same record used to form the product.
-    pub fn materialize(&self, query: &QueryRecord) -> ComputedProduct<'a> {
+    pub fn materialize(&self, query: &QueryRecord) -> MaybeComputedProduct<'a> {
+        match self.product_ranges.as_slice() {
+            // Return an EmptyProduct if there are no ranges
+            [] => {
+                return MaybeComputedProduct::Empty(EmptyProduct {
+                    name:        self.name,
+                    cds_aln_pad: self.lpad + self.rpad,
+                });
+            }
+
+            // Return a DeletedProduct if there is only a single deletion
+            [CdsStateRange::D(del)] => {
+                let del_len = del.len();
+
+                let cds_aln = std::iter::repeat_n(b'-', del_len).collect();
+
+                let mut aa_aln: AminoAcids = std::iter::repeat_n(b'-', del_len / 3).collect();
+                if !del_len.is_multiple_of(3) {
+                    aa_aln.push(b'~');
+                }
+
+                let deletion = ComputedDeletion::new(del);
+
+                return MaybeComputedProduct::Deleted(DeletedProduct {
+                    name: self.name,
+                    cds_aln,
+                    aa_aln,
+                    deletion,
+                    cds_aln_rpad: self.rpad,
+                });
+            }
+
+            // Otherwise, continue as normal to return a ComputedProduct
+            _ => {}
+        }
+
         // Compute all the fields that rely on incremental updates until the
         // first stop codon
         let incremental = ComputedIncrementalProducts::new(query, self);
@@ -83,8 +122,8 @@ impl<'a> Product<'a> {
         // derived from StdGeneticCode with gaps filtered)
         let variant_hash = variant_hash_iupac(&aa_seq);
 
-        ComputedProduct {
-            name: &self.product_spec.name,
+        MaybeComputedProduct::Ok(ComputedProduct {
+            name: self.name,
             cds_seq,
             cds_aln,
             cds_id,
@@ -98,7 +137,7 @@ impl<'a> Product<'a> {
             insertions,
             deletions,
             cds_aln_rpad,
-        }
+        })
     }
 }
 
@@ -160,7 +199,14 @@ impl ComputedIncrementalProducts {
 
         let end_cds_index = out.populate_from(query, product);
 
-        let cds_aln_rpad = product.product_spec.exons.cds_len() - end_cds_index;
+        // If early termination occurs, recompute cds_aln_rpad to be larger.
+        // Otherwise, use the value from product
+        let cds_aln_rpad = if let Some(end_cds_index) = end_cds_index {
+            let cds_len = product.full_cds_len();
+            cds_len - end_cds_index
+        } else {
+            product.rpad
+        };
 
         Self {
             cds_aln: out.cds_aln,
@@ -234,9 +280,9 @@ impl IncrementalAccumulator {
     }
 
     /// Populates the [`IncrementalAccumulator`] from all the ranges in
-    /// `product`, returning the exclusive-end index of the accumulated
-    /// sequences within the coding sequence (used in initializing
-    /// `cds_aln_rpad`).
+    /// `product`. If a premature stop codon is encountered in a matched state
+    /// (not an insertion), materialization halts and the end of
+    /// [`CdsMatchRange::cds_range`] is returned.
     ///
     /// The following cases describe the length of the output sequences:
     ///
@@ -246,7 +292,7 @@ impl IncrementalAccumulator {
     ///   and `aa_aln` will be non-empty, while `cds_seq` and the coordinate
     ///   fields will be empty.
     /// - Otherwise, all the sequence and coordinate fields will be non-empty.
-    fn populate_from(&mut self, query: &QueryRecord, product: &Product) -> usize {
+    fn populate_from(&mut self, query: &QueryRecord, product: &Product) -> Option<usize> {
         let ranges = product.product_ranges.iter().enumerate();
 
         // Populate from ranges up to the last
@@ -259,7 +305,7 @@ impl IncrementalAccumulator {
                 CdsStateRange::M(m) => {
                     // Short circuit if a stop codon is found
                     if let Some(end_cds_index) = self.extend_from_match(query, m) {
-                        return end_cds_index;
+                        return Some(end_cds_index);
                     }
                 }
                 CdsStateRange::I(ins) => self.extend_from_insertion(query, ins),
@@ -275,20 +321,12 @@ impl IncrementalAccumulator {
             self.aa_aln.push(b'~');
         }
 
-        product
-            .product_ranges
-            .iter()
-            .rev()
-            .find_map(|s| match s {
-                CdsStateRange::M(m) => Some(m.cds_range.end),
-                CdsStateRange::D(d) => Some(d.cds_range.end),
-                _ => None,
-            })
-            .unwrap_or(0)
+        None
     }
 
     /// Updates the accumulator with a match range. If a stop codon is reached,
-    /// translation halts and the end index in the coding sequence is returned.
+    /// translation halts and the exclusive end index of the translated coding
+    /// sequence is returned.
     ///
     /// This method guarantees that `cds_aln`, `cds_seq`, `query_coords`, and
     /// `cds_coords` will grow in size.
@@ -479,30 +517,6 @@ impl DependentFields {
             self.has_shift_indel = true;
         }
 
-        let in_frame = range.cds_range.start.is_multiple_of(3) && range.len().is_multiple_of(3);
-
-        // The 1-based inclusive start. Floor divide so that
-        // deleting any part of a codon deletes the amino acid. Add
-        // 1 to make it 1-based.
-        let del_aa_start = (range.cds_range.start / 3) + 1;
-
-        // The 1-based inclusive end. Ceiling divide so that
-        // deleting any part of a codon deletes the amino acid.
-        // 0-based exclusive end is equivalent to 1-based inclusive
-        // end.
-        let del_aa_end = range.cds_range.end.div_ceil(3);
-
-        let del_cds_len = range.len();
-        let del_aa_len = del_cds_len.div_ceil(3);
-
-        self.deletions.push(ComputedDeletion {
-            del_aa_start,
-            del_aa_end,
-            del_aa_len,
-            in_frame,
-            del_cds_start: range.cds_range.start + 1,
-            del_cds_end: range.cds_range.end,
-            del_cds_len,
-        });
+        self.deletions.push(ComputedDeletion::new(range));
     }
 }

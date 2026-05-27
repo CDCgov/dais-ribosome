@@ -85,14 +85,14 @@ impl<'a> Product<'a> {
     ///
     /// This must be called before [`Product::condense_deletions`], otherwise
     /// deletions may not be shifted properly.
-    pub(crate) fn fix_frames(&mut self, query: &QueryRecord) {
+    pub(crate) fn fix_frames(&mut self, query: &QueryRecord, product_spec: &ProductSpec) {
         // The index of the current CdsStateRange to correct/handle
         let mut idx = 0;
 
         while let Some(states) = get_frame_states(idx, &mut self.product_ranges) {
             // Perform any frame fixing on range, which then returns whether to
             // advance the index or not, as well as any states to remove.
-            let IdxAdjustment { advance, removal } = fix_frame(states, query, self.product_spec);
+            let IdxAdjustment { advance, removal } = fix_frame(states, query, product_spec);
 
             if let Some(removal) = removal {
                 // Remove the specified states, returning the resulting shift

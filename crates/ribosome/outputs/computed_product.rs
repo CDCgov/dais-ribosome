@@ -1,6 +1,64 @@
-use crate::{data::ranges::InsertionIdx, ranges::CdsCoord};
+use crate::{
+    data::ranges::InsertionIdx,
+    ranges::{CdsCoord, CdsDeletionRange},
+};
 use std::ops::Range;
 use zoe::prelude::*;
+
+/// The three cases for materializing a product.
+///
+/// The normal output is [`MaybeComputedProduct::Ok`], which contains the
+/// [`ComputedProduct`].
+pub enum MaybeComputedProduct<'a> {
+    /// The normal output for a non-empty product with at least one match state.
+    Ok(ComputedProduct<'a>),
+    /// An empty product, caused by the genome alignment not intersecting the
+    /// exons.
+    Empty(EmptyProduct<'a>),
+    /// A fully-deleted product, caused by all of the exons being covered by
+    /// deletions.
+    Deleted(DeletedProduct<'a>),
+}
+
+/// An empty product, caused by the genome alignment not intersecting the exons.
+#[derive(Debug)]
+pub struct EmptyProduct<'a> {
+    /// The protein product name (e.g., `HA`, `HA-signal`).
+    pub name: &'a str,
+
+    /// The total padding for `cds_aln`, which is equal to the length of the
+    /// coding sequence from the specifications since the product is empty.
+    pub cds_aln_pad: usize,
+}
+
+#[derive(Debug)]
+pub struct DeletedProduct<'a> {
+    /// The protein product name (e.g., `HA`, `HA-signal`).
+    pub name:         &'a str,
+    /// The aligned coding sequence for the protein (with `-` for deletions but
+    /// no insertions).
+    ///
+    /// This will only contain uppercase IUPAC, padding `.`, and gaps `-`. Both
+    /// `U` and `T` are allowed.
+    pub cds_aln:      Nucleotides,
+    /// The aligned amino acid sequence for the protein (with `-` for deletions
+    /// but no insertions).
+    ///
+    /// This will only contain uppercase IUPAC, partial codons, stop codons,
+    /// padding `.`, and gaps `-`.
+    pub aa_aln:       AminoAcids,
+    /// The computed deletions within the product.
+    ///
+    /// Unlike `insertions`, deletions of any length are included.
+    pub deletion:     ComputedDeletion,
+    /// The amount of right padding that occurs after `cds_aln`.
+    ///
+    /// Padding of this length can be added to the end of `cds_aln` to get an
+    /// aligned sequence spanning the full coding sequence length. This does not
+    /// include trailing deletions, since these are present in `cds_aln`
+    /// already.
+    pub cds_aln_rpad: usize,
+}
 
 /// A computed product, with materialized coding and amino acid sequences.
 ///
@@ -26,9 +84,8 @@ pub struct ComputedProduct<'a> {
     /// Both `U` and `T` are allowed. Right padding is not included, but the
     /// length of it can be obtained from [`ComputedProduct::cds_aln_rpad`].
     pub cds_aln:         Nucleotides,
-    /// The SHA1 hash of the unaligned coding sequence (`cds_seq`), or `None` if
-    /// no DNA data remained after filtering.
-    pub cds_id:          Option<String>,
+    /// The SHA1 hash of the unaligned coding sequence (`cds_seq`).
+    pub cds_id:          String,
     /// The unaligned amino acid sequence for the protein (with insertions but
     /// no deletions).
     ///
@@ -52,9 +109,8 @@ pub struct ComputedProduct<'a> {
     /// left padding `.`, and gaps `-`. Right padding is not included, but the
     /// length of it can be obtained from [`ComputedProduct::aa_aln_rpad`].
     pub aa_aln:          AminoAcids,
-    /// The MD5 hash of the unaligned amino acid sequence (`aa_seq`), or `None`
-    /// if no amino acid data remained after filtering.
-    pub variant_hash:    Option<String>,
+    /// The MD5 hash of the unaligned amino acid sequence (`aa_seq`).
+    pub variant_hash:    String,
     /// Whether any insertion exists in this product.
     ///
     /// This includes insertions that were filtered, so it is possible that
@@ -97,6 +153,19 @@ pub struct ComputedProduct<'a> {
     /// include trailing deletions, since these are present in `cds_aln`
     /// already.
     pub cds_aln_rpad:    usize,
+}
+
+impl DeletedProduct<'_> {
+    /// The amount of right padding that occurs after `aa_aln`.
+    ///
+    /// Padding of this length can be added to the end of `aa_aln` to get an
+    /// aligned sequence spanning the full coding protein length. This does not
+    /// include trailing deletions, since these are present in `aa_aln` already.
+    pub fn aa_aln_rpad(&self) -> usize {
+        // Floor divide since any leftover bases are already accounted for with
+        // a partial codon
+        self.cds_aln_rpad / 3
+    }
 }
 
 impl ComputedProduct<'_> {
@@ -220,4 +289,35 @@ pub struct ComputedDeletion {
     pub del_cds_end:   usize,
     /// The deletion length in nucleotides.
     pub del_cds_len:   usize,
+}
+
+impl ComputedDeletion {
+    /// Creates a [`ComputedDeletion`] from raw deletion data.
+    pub(crate) fn new(del: &CdsDeletionRange) -> Self {
+        let in_frame = del.cds_range.start.is_multiple_of(3) && del.len().is_multiple_of(3);
+
+        // The 1-based inclusive start. Floor divide so that
+        // deleting any part of a codon deletes the amino acid. Add
+        // 1 to make it 1-based.
+        let del_aa_start = (del.cds_range.start / 3) + 1;
+
+        // The 1-based inclusive end. Ceiling divide so that
+        // deleting any part of a codon deletes the amino acid.
+        // 0-based exclusive end is equivalent to 1-based inclusive
+        // end.
+        let del_aa_end = del.cds_range.end.div_ceil(3);
+
+        let del_cds_len = del.len();
+        let del_aa_len = del_cds_len.div_ceil(3);
+
+        ComputedDeletion {
+            del_aa_start,
+            del_aa_end,
+            del_aa_len,
+            in_frame,
+            del_cds_start: del.cds_range.start + 1,
+            del_cds_end: del.cds_range.end,
+            del_cds_len,
+        }
+    }
 }

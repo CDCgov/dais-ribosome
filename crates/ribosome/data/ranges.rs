@@ -1,6 +1,7 @@
 //! Structs and enums for representing product and genome alignments,
 //! specifically the ranges where matches, insertions, and deletions apply.
 
+use crate::tsv::{Nullable, NullableValue};
 use std::{
     cmp::Ordering,
     fmt::{self, Display, Formatter},
@@ -11,8 +12,6 @@ use zoe::{
     alignment::Alignment,
     data::{cigar::Ciglet, err::ResultWithErrorContext},
 };
-
-use crate::tsv::HADOOP_NULL;
 
 /// A helper struct to avoid confusion when storing the 0-based index of an
 /// insertion within a reference or coding sequence.
@@ -149,6 +148,28 @@ pub enum StateRange {
     I(InsertionRange),
 }
 
+impl StateRange {
+    /// Returns the length of the state in either the query or reference
+    /// coordinates, whichever is applicable.
+    pub fn len(&self) -> usize {
+        match self {
+            StateRange::M(range) => range.len(),
+            StateRange::D(range) => range.len(),
+            StateRange::I(range) => range.len(),
+        }
+    }
+
+    /// Returns whether the state is empty (zero length) in either the query or
+    /// reference coordinates, whichever is applicable.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            StateRange::M(range) => range.is_empty(),
+            StateRange::D(range) => range.is_empty(),
+            StateRange::I(range) => range.is_empty(),
+        }
+    }
+}
+
 /// The range within the query and reference where a continguous block of
 /// matches occurs.
 ///
@@ -163,11 +184,44 @@ pub struct MatchRange {
     pub ref_range:   Range<usize>,
 }
 
+impl MatchRange {
+    /// Returns the length of the [`MatchRange`] in query and reference
+    /// coordinates.
+    pub fn len(&self) -> usize {
+        // Validity: The ranges are the same length
+        self.query_range.len()
+    }
+
+    /// Returns whether the [`MatchRange`] in empty in query and reference
+    /// coordinates.
+    pub fn is_empty(&self) -> bool {
+        // Validity: The ranges are the same length
+        self.query_range.is_empty()
+    }
+}
+
 /// The range within the reference where a deletion occurs.
 #[derive(Clone, Debug)]
 pub struct DeletionRange {
     /// The 0-based end-exclusive range of the deletion within the reference.
     pub ref_range: Range<usize>,
+}
+
+impl DeletionRange {
+    /// Returns the length of the [`DeletionRange`] in reference coordinates.
+    ///
+    /// The deletion has no length in query coordinates.
+    pub fn len(&self) -> usize {
+        self.ref_range.len()
+    }
+
+    /// Returns whether the [`DeletionRange`] in empty in reference coordinates.
+    ///
+    /// The deletion has no length in query coordinates.
+    pub fn is_empty(&self) -> bool {
+        // Validity: The ranges are the same length
+        self.ref_range.is_empty()
+    }
 }
 
 /// The range within the query where an insertion occurs, as well as the
@@ -178,6 +232,22 @@ pub struct InsertionRange {
     pub ref_index:   InsertionIdx,
     /// The 0-based end-exclusive range of the insertion within the query.
     pub query_range: Range<usize>,
+}
+
+impl InsertionRange {
+    /// Returns the length of the [`InsertionRange`] in query coordinates.
+    ///
+    /// The insertion has no length in reference coordinates.
+    pub fn len(&self) -> usize {
+        self.query_range.len()
+    }
+
+    /// Returns whether the [`InsertionRange`] in empty in query coordinates.
+    ///
+    /// The insertion has no length in reference coordinates.
+    pub fn is_empty(&self) -> bool {
+        self.query_range.is_empty()
+    }
 }
 
 /// Alignment state ranges converted to coding sequence coordinates by
@@ -208,6 +278,22 @@ impl CdsStateRange {
         match self {
             CdsStateRange::I(range) => Some(range),
             _ => None,
+        }
+    }
+
+    pub fn cds_len(&self) -> usize {
+        match self {
+            CdsStateRange::M(range) => range.cds_range.len(),
+            CdsStateRange::D(range) => range.cds_range.len(),
+            CdsStateRange::I(_) => 0,
+        }
+    }
+
+    pub fn query_len(&self) -> usize {
+        match self {
+            CdsStateRange::M(range) => range.query_range.len(),
+            CdsStateRange::D(_) => 0,
+            CdsStateRange::I(range) => range.query_range.len(),
         }
     }
 }
@@ -297,7 +383,7 @@ pub struct CdsDeletionRange {
 }
 
 impl CdsDeletionRange {
-    /// Returns the length of the deletion.
+    /// Returns the length of the deletion in nucleotides.
     #[inline]
     pub(crate) fn len(&self) -> usize {
         self.cds_range.len()
@@ -624,8 +710,7 @@ pub(crate) struct RangeShrinkage {
 
 /// A wrapper around a coordinate-related type such that it implements 1-based,
 /// end-inclusive [`Display`]. Semicolons are used as delimiters, and the same
-/// `..` syntax is used for ranges rather than `..=`. [`HADOOP_NULL`] is used
-/// for an empty slice of ranges/indices.
+/// `..` syntax is used for ranges rather than `..=`.
 pub(crate) struct InclusiveFormatter<T>(T);
 
 impl Display for InclusiveFormatter<&Range<usize>> {
@@ -659,7 +744,7 @@ where
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let Some((first, rest)) = self.0.split_first() else {
-            return write!(f, "{HADOOP_NULL}");
+            return Ok(());
         };
 
         write!(f, "{}", InclusiveFormatter(first))?;
@@ -668,24 +753,32 @@ where
     }
 }
 
+impl<T> Display for InclusiveFormatter<&Nullable<T>>
+where
+    for<'a> InclusiveFormatter<&'a T>: Display,
+    T: NullableValue,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self.0.as_option() {
+            Some(val) => write!(f, "{}", InclusiveFormatter(val)),
+            None => Ok(()),
+        }
+    }
+}
+
 /// A trait for easily constructing [`InclusiveFormatter`].
-pub(crate) trait InclusiveDisplay {
+pub(crate) trait InclusiveDisplay: Sized {
     /// Gets a 1-based end-inclusive display for a coordinate-related type.
     /// Semicolons are used as delimiters, and the same `..` syntax is used for
-    /// ranges rather than `..=`. [`HADOOP_NULL`] is used for an empty slice of
-    /// ranges/indices.
+    /// ranges rather than `..=`.
     #[inline]
     #[must_use]
-    fn display_inclusive(&self) -> InclusiveFormatter<&Self> {
+    fn display_inclusive(self) -> InclusiveFormatter<Self> {
         InclusiveFormatter(self)
     }
 }
 
-impl InclusiveDisplay for Range<usize> {}
-impl InclusiveDisplay for [Range<usize>] {}
-impl InclusiveDisplay for InsertionIdx {}
-impl InclusiveDisplay for CdsCoord {}
-impl InclusiveDisplay for [CdsCoord] {}
+impl<T> InclusiveDisplay for T where for<'a> InclusiveFormatter<T>: Display {}
 
 /// A trait implemented for types that can be parsed from a one-based string
 /// representation.
@@ -777,7 +870,7 @@ impl<T: ParseOneBasedInclusive> ParseOneBasedInclusive for Vec<T> {
     ///
     /// [`parse_inclusive`]: ParseOneBasedInclusive::parse_inclusive
     fn parse_inclusive(coords: &str) -> std::io::Result<Self> {
-        if coords.is_empty() || coords == HADOOP_NULL {
+        if coords.is_empty() {
             return Ok(Vec::new());
         }
 
@@ -813,12 +906,11 @@ impl<T: ParseOneBasedInclusive> Iterator for OneBasedInclusiveCoordsParser<'_, T
 /// Forms an iterator for lazily parsing the one-based inclusive ranges in a
 /// semicolon-delimited string.
 ///
-/// If the string is empty or equal to [`HADOOP_NULL`], then the iterator will
-/// be empty.
+/// If the string is empty, then the iterator will be empty.
 pub(crate) fn parse_coords_inclusive<T>(coords: &str) -> OneBasedInclusiveCoordsParser<'_, T> {
     let mut parts = coords.split(';');
 
-    if coords.is_empty() || coords == HADOOP_NULL {
+    if coords.is_empty() {
         parts.next();
     }
 
