@@ -154,9 +154,10 @@ pub struct Product<'a> {
     /// cause the query ranges to have repeated indices and not be in order, so
     /// no guarantees can be made for those fields.
     ///
-    /// This field does not begin or end with [`CdsStateRange::I`]. This field
-    /// may be empty if there is no intersection between the query and the
-    /// exons. The contained ranges will have non-zero length.
+    /// This may end in a trailing insertion, which represents a stop extension.
+    ///
+    /// This field may be empty if there is no intersection between the query
+    /// and the exons. The contained ranges will have non-zero length.
     pub product_ranges: Vec<CdsStateRange>,
 
     /// The number of bases in the coding sequence that were not aligned against
@@ -172,12 +173,4 @@ pub struct Product<'a> {
     /// Materialization may use an _increased_ version of this if it truncates
     /// the alignment at the first stop codon encountered.
     pub trailing_cds_unaligned: usize,
-
-    /// If this product's last exon ends at the stop extension position, this
-    /// holds the query range of the stop extension nucleotides.
-    ///
-    /// If `Some`, the range will have length at least 3. The last three indices
-    /// will correspond to the stop codon in `query`. This can only be set if
-    /// `product_ranges` ends in a match state.
-    pub stop_extension_query_range: Option<Range<usize>>,
 }

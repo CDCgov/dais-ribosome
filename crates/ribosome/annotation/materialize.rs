@@ -3,7 +3,7 @@
 
 use crate::{
     IteratorExt, QueryRecord,
-    data::ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, CdsStateRange, InsertionIdx},
+    data::ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, CdsStateRange},
     hashing::{nt_id_iupac, variant_hash_iupac},
     outputs::{ComputedDeletion, ComputedInsertion, ComputedProduct, Product},
     ranges::CdsCoord,
@@ -267,13 +267,6 @@ impl IncrementalAccumulator {
             };
         }
 
-        // Add stop extension if the alignment includes one. This does not occur
-        // if a stop codon was reached above.
-        if let Some(ext_range) = &product.stop_extension_query_range {
-            self.dependent_fields
-                .extend_from_stop_extension(query, ext_range, product.product_spec.exons.cds_len());
-        }
-
         // No stop codon reached, so finish the translation
         self.update_translation();
 
@@ -508,41 +501,5 @@ impl DependentFields {
             del_cds_end: range.cds_range.end,
             del_cds_len,
         });
-    }
-
-    /// Extends the dependent fields from a stop extension.
-    ///
-    /// This method guarantees that `cds_seq`, `query_coords`, and `cds_coords`
-    /// will grow in size.
-    ///
-    /// ## Validity
-    ///
-    /// `ext_range` must be from [`Product::stop_extension_query_range`].
-    fn extend_from_stop_extension(&mut self, query: &QueryRecord, ext_range: &Range<usize>, cds_length: usize) {
-        // Validity: This will not be out of bounds due to ext_range being the
-        // field in the product, which was formed using the same query that is
-        // being passed
-        let slice = &query.nucleotides()[ext_range.clone()];
-
-        let nt_insertion_idx = InsertionIdx::from_right_idx(cds_length);
-
-        // Validity: slice is from QueryRecord. The insertion cannot be filtered
-        // since it has length at least 3 and ends with indices corresponding to
-        // a stop codon in `query`.
-        let (ins, _) = ComputedInsertion::new(nt_insertion_idx, slice);
-
-        // Validity: ComputedInsertion::inserted_nt meets validity requirements
-        self.cds_seq.extend_from_slice(&ins.inserted_nt);
-        self.insertions.push(ins);
-
-        self.has_insertion = true;
-
-        // Validity: we push to query_coords and cds_coords at the same time
-        self.query_coords.push(ext_range.clone());
-        self.cds_coords.push(CdsCoord::I(nt_insertion_idx));
-
-        if !ext_range.len().is_multiple_of(3) {
-            self.has_shift_indel = true;
-        }
     }
 }

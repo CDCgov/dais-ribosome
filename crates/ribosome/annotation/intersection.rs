@@ -14,25 +14,19 @@ use crate::{
 /// Intersects the ranges for an alignment ([`StateRange`]) with the ranges for
 /// the exons ([`Exons`]) to form the ranges in the product.
 ///
-/// The `stop_extension_query_range` field is initialized to `None`, and must be
-/// updated later.
-///
 /// ## Validity
 ///
 /// The `state_ranges` must contain ordered non-overlapping ranges that fully
 /// partition the aligned query and reference ranges (if any part of the
 /// sequences was not locally aligned, this will not be included). None of the
-/// ranges can be empty. It also must begin and end with [`StateRange::M`].
+/// ranges can be empty.
 pub(crate) fn form_product<'a>(state_ranges: &[StateRange], product_spec: &'a ProductSpec) -> Product<'a> {
     let product_ranges = intersect_with_exons(state_ranges, &product_spec.exons);
 
     let leading_cds_unaligned = match product_ranges.first() {
         Some(CdsStateRange::M(m)) => m.cds_range.start,
         Some(CdsStateRange::D(d)) => d.cds_range.start,
-        Some(CdsStateRange::I(i)) => {
-            // Unreachable in the current algorithm but may change in the future
-            i.cds_index.right()
-        }
+        Some(CdsStateRange::I(i)) => i.cds_index.right(),
 
         // We put all of the unaligned bases in trailing_cds_unaligned
         None => 0,
@@ -42,11 +36,7 @@ pub(crate) fn form_product<'a>(state_ranges: &[StateRange], product_spec: &'a Pr
         let end = match product_ranges.last() {
             Some(CdsStateRange::M(m)) => m.cds_range.end,
             Some(CdsStateRange::D(d)) => d.cds_range.end,
-            Some(CdsStateRange::I(i)) => {
-                // Unreachable in the current algorithm but may change in the
-                // future
-                i.cds_index.right()
-            }
+            Some(CdsStateRange::I(i)) => i.cds_index.right(),
 
             // If product_ranges is empty, then the aligned-against region ends
             // at 0 (resulting in trailing_cds_unaligned being cds_len)
@@ -61,7 +51,6 @@ pub(crate) fn form_product<'a>(state_ranges: &[StateRange], product_spec: &'a Pr
         product_ranges,
         leading_cds_unaligned,
         trailing_cds_unaligned,
-        stop_extension_query_range: None,
     }
 }
 
@@ -69,10 +58,8 @@ pub(crate) fn form_product<'a>(state_ranges: &[StateRange], product_spec: &'a Pr
 /// field.
 ///
 /// The output `Vec` may be empty (in which case there was no intersection of
-/// the state ranges with any exons). It may begin and end with match states or
-/// delete states, but it will never begin or end with an insert state.
-///
-/// Any returned [`CdsStateRange`] entries will have a non-zero length.
+/// the state ranges with any exons). Any returned [`CdsStateRange`] entries
+/// will have a non-zero length.
 ///
 /// ## Validity
 ///
@@ -98,12 +85,6 @@ fn intersect_with_exons(state_ranges: &[StateRange], exons: &Exons) -> Vec<CdsSt
         }
     }
 
-    // Validity: the output range will not begin or end with an insertion. An
-    // intersected insertion implies that the insertion is strictly contained in
-    // an exon, but therefore there must exist flanking ranges in `state_ranges`
-    // that also intersect the exon. This is because `state_ranges` forms an
-    // ordered partition of the aligned query and reference ranges, and cannot
-    // begin or end with an insertion.
     product_ranges
 }
 

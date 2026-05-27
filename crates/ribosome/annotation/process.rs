@@ -11,6 +11,7 @@ use crate::{
     },
     errors::RibosomeError,
     outputs::{GenomeAndProductStates, Product, RibosomeOutput},
+    ranges::CdsInsertionRange,
 };
 use std::ops::Range;
 use zoe::{alignment::Alignment, data::types::nucleotides::CodonExtension, prelude::*};
@@ -72,30 +73,26 @@ impl<'a> AnnotationModule<'a> {
                     continue;
                 }
 
-                products.push(product);
-            }
+                // Add the stop extension if applicable
+                if let Some(ext) = &stop_extension
+                    && product.product_spec.exons.last().ref_range.end == ext.ref_index.right()
+                {
+                    // stop_extension is only Some if the genome alignment
+                    // extends to the end of the reference. Above we ensure the
+                    // exons extend to the end of the reference. Hence, the
+                    // product alignment (intersection of the two) will extend
+                    // to the end of the reference.
+                    debug_assert_eq!(product.trailing_cds_unaligned, 0);
 
-            // Push stop extension into every product whose last exon ends at
-            // the extension's reference position
-            if let Some(ext) = &stop_extension {
-                for product in &mut products {
-                    let last_exon = product.product_spec.exons.last();
+                    let stop_extension = CdsInsertionRange {
+                        cds_index:   InsertionIdx::from_right_idx(product.product_spec.exons.cds_len()),
+                        query_range: ext.query_range.clone(),
+                    };
 
-                    // Check whether the last exon ends at the same place the
-                    // stop extension "ends" (the index before which it occurs).
-                    if last_exon.ref_range.end == ext.ref_index.right() {
-                        // Validity: stop_extension is only Some if the genome
-                        // alignment extended to the end of the reference.
-                        // Trailing indels in the genome alignment are not
-                        // possible, so the last base of the reference has a
-                        // match with the query. This match must intersect the
-                        // final exon (since it is non-empty), so product_ranges
-                        // will end in a match state.
-                        debug_assert!(product.product_ranges.last().and_then(CdsStateRange::match_range).is_some());
-
-                        product.stop_extension_query_range = Some(ext.query_range.clone());
-                    }
+                    product.product_ranges.push(CdsStateRange::I(stop_extension));
                 }
+
+                products.push(product);
             }
 
             let ref_len = ref_id_data.length;
