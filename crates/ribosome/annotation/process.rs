@@ -95,37 +95,12 @@ impl<'a> AnnotationModule<'a> {
                 products.push(product);
             }
 
-            let ref_len = ref_id_data.length;
-
-            let lpad = genome_aln_states
-                .iter()
-                .find_map(|s| match s {
-                    StateRange::M(m) => Some(m.ref_range.start),
-                    StateRange::D(d) => Some(d.ref_range.start),
-                    _ => None,
-                })
-                .unwrap_or(0);
-
-            let rpad = ref_len
-                - genome_aln_states
-                    .iter()
-                    .rev()
-                    .find_map(|s| match s {
-                        StateRange::M(m) => Some(m.ref_range.end),
-                        StateRange::D(d) => Some(d.ref_range.end),
-                        _ => None,
-                    })
-                    .unwrap_or(0);
-
-            states.push(GenomeAndProductStates {
-                reference_id: &ref_id_data.reference_id,
-                ref_len,
+            states.push(GenomeAndProductStates::new(
+                ref_id_data,
                 genome_aln_states,
-                lpad,
-                rpad,
+                stop_extension,
                 products,
-                stop_extension_query_range: stop_extension.map(|ins| ins.query_range),
-            });
+            ));
         }
 
         Ok(RibosomeOutput {

@@ -1,11 +1,12 @@
 use crate::{
-    config::{ProductSpec, toml::Formatting},
+    config::{ProductSpec, annotation_module::ReferenceGroup, toml::Formatting},
     data::{
         QueryRecord,
         ranges::{CdsStateRange, InsertionIdx, StateRange},
     },
     hashing::nt_id_iupac,
     outputs::{ComputedGenome, ComputedGenomeInsertion},
+    ranges::InsertionRange,
 };
 use std::ops::Range;
 use zoe::prelude::*;
@@ -50,7 +51,8 @@ pub struct GenomeAndProductStates<'a> {
     /// The length of the reference sequence.
     pub ref_len: usize,
 
-    /// Genome alignment to nucleotide reference sequence expressed as [`StateRange`]
+    /// Genome alignment to nucleotide reference sequence expressed as
+    /// [`StateRange`].
     pub genome_aln_states: Vec<StateRange>,
 
     /// The range of the stop extension within the query, if present.
@@ -74,6 +76,51 @@ pub struct GenomeAndProductStates<'a> {
 }
 
 impl<'a> GenomeAndProductStates<'a> {
+    /// Creates a new [`GenomeAndProductStates`] from the given reference
+    /// information, states, stop extension, and products. The stop extension
+    /// must already be added to the products if applicable.
+    ///
+    /// ## Panics
+    ///
+    /// In debug mode, this panics if `genome_aln_states` does not begin and end
+    /// with a match state.
+    pub(crate) fn new(
+        references: &'a ReferenceGroup, genome_aln_states: Vec<StateRange>, stop_extension: Option<InsertionRange>,
+        products: Vec<Product<'a>>,
+    ) -> Self {
+        #[cfg(debug_assertions)]
+        {
+            let (Some(first), Some(last)) = (genome_aln_states.first(), genome_aln_states.last()) else {
+                panic!("genome_aln_states cannot be empty");
+            };
+
+            if !first.is_match() {
+                panic!("genome_aln_states must start with a match state");
+            }
+
+            if !last.is_match() {
+                panic!("genome_aln_states must end with a match state");
+            }
+        }
+
+        let ref_len = references.length;
+
+        let lpad = genome_aln_states
+            .first()
+            .map_or(0, |first_state| first_state.begin_ref_coord());
+        let rpad = ref_len - genome_aln_states.last().map_or(0, |last_state| last_state.end_ref_coord());
+
+        Self {
+            reference_id: &references.reference_id,
+            ref_len,
+            genome_aln_states,
+            stop_extension_query_range: stop_extension.map(|ins| ins.query_range),
+            lpad,
+            rpad,
+            products,
+        }
+    }
+
     /// Computes the output data for this genome, materializing all ranges into
     /// sequences using `query`.
     pub fn materialize_genome(&self, query: &QueryRecord) -> ComputedGenome {

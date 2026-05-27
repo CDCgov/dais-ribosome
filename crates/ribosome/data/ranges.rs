@@ -323,6 +323,45 @@ impl CdsInsertionRange {
 }
 
 impl StateRange {
+    pub fn is_match(&self) -> bool {
+        matches!(self, StateRange::M(_))
+    }
+
+    pub fn is_insert(&self) -> bool {
+        matches!(self, StateRange::I(_))
+    }
+
+    pub fn is_delete(&self) -> bool {
+        matches!(self, StateRange::D(_))
+    }
+
+    /// Returns the inclusive start index of the state in reference coordinates.
+    ///
+    /// For an insertion, this returns the index right of the insertion. When
+    /// called on the first element of `Vec<StateRange>`, the right index will
+    /// be the same as the start of a subsequent match or deletion.
+    pub(crate) fn begin_ref_coord(&self) -> usize {
+        match self {
+            StateRange::M(state) => state.ref_range.start,
+            StateRange::D(state) => state.ref_range.start,
+            StateRange::I(state) => state.ref_index.right(),
+        }
+    }
+
+    /// Returns the exclusive end index of the state in reference coordinates.
+    ///
+    /// For an insertion, this returns the index right of the insertion. When
+    /// called on the last element of `Vec<StateRange>`, the right index will be
+    /// the same as the exclusive end index of a preceding match or deletion.
+    pub(crate) fn end_ref_coord(&self) -> usize {
+        match self {
+            StateRange::M(state) => state.ref_range.end,
+            StateRange::D(state) => state.ref_range.end,
+            // right is the exclusive end, whereas left would be inclusive
+            StateRange::I(state) => state.ref_index.right(),
+        }
+    }
+
     /// Converts an [`Alignment`] to a sequence of [`StateRange`] for coordinate
     /// manipulation.
     ///
