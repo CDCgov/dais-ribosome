@@ -1,6 +1,7 @@
 [[module]]
 name = "flu"
 version = "2.0-alpha"
+alternative_names = ["influenza"]
 references = "flu-references.fasta"
 weights = "flu-codon-position-weights.tsv"
 cds_spec = "flu-cds-spec.tsv"
@@ -21,6 +22,7 @@ B_HA = { match = 10, mismatch = 1, gap_open = 50, gap_extend = 1 }
 
 [[module]]
 name = "cov"
+alternative_names = ["cov-beta", "covid", "sc2", "betacoronavirus"]
 references = "cov-references.fasta"
 weights = "cov-codon-position-weights.tsv"
 cds_spec = "cov-cds-spec.tsv"

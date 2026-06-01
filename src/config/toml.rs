@@ -6,7 +6,7 @@ use serde::{
 };
 use serde_derive::Deserialize;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, hash_map::Entry},
     path::{Path, PathBuf},
 };
 use zoe::data::{WeightMatrix, err::ResultWithErrorContext};
@@ -17,9 +17,12 @@ use zoe::data::{WeightMatrix, err::ResultWithErrorContext};
 ///
 /// The alignment parameters specified for mismatch, gap open, and gap extend
 /// are automatically converted to non-positive.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct TomlConfig {
-    #[serde(rename = "module")]
+    /// The available modules.
+    ///
+    /// All modules should have distinct names, ignoring case. This invariant is
+    /// upheld by the [`Deserialize`] implementation.
     pub modules: Vec<ConfiguredModule>,
 }
 
@@ -53,7 +56,9 @@ impl TomlConfig {
         let mut others = Vec::new();
 
         for m in &self.modules {
-            if m.name == name {
+            if m.name.eq_ignore_ascii_case(name)
+                || m.alternative_names.iter().any(|alt_name| name.eq_ignore_ascii_case(alt_name))
+            {
                 selected = Some(m);
             } else {
                 let ref_path = modules_dir.join(&m.name).join(&m.references);
@@ -65,32 +70,95 @@ impl TomlConfig {
     }
 }
 
+/// A helper type for parsing [`TomlConfig`], allowing us to validate that the
+/// names of the modules are unique.
+#[derive(Deserialize)]
+struct TomlConfigRaw {
+    #[serde(rename = "module")]
+    modules: Vec<ConfiguredModule>,
+}
+
+impl<'de> Deserialize<'de> for TomlConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>, {
+        let raw = TomlConfigRaw::deserialize(deserializer)?;
+
+        // The currently-encountered names as keys. If None, it is a module
+        // name. If Some, it is an alternative name for the specified module
+        let mut names: HashMap<String, Option<String>> = HashMap::new();
+
+        for module in &raw.modules {
+            let name = module.name.to_ascii_lowercase();
+
+            match names.entry(name.clone()) {
+                Entry::Occupied(entry) => {
+                    return match entry.get() {
+                        Some(other_module_name) => Err(D::Error::custom(format!(
+                            "{name} appeared as both a module and as an alternative name for {other_module_name}"
+                        ))),
+                        None => Err(D::Error::custom(format!("two modules with name {name} were found"))),
+                    };
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(None);
+                }
+            }
+
+            for alt_name in &module.alternative_names {
+                let alt_name = alt_name.to_ascii_lowercase();
+
+                match names.entry(alt_name.clone()) {
+                    Entry::Occupied(entry) => {
+                        return match entry.get() {
+                            Some(other_module_name) => Err(D::Error::custom(format!(
+                                "{alt_name} appeared as an alternative name for both {name} and {other_module_name}"
+                            ))),
+                            None => Err(D::Error::custom(format!(
+                                "{alt_name} exists as a module and as an alternative name for {name}"
+                            ))),
+                        };
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(Some(module.name.clone()));
+                    }
+                }
+            }
+        }
+
+        Ok(TomlConfig { modules: raw.modules })
+    }
+}
+
 /// Configuration for a single annotation module (e.g., `flu`, `cov`, or `rsv`).
 #[derive(Clone, Debug, Deserialize)]
 pub struct ConfiguredModule {
     /// The name of the module (e.g., `flu`, `cov`, or `rsv`). This must
     /// correspond to a folder in `ribosome_res`.
-    pub name:             String,
+    pub name:              String,
     /// An optional version for the module (e.g., `2.0-alpha`).
-    pub version:          Option<String>,
+    pub version:           Option<String>,
+    /// Any alternative names that can be used to refer to the module.
+    #[serde(default)]
+    pub alternative_names: Vec<String>,
     /// The file name for the FASTA file containing the references. This should
     /// be a relative path within the module folder.
-    pub references:       PathBuf,
+    pub references:        PathBuf,
     // The path containing the codon position weights.
-    pub weights:          PathBuf,
+    pub weights:           PathBuf,
     /// The file name for the TSV file containing the coding sequence (CDS)
     /// specifications. This should be a relative path within the module folder.
-    pub cds_spec:         PathBuf,
+    pub cds_spec:          PathBuf,
     /// The alignment method to use.
     #[serde(default)]
-    pub alignment_method: AlignmentMethod,
+    pub alignment_method:  AlignmentMethod,
     /// The output formatting options.
-    pub formatting:       Formatting,
+    pub formatting:        Formatting,
     /// Rules allowing customization of the annotation process.
-    pub rules:            Rules,
+    pub rules:             Rules,
     /// Collection of alignment weights for the module (and specific compound
     /// types within it).
-    pub alignment:        AlignmentWeights,
+    pub alignment:         AlignmentWeights,
 }
 
 /// The supported alignment methods in DAIS-ribosome.
@@ -197,27 +265,6 @@ pub struct Rules {
     pub repairable_end_limit: usize,
 }
 
-/// A helper type for parsing [`AlignmentParams`] that does not impose any
-/// conditions or checking on the integers.
-#[derive(Deserialize)]
-struct AlignmentParamsRaw {
-    /// The score for a match
-    #[serde(rename = "match")]
-    match_score: i8,
-
-    /// The score for a mismatch, guaranteed to be non-positive
-    #[serde(deserialize_with = "deserialize_penalty")]
-    mismatch: i8,
-
-    /// The score for opening a gap, guaranteed to be non-positive
-    #[serde(deserialize_with = "deserialize_penalty")]
-    gap_open: i8,
-
-    /// The score for extending a gap, guaranteed to be non-positive
-    #[serde(deserialize_with = "deserialize_penalty")]
-    gap_extend: i8,
-}
-
 /// The alignment scoring parameters.
 ///
 /// ## Validity
@@ -244,6 +291,23 @@ pub struct AlignmentParams {
     ///
     /// This must be non-positive, and cannot be -128.
     pub gap_extend: i8,
+}
+
+/// A helper type for parsing [`AlignmentParams`] that does not impose any
+/// conditions or checking on the integers.
+#[derive(Deserialize)]
+struct AlignmentParamsRaw {
+    #[serde(rename = "match")]
+    match_score: i8,
+
+    #[serde(deserialize_with = "deserialize_penalty")]
+    mismatch: i8,
+
+    #[serde(deserialize_with = "deserialize_penalty")]
+    gap_open: i8,
+
+    #[serde(deserialize_with = "deserialize_penalty")]
+    gap_extend: i8,
 }
 
 impl<'de> Deserialize<'de> for AlignmentParams {
