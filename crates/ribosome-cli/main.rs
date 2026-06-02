@@ -1,17 +1,15 @@
 #![feature(string_from_utf8_lossy_owned, bufreader_peek, try_trait_v2, iter_intersperse)]
 
-use app::{
-    args::Args,
-    input::{NoCtype, QueryInfo, QueryReader},
-    log::{self, time_stamp},
-    num_cpus::init_thread_pool,
-    par_utils::{
-        grid::{GridCompatibleArgs, GridInfo, JobErrorOrFail},
-        writers::WriterThreaded,
-    },
-    paths::find_modules_toml,
-};
+use args::Args;
 use dais_ribosome::{AnnotationModule, errors::RibosomeError, outputs::RibosomeOutput, toml::TomlConfig, tsv::Writers};
+use input::{NoCtype, QueryInfo, QueryReader};
+use log::time_stamp;
+use num_cpus::init_thread_pool;
+use par_utils::{
+    grid::{GridCompatibleArgs, GridInfo, JobErrorOrFail},
+    writers::WriterThreaded,
+};
+use paths::find_modules_toml;
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use sswsort::SSWSortModule;
 use std::{collections::HashSet, error::Error, fmt::Display, io::Write, path::PathBuf};
@@ -21,7 +19,12 @@ use zoe::{
     unwrap_or_return_some_err,
 };
 
-pub mod app;
+pub mod args;
+pub mod input;
+pub mod log;
+pub mod num_cpus;
+pub mod par_utils;
+pub mod paths;
 
 // If we later want to match the shell script, we can use:
 // <https://docs.rs/git-version/latest/git_version/macro.git_describe.html>

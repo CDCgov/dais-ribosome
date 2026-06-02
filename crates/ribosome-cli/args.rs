@@ -1,4 +1,4 @@
-use crate::app::par_utils::grid::{GridCompatibleArgs, GridCompatibleCli};
+use crate::par_utils::grid::{GridCompatibleArgs, GridCompatibleCli};
 use clap::{Arg, Parser};
 use std::{num::NonZero, path::PathBuf};
 use zoe::prelude::rand_sequence;

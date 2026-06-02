@@ -1,0 +1,17 @@
+[package]
+name = "dais-ribosome"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+zoe = { workspace = true }
+toml = "1.1"
+serde = { version = "1", features = [ "derive" ] }
+sha1_smol = "1"
+md5 = "0.8"
+csv = "1"

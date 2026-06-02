@@ -1,0 +1,21 @@
+[package]
+name = "dais-ribosome-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "ribosome"
+path = "main.rs"
+doc = false
+
+[dependencies]
+zoe = { workspace = true }
+dais-ribosome = { path = "../ribosome" }
+sswsort = { git = "https://github.com/CDCgov/sswsort.git" }
+clap = { version = "4", features = ["derive"] }
+rayon = "1"
+num_cpus = "1"
+getrandom = "0.4"
+jiff = "0.2"

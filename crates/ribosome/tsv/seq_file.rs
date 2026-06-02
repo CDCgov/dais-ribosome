@@ -9,7 +9,6 @@ use crate::{
 };
 use csv::{Reader, ReaderBuilder};
 use serde::{Deserialize, de::Error};
-use serde_derive::Deserialize;
 use std::{fmt::Display, fs::File, io::Read, ops::Range, path::Path};
 use zoe::{
     data::err::{ResultWithErrorContext, WithErrorContext},

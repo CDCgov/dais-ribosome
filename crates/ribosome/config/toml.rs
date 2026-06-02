@@ -4,7 +4,6 @@ use serde::{
     Deserialize, Deserializer,
     de::{Error, Unexpected},
 };
-use serde_derive::Deserialize;
 use std::{
     collections::{HashMap, hash_map::Entry},
     path::{Path, PathBuf},

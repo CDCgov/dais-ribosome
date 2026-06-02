@@ -55,12 +55,7 @@ impl Write for WriterThreaded {
         match self.sender.send(Msg::Data(buf.to_vec())) {
             Ok(()) => Ok(buf.len()),
             Err(SendError(_)) => Err(self.writer_error.get().map_or_else(
-                || {
-                    std::io::Error::new(
-                        std::io::ErrorKind::BrokenPipe,
-                        "writer thread is no longer running",
-                    )
-                },
+                || std::io::Error::new(std::io::ErrorKind::BrokenPipe, "writer thread is no longer running"),
                 Into::into,
             )),
         }
@@ -84,22 +79,12 @@ impl Write for WriterThreaded {
             Ok(()) => match receiver.recv() {
                 Ok(()) => Ok(()),
                 Err(RecvError) => Err(self.writer_error.get().map_or_else(
-                    || {
-                        std::io::Error::new(
-                            std::io::ErrorKind::BrokenPipe,
-                            "writer thread is no longer running",
-                        )
-                    },
+                    || std::io::Error::new(std::io::ErrorKind::BrokenPipe, "writer thread is no longer running"),
                     Into::into,
                 )),
             },
             Err(SendError(_)) => Err(self.writer_error.get().map_or_else(
-                || {
-                    std::io::Error::new(
-                        std::io::ErrorKind::BrokenPipe,
-                        "writer thread is no longer running",
-                    )
-                },
+                || std::io::Error::new(std::io::ErrorKind::BrokenPipe, "writer thread is no longer running"),
                 Into::into,
             )),
         }
@@ -128,8 +113,7 @@ impl WriterThreaded {
     #[must_use]
     pub fn new<W>(mut writer: W) -> Self
     where
-        W: Write + Send + 'static,
-    {
+        W: Write + Send + 'static, {
         let (sender, receiver) = std::sync::mpsc::channel();
 
         let writer_error = Arc::new(OnceLock::new());
@@ -163,9 +147,8 @@ impl WriterThreaded {
                         // may as well poison as much as possible.
                         let res = sender.send(());
                         if let Err(SendError(())) = res {
-                            thread_writer_error.get_or_init(|| {
-                                std::io::Error::other("failed to confirm successful flush").into()
-                            });
+                            thread_writer_error
+                                .get_or_init(|| std::io::Error::other("failed to confirm successful flush").into());
                             return;
                         }
                     }
@@ -177,10 +160,7 @@ impl WriterThreaded {
             let _ = writer.flush();
         });
 
-        Self {
-            sender,
-            writer_error,
-        }
+        Self { sender, writer_error }
     }
 }
 

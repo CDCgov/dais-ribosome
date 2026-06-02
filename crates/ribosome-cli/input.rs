@@ -2,7 +2,7 @@
 //! first byte, then yields [`QueryInfo`]s through a unified iterator.
 //! The file is opened only once.
 
-use crate::{ClassificationStrategy, app::log::time_stamp};
+use crate::{ClassificationStrategy, log::time_stamp};
 use dais_ribosome::{NoNucleotides, QueryRecord};
 use sswsort::{ClassificationResult, Strand};
 use std::{

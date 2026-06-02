@@ -1,27 +1,24 @@
-[package]
-name = "dais-ribosome"
+[workspace]
+members = ["crates/ribosome", "crates/ribosome-cli"]
+resolver = "2"
+
+[workspace.package]
 version = "2.0.0"
 edition = "2024"
+authors = ["Samuel S. Shepard", "William Chettleburgh"]
+rust-version = "1.96"
 
-[dependencies]
-clap = { version = "4", features = ["derive"] }
-rayon = "1"
-toml = "1.1"
-serde = "1"
-serde_derive = "1"
-sswsort = { git = "https://github.com/CDCgov/sswsort.git" }
-zoe = { version = "0.0.28", default-features = false, features = [
+[workspace.dependencies]
+zoe = { version = "0.0.29", default-features = false, features = [
     "multiversion",
     "rand",
 ] }
-num_cpus = "1"
-sha1_smol = "1"
-md5 = "0.8"
-getrandom = "0.4"
-jiff = "0.2.18"
-csv = "1.4.0"
 
-[[bin]]
-bench = false
-path = "src/main.rs"
-name = "ribosome"
+[profile.dev]
+opt-level = 1
+
+[profile.prod]
+inherits = "release"
+codegen-units = 1
+lto = "fat"
+strip = true

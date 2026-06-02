@@ -4,7 +4,6 @@
 use crate::outputs::{ComputedInsertion, ComputedProduct};
 use csv::{Reader, ReaderBuilder};
 use serde::Deserialize;
-use serde_derive::Deserialize;
 use std::{fmt::Display, fs::File, io::Read, path::Path};
 use zoe::{
     data::err::ResultWithErrorContext,
