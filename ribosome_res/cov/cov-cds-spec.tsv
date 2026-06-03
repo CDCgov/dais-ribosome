@@ -1,4 +1,4 @@
-Reference ID	Compound Type	Protein	Coords	Required Beginning
+reference_id	ctype	product_name	coords	required_beginning
 WUHAN19	SARS-CoV-2	orf1ab	266..13468;13468..21555
 WUHAN19	SARS-CoV-2	S	21563..25384
 WUHAN19	SARS-CoV-2	ORF3a	25393..26220

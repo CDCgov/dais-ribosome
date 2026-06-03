@@ -9,7 +9,7 @@ use std::{
     cmp::Ordering,
     collections::HashMap,
     fs::File,
-    io::{BufRead, BufReader, Lines},
+    io::{BufRead, BufReader, Lines, Read},
     iter::Enumerate,
     ops::Range,
     path::Path,
@@ -18,7 +18,7 @@ use std::{
 use zoe::{
     data::{
         SanitizeBase,
-        err::{ResultWithErrorContext, WithErrorContext},
+        err::{ErrorWithContext, ResultWithErrorContext, WithErrorContext, WithSubitem},
     },
     prelude::RefineDNAStrat,
     unwrap_or_return_some_err,
@@ -41,7 +41,9 @@ pub(crate) type CdsSpecMap = HashMap<RefKey, Vec<(String, Exons)>>;
 /// All IO errors are propagated without path context. Each row of the file must
 /// successfully parse using [`TsvRow::from_str`], and there must be at least
 /// one row. The length of the coding sequence (sum of all exon lengths) must be
-/// a multiple of 3.
+/// a multiple of 3. The header row (if present) must contain the expected
+/// columns in the correct order, although `"required_start"` is optional in the
+/// header.
 pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
     let reader = TsvReader::from_path(path)?;
 
@@ -153,19 +155,19 @@ impl FromStr for TsvRow {
 
         // Get fields as string slices
         let Some(reference_id) = parts.next() else {
-            return Err(std::io::Error::other("Missing Reference ID field (first field)"));
+            return Err(std::io::Error::other("Missing reference_id field (first field)"));
         };
 
         let Some(ctype) = parts.next() else {
-            return Err(std::io::Error::other("Missing Compound Type field (second field)"));
+            return Err(std::io::Error::other("Missing ctype field (second field)"));
         };
 
         let Some(product_name) = parts.next() else {
-            return Err(std::io::Error::other("Missing Protein field (third field)"));
+            return Err(std::io::Error::other("Missing product_name field (third field)"));
         };
 
         let Some(coords) = parts.next() else {
-            return Err(std::io::Error::other("Missing Coords field (fourth field)"));
+            return Err(std::io::Error::other("Missing coords field (fourth field)"));
         };
         let required_start = parts.next();
 
@@ -182,7 +184,7 @@ impl FromStr for TsvRow {
                 // Validate length of codon
                 let mut codon: [u8; 3] = required_start.as_bytes().try_into().map_err(|_| {
                     std::io::Error::other(format!(
-                        "If provided, Required Beginning must contain exactly 3 amino acids (not {})",
+                        "If provided, required_beginning must contain exactly 3 nucleotides (not {})",
                         required_start.len()
                     ))
                 })?;
@@ -191,7 +193,7 @@ impl FromStr for TsvRow {
                 for residue in &mut codon {
                     let Some(recoded) = residue.refine_base(RefineDNAStrat::AcgtNoGapsUc) else {
                         return Err(std::io::Error::other(format!(
-                            "An invalid residue ({residue}) was found in the required beginning field. Expected any of ACGTUacgtu",
+                            "An invalid residue ({residue}) was found in the required_beginning field. Expected any of ACGTUacgtu",
                             residue = *residue as char
                         )));
                     };
@@ -236,14 +238,88 @@ impl TsvReader {
     ///
     /// ## Errors
     ///
-    /// IO errors opening the file are propagated without context.
+    /// IO errors opening the file are propagated without context. The header
+    /// row must be well-formed if present.
     fn from_path(path: &Path) -> std::io::Result<Self> {
         let file = File::open(path)?;
-        let reader = std::io::BufReader::new(file);
+        let mut reader = std::io::BufReader::new(file);
+
+        Self::skip_header(&mut reader)?;
 
         Ok(Self {
             lines: reader.lines().enumerate(),
         })
+    }
+
+    /// A helper function to pre-emptively skip past the header row, if it is
+    /// present.
+    ///
+    /// ## Errors
+    ///
+    /// IO errors are propagated. If `"reference_id"`, `"ctype"`,
+    /// `"product_name"`, `"coords"`, or `"required_beginning"` are present in
+    /// the first line, then the first line must equal the expected header (with
+    /// `"required_beginning"` optionally present or excluded).
+    fn skip_header(reader: &mut BufReader<File>) -> std::io::Result<()> {
+        const REQUIRED: &str = "reference_id\tctype\tproduct_name\tcoords";
+        const OPTIONAL: &str = "\trequired_beginning";
+        const HEADER_FIELDS: [&str; 5] = ["reference_id", "ctype", "product_name", "coords", "required_beginning"];
+
+        // Handle case where the header appears to be fully present
+        if reader.starts_with(REQUIRED.as_bytes())? {
+            let mut lines = reader.lines();
+
+            // Advance past the header using lines.next
+            let Some(header_line) = lines.next().transpose()? else {
+                // Should be unreachable, since the underlying buffer contains
+                // HEADER
+                return Ok(());
+            };
+
+            if !header_line.is_ascii() {
+                return Err(std::io::Error::other("The header row contained a non-ASCII character"));
+            }
+
+            if header_line.trim_ascii().contains(' ') {
+                return Err(std::io::Error::other(
+                    "The header row contained a space, but only tabs were expected",
+                ));
+            }
+
+            let optional = header_line.strip_prefix(REQUIRED).unwrap_or_default().trim_ascii();
+
+            if !optional.is_empty() && optional != OPTIONAL.trim_ascii() {
+                return Err(ErrorWithContext::new("Incorrect header found")
+                    .with_subitem(format!("Expected header: {REQUIRED}{OPTIONAL}"))
+                    .with_subitem(format!("Found header:    {header_line}"))
+                    .into());
+            }
+
+            return Ok(());
+        }
+
+        // Handle case where the header seems to be present, but perhaps is
+        // malformed or out of order
+        let buffer = reader.fill_buf()?;
+
+        let Some(header_line) = buffer.lines().next().transpose()? else {
+            // No header present, since there are no lines
+            return Ok(());
+        };
+
+        if header_line
+            .split('\t')
+            .map(str::trim_ascii)
+            .any(|field| HEADER_FIELDS.contains(&field))
+        {
+            return Err(ErrorWithContext::new("Incorrect header found")
+                .with_subitem(format!("Expected header: {REQUIRED}{OPTIONAL}"))
+                .with_subitem(format!("Found header:    {header_line}"))
+                .into());
+        }
+
+        // No header present
+        Ok(())
     }
 }
 
@@ -252,8 +328,7 @@ impl Iterator for TsvReader {
 
     /// Parses the next row of the CDS specifications file.
     ///
-    /// The header row (any line beginning with "Reference ID") and commented
-    /// lines (those beginning with `#`) are skipped.
+    /// Empty lines and commented lines (those beginning with `#`) are skipped.
     ///
     /// ## Errors
     ///
@@ -264,8 +339,8 @@ impl Iterator for TsvReader {
         let line = unwrap_or_return_some_err!(line);
         let line = line.trim();
 
-        // Skip empty lines and headers
-        if line.is_empty() || line.starts_with("Reference ID") || line.starts_with('#') {
+        // Skip empty lines and comments
+        if line.is_empty() || line.starts_with('#') {
             return self.next();
         }
 
@@ -385,4 +460,14 @@ fn parse_exon_coords(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
 
     // Validity: exon_ranges will be non-empty since split is always non-empty.
     Ok(exon_ranges)
+}
+
+trait BufReaderExt {
+    fn starts_with(&mut self, needle: &[u8]) -> std::io::Result<bool>;
+}
+
+impl<R: Read> BufReaderExt for BufReader<R> {
+    fn starts_with(&mut self, needle: &[u8]) -> std::io::Result<bool> {
+        Ok(self.peek(needle.len())? == needle)
+    }
 }

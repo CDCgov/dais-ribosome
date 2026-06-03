@@ -1,4 +1,4 @@
-Reference ID	Compound Type	Protein	Coords	Required Beginning
+reference_id	ctype	product_name	coords	required_beginning
 KY654518	RSV_AD	NS1	99..518
 KY654518	RSV_AD	NS2	628..1002
 KY654518	RSV_AD	N	1140..2315

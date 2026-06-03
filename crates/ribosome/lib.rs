@@ -1,3 +1,5 @@
+#![feature(bufreader_peek)]
+
 mod annotation;
 pub(crate) mod config;
 pub(crate) mod data;

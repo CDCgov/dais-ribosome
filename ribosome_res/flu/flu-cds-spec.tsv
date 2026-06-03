@@ -1,4 +1,4 @@
-Reference ID	Compound Type	Protein	Coords	Required Beginning
+reference_id	ctype	product_name	coords	required_beginning
 ANHUI01	A_HA_H7	HA-signal	1..54
 ANHUI01	A_HA_H7	HA	55..1683
 ANHUI01	A_NA_N9	NA	1..1398
