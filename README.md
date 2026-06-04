@@ -128,7 +128,9 @@ The field explanations:
 
 ## Special use of translated characters
 
-Translation produces standard amino acid codes with the two non-standard exceptions listed below.  The translation engine also stops when it encounters a stop codon.
+Translation produces [standard amino acid codes] with the two non-standard
+exceptions listed below.  The translation engine also stops when it encounters a
+stop codon.
 
 | Character | Interpretation                         |
 | --------- | -------------------------------------- |
@@ -136,6 +138,7 @@ Translation produces standard amino acid codes with the two non-standard excepti
 | **-**     | Gap in alignment (standard)            |
 | **~**     | Partial codon (non-standard)           |
 | **X**     | Ambiguous codon translation (standard) |
+| **\***    | Stop codon (standard)                  |
 
 ## CLI Usage
 
@@ -228,3 +231,5 @@ This package uses a modified version of SSW (`bin/licenses`):
 This package uses GNU Parallel :
 
 > Tange O. GNU Parallel. Version 20200422. doi:10.5281/zenodo.1146014
+
+[standard amino acid codes]: https://www.bioinformatics.org/sms/iupac.html
