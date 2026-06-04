@@ -143,7 +143,8 @@ pub struct ConfiguredModule {
     /// The file name for the FASTA file containing the references. This should
     /// be a relative path within the module folder.
     pub references:        PathBuf,
-    // The path containing the codon position weights.
+    // The path containing the codon-position weights. This should be a relative
+    // path within the module folder.
     pub weights:           PathBuf,
     /// The file name for the TSV file containing the coding sequence (CDS)
     /// specifications. This should be a relative path within the module folder.
