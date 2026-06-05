@@ -3,8 +3,8 @@
 use crate::data::keys::RefKey;
 use std::{collections::HashMap, path::Path};
 use zoe::{
-    data::{fasta::FastaSeq, nucleotides::ToDNA},
-    prelude::{FastaReader, Nucleotides},
+    data::{err::WithErrorContext, fasta::FastaSeq, nucleotides::CheckNucleotides},
+    prelude::{FastaReader, IsValidDNA, Nucleotides},
 };
 
 /// Loads reference sequences from a FASTA file.
@@ -30,7 +30,24 @@ pub fn load_references(path: &Path) -> std::io::Result<HashMap<RefKey, Vec<Nucle
     for r in data {
         let FastaSeq { name, sequence } = r?;
 
-        let forward = sequence.recode_to_dna();
+        let sequence = Nucleotides::from(sequence);
+
+        if !sequence.is_valid_dna(IsValidDNA::IupacNoGaps) {
+            let e =
+                if let Some(p) = zoe::search::position_by_byte2::<32>(sequence.as_bytes(), b'-', b'.') {
+                    std::io::Error::other(format!(
+                        "A gap character '{}' was found. Consider N-filling gaps instead.",
+                        sequence[p] as char
+                    ))
+                } else {
+                    std::io::Error::other(
+                        "Non-IUPAC character(s) were found. Consider removing them (if it is erroneously present) or masking to N.",
+                    )
+                }
+            .with_context(format!("Failed to parse reference sequence with name: {name}"));
+
+            return Err(e.into());
+        }
 
         let key = RefKey::parse(&name).ok_or_else(|| {
             std::io::Error::other(format!(
@@ -38,7 +55,7 @@ pub fn load_references(path: &Path) -> std::io::Result<HashMap<RefKey, Vec<Nucle
             ))
         })?;
 
-        refs.entry(key).or_insert_with(Vec::new).push(forward);
+        refs.entry(key).or_insert_with(Vec::new).push(sequence);
     }
 
     // Validity: each value in the output HashMap will be non-empty since we
