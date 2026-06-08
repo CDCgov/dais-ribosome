@@ -7,10 +7,6 @@ weights = "flu-codon-position-weights.tsv"
 cds_spec = "flu-cds-spec.tsv"
 alignment_method = "one-pass"
 
-[module.formatting]
-right_pad_aa = false
-right_pad_cds = true
-
 [module.rules]
 list_contig_stop_extension = true
 chew_to_start = true
@@ -28,10 +24,6 @@ weights = "cov-codon-position-weights.tsv"
 cds_spec = "cov-cds-spec.tsv"
 alignment_method = "three-pass"
 
-[module.formatting]
-right_pad_aa = false
-right_pad_cds = true
-
 [module.rules]
 chew_to_start = true
 repairable_end_limit = 9
@@ -45,10 +37,6 @@ references = "rsv-references.fasta"
 weights = "rsv-codon-position-weights.tsv"
 cds_spec = "rsv-cds-spec.tsv"
 alignment_method = "three-pass"
-
-[module.formatting]
-right_pad_aa = false
-right_pad_cds = true
 
 [module.rules]
 chew_to_start = true

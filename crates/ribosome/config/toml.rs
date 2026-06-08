@@ -152,6 +152,7 @@ pub struct ConfiguredModule {
     #[serde(default)]
     pub alignment_method:  AlignmentMethod,
     /// The output formatting options.
+    #[serde(default)]
     pub formatting:        Formatting,
     /// Rules allowing customization of the annotation process.
     pub rules:             Rules,
@@ -203,7 +204,7 @@ impl AlignmentWeights {
 /// required for ensuring the proper reading frame, but may be useful to
 /// downstream applications which expect sequences of a given length (or the
 /// same length, such as multiple sequence alignment programs).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Formatting {
     /// Whether to add right padding to the amino acid sequence.
     #[serde(default = "pad_default")]
@@ -216,10 +217,21 @@ pub struct Formatting {
     pub right_pad_gen: bool,
 }
 
-/// Returns the default value for whether to perform padding. This is used by
-/// `serde` in [`Formatting`].
+/// Returns the default value for whether to perform padding.
+///
+/// This is function so that it works with `serde`.
 const fn pad_default() -> bool {
     true
+}
+
+impl Default for Formatting {
+    fn default() -> Self {
+        Self {
+            right_pad_aa:  pad_default(),
+            right_pad_cds: pad_default(),
+            right_pad_gen: pad_default(),
+        }
+    }
 }
 
 /// Rules allowing customization of the annotation process.
