@@ -155,6 +155,7 @@ pub struct ConfiguredModule {
     #[serde(default)]
     pub formatting:        Formatting,
     /// Rules allowing customization of the annotation process.
+    #[serde(default)]
     pub rules:             Rules,
     /// Collection of alignment weights for the module (and specific compound
     /// types within it).
@@ -235,7 +236,7 @@ impl Default for Formatting {
 }
 
 /// Rules allowing customization of the annotation process.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct Rules {
     /// If the genome alignment reaches the end of the reference but does not
     /// end in a stop codon as expected, then this rule causes the alignment to
