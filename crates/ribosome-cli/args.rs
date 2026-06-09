@@ -6,11 +6,10 @@ use zoe::prelude::rand_sequence;
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
+#[command(after_help = "† For classified FASTA:  >ID|ctype\n  and classified TSV:    ID<TAB>ctype<TAB>sequence")]
 /// CDS and and amino acid annotation tool for viruses.
 pub struct Cli {
-    /// Data file to annotate in TSV or FASTA format.
-    ///         `†if classified, FASTA:  >ID|type_segment[_subtype]`
-    ///         `*if classified, TSV:    ID<TAB>type_segment_[subtype]<TAB>sequence`
+    /// Data file to annotate in TSV or FASTA format.†
     pub data_file: PathBuf,
 
     /// CDS and AA output, including coordinate mapping information, as a
@@ -58,8 +57,7 @@ pub struct Cli {
     #[arg(short = 'S', long, conflicts_with_all = ["threads", "is_grid_task"])]
     pub submit_grid_job: Option<usize>,
 
-    /// Prints warning messages to stderr. See the TODO for a full list of
-    /// warnings that may be generated.
+    /// Prints warning messages to stderr
     #[arg(long, conflicts_with_all = ["is_grid_task", "submit_grid_job"])]
     pub verbose: bool,
 

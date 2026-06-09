@@ -1,6 +1,6 @@
 #!/bin/bash
 
-default_sswsort=v2.0.0
+default_sswsort=v2.2.2
 
 version=${PINNED_SSWSORT:-$default_sswsort}
 folder=sswsort-${version#v}
