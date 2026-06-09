@@ -114,18 +114,16 @@ impl<'a> AnnotationModule<'a> {
         })
     }
 
-    /// Computes the stop extension if the [`list_contig_stop_extension`] rule
-    /// is set.
+    /// Computes the stop extension if the [`try_stop_extension`] rule is set.
     ///
     /// If `Some`, the returned range will have length at least 3. The last
     /// three indices will correspond to the stop codon in `query`.
     ///
-    /// [`list_contig_stop_extension`]:
-    ///     crate::config::toml::Rules::list_contig_stop_extension
+    /// [`try_stop_extension`]: crate::config::toml::Rules::try_stop_extension
     fn rule_stop_extension(&self, query: &QueryRecord, genome_aln: &Alignment<u32>) -> Option<InsertionRange> {
         let query_seq = query.nucleotides();
 
-        if self.rules.list_contig_stop_extension
+        if self.rules.try_stop_extension
             && genome_aln.uanligned_ref_tail() == 0
             && genome_aln.unaligned_query_tail() >= 3
             && let Some(last_aligned_codon) = query_seq.slice(genome_aln.aln_query_range()).get_tail_codon()

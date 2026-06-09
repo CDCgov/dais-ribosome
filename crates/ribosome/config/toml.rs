@@ -244,7 +244,7 @@ pub struct Rules {
     /// represented as an insertion at the end of the genome and any products
     /// extending to the end of the genome.
     #[serde(default)]
-    pub list_contig_stop_extension: bool,
+    pub try_stop_extension: bool,
 
     /// If the query does not start with a start codon, this rule will trim the
     /// start of the query up to this start codon before carrying out alignment.
