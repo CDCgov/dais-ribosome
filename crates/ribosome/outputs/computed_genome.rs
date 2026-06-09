@@ -2,7 +2,7 @@ use crate::data::ranges::InsertionIdx;
 use zoe::prelude::Nucleotides;
 
 /// A computed genome, with materialized nucleotide and amino acid sequences.
-#[derive(Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct ComputedGenome {
     /// The SHA1 hash of the cleaned genome sequence.
     pub genome_id:       String,
@@ -43,7 +43,7 @@ pub struct ComputedGenome {
 }
 
 /// Genome-level insertion for `.gen.ins` output.
-#[derive(Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct ComputedGenomeInsertion {
     /// The upstream nucleotide position (1-based), which is the position
     /// _after_ which the insertion occurs.

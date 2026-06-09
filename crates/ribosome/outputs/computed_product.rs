@@ -9,6 +9,7 @@ use zoe::prelude::*;
 ///
 /// The normal output is [`MaybeComputedProduct::Ok`], which contains the
 /// [`ComputedProduct`].
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum MaybeComputedProduct<'a> {
     /// The normal output for a non-empty product with at least one match state.
     Ok(ComputedProduct<'a>),
@@ -21,7 +22,7 @@ pub enum MaybeComputedProduct<'a> {
 }
 
 /// An empty product, caused by the genome alignment not intersecting the exons.
-#[derive(Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct EmptyProduct<'a> {
     /// The protein product name (e.g., `HA`, `HA-signal`).
     pub name: &'a str,
@@ -31,7 +32,7 @@ pub struct EmptyProduct<'a> {
     pub cds_aln_pad: usize,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct DeletedProduct<'a> {
     /// The protein product name (e.g., `HA`, `HA-signal`).
     pub name:         &'a str,

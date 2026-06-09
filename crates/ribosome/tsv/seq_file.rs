@@ -15,6 +15,7 @@ use zoe::{
     prelude::{AminoAcids, AminoAcidsView, DataOwned, Len, Nucleotides, NucleotidesView},
 };
 
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum SeqRow {
     Data(SeqData),
     Empty(EmptySeqRow),
@@ -295,6 +296,7 @@ struct SeqRowRaw {
     cds_coordinates:   Nullable<String>,
 }
 
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum SeqRowView<'a> {
     Data(SeqDataView<'a>),
     Empty(EmptySeqRowView<'a>),
