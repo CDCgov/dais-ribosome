@@ -68,7 +68,11 @@ impl<W: Write> Writers<W> {
                     output.formatting,
                 );
 
-                writeln!(self.seq, "{seq_row}")?;
+                match seq_row {
+                    SeqRowView::Data(seq_data) => writeln!(self.seq, "{seq_data}")?,
+                    SeqRowView::Empty(_) => {}
+                    SeqRowView::Deleted(deleted_seq_row) => writeln!(self.seq, "{deleted_seq_row}")?,
+                }
 
                 let computed_product = match computed_product {
                     MaybeComputedProduct::Ok(computed_product) => computed_product,
