@@ -1,12 +1,11 @@
 use crate::{
     data::{
-        exons::{ExonCoords, ExonOverlapCoords, Exons, NoncodingCoords},
+        exons::{ExonCoords, Exons},
         keys::RefKey,
     },
-    ranges::{InclusiveDisplay, RangeExt, parse_coords_inclusive},
+    ranges::parse_coords_inclusive,
 };
 use std::{
-    cmp::Ordering,
     collections::HashMap,
     fs::File,
     io::{BufRead, BufReader, Lines, Read},
@@ -18,8 +17,9 @@ use std::{
 use zoe::{
     data::{
         SanitizeBase,
-        err::{ErrorWithContext, ResultWithErrorContext, WithErrorContext, WithSubitem},
+        err::{ErrorWithContext, ResultWithErrorContext, WithSubitem},
     },
+    iter_utils::ProcessResultsExt,
     prelude::RefineDNAStrat,
     unwrap_or_return_some_err,
 };
@@ -58,43 +58,8 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
             required_start,
         } = row?;
 
-        // Validity: coords is non-empty per TsvRow guarantees
-        let cds_len = coords
-            .last()
-            .expect("The coords field of TsvRow should be non-empty")
-            .cds_range
-            .end;
-
-        if !cds_len.is_multiple_of(3) {
-            return Err(std::io::Error::other(
-                "The length of the coding sequence (sum of all exon lengths) was not a multiple of 3.",
-            )
-            .with_context(format!("Failed to parse {ctype} product for reference ID {reference_id}"))
-            .into());
-        }
-
-        let mut overlapped_regions = Vec::new();
-        let mut noncoding_regions = Vec::new();
-
-        for [exon1, exon2] in coords.array_windows() {
-            // Overlapping and containing a noncoding region between them are
-            // mutually exclusive, so use "else if"
-            if let Some(overlapped) = ExonOverlapCoords::new(exon1, exon2) {
-                overlapped_regions.push(overlapped);
-            } else if let Some(noncoding) = NoncodingCoords::new(exon1, exon2) {
-                noncoding_regions.push(noncoding);
-            }
-        }
-
-        // Validity: coords is non-empty, CDS length is multiple of 3, etc.
-        let exons = Exons {
-            // Validity: this contains solely ACGT by TsvRow guarantees
-            required_start,
-            // Validity: this is non-empty by TsvRow guarantees
-            coords,
-            overlapped_regions,
-            noncoding_regions,
-        };
+        let exons = Exons::new(coords, required_start)
+            .with_context(format!("Failed to parse {ctype} product for reference ID {reference_id}"))?;
 
         let key = RefKey::new(reference_id, ctype);
         cds_specs.entry(key).or_default().push((product_name, exons));
@@ -121,14 +86,6 @@ struct TsvRow {
 
     /// A list of the exon coordinates in column 4 (e.g., `55..1683`,
     /// `1..33;689..1024`).
-    ///
-    /// The exons are ordered by `cds_range`, which form a partition of
-    /// `0..cds_len` where `cds_len` is the total length of the coding sequence.
-    /// The `ref_range` fields are in order, although up to 2 nucleotides
-    /// overlap is allowed between ranges. Note that any repeated indices are
-    /// represented twice with distinct coordinates in the coding sequence.
-    ///
-    /// This vector is non-empty.
     coords: Vec<ExonCoords>,
 
     /// An optional required codon at the start in column 5 (e.g., `ATG`).
@@ -210,8 +167,6 @@ impl FromStr for TsvRow {
             reference_id,
             product_name,
             ctype,
-            // Validity: coords is non-empty since parse_exon_coords ensures
-            // this
             coords,
             // Validity: we recoded to ACGT above
             required_start,
@@ -360,8 +315,6 @@ impl Iterator for TsvReader {
 /// reference ranges. The `cds_range` fields of the resulting [`ExonCoords`]
 /// partition this length, starting from 0.
 ///
-/// The output vector will be non-empty.
-///
 /// ## Errors
 ///
 /// - Each range must successfully parse
@@ -370,96 +323,30 @@ impl Iterator for TsvReader {
 ///   or have a non-coding region between them)
 /// - A single region of overlap cannot involve more than 2 ranges
 fn parse_exon_coords(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
-    /// The maximum amount of overlap allowed between exons.
-    ///
-    /// SARS-CoV-2 requires -1 exon-to-exon frameshift with other viruses
-    /// reported up to -2.
-    const MAX_DUPLICATED_OVERLAP_NT: usize = 2;
-
-    let mut exon_ranges: Vec<ExonCoords> = Vec::new();
     let mut cds_start = 0;
 
-    // Parses and pushes a range to exon_ranges. Iterators do not work since we
-    // need to access the previous ExonCoords to validate order and overlap.
-    for ref_range in parse_coords_inclusive::<Range<usize>>(coords) {
-        let ref_range = ref_range?;
+    let ref_ranges = parse_coords_inclusive::<Range<usize>>(coords);
 
-        if let Some(last) = exon_ranges.last() {
-            match ref_range.relaxed_cmp(&last.ref_range) {
-                Some(Ordering::Greater) => {}
-                Some(Ordering::Less) => {
-                    return Err(std::io::Error::other(format!(
-                        "Exons out of order! Found {} then {}",
-                        last.ref_range.display_inclusive(),
-                        ref_range.display_inclusive(),
-                    )));
-                }
-                Some(Ordering::Equal) => {
-                    return Err(std::io::Error::other(format!(
-                        "Found the same exon twice: {}",
-                        ref_range.display_inclusive()
-                    )));
-                }
-                None => {
-                    return Err(std::io::Error::other(format!(
-                        "One exon cannot completely contain another! Found {} then {}",
-                        last.ref_range.display_inclusive(),
-                        ref_range.display_inclusive(),
-                    )));
-                }
-            }
+    let exon_ranges = ref_ranges.process_results(|iter| {
+        let exons = iter.map(|ref_range| {
+            let cds_end = cds_start + ref_range.len();
 
-            // Prevent perfectly adjacent exons (there should either be overlap
-            // or non-coding region)
-            if last.ref_range.end == ref_range.start {
-                return Err(std::io::Error::other(format!(
-                    "Two exons are perfectly adjacent, and should therefore be represented as a single exon. Found {} then {}",
-                    last.ref_range.display_inclusive(),
-                    ref_range.display_inclusive(),
-                )));
-            }
+            // Validity: ref_range is non-empty per guarantees from
+            // parse_coordinate_range, and they are the same length per above
+            // definition
+            let exon = ExonCoords {
+                ref_range,
+                cds_range: cds_start..cds_end,
+            };
 
-            // Prevent overlapping exons that overlap by more than
-            // MAX_DUPLICATED_OVERLAP_NT
-            //
-            // Exclusive index - inclusive index is valid length
-            let overlap_nt = last.ref_range.end.saturating_sub(ref_range.start);
-            if overlap_nt > MAX_DUPLICATED_OVERLAP_NT {
-                return Err(std::io::Error::other(format!(
-                    "Exon overlap exceeds {MAX_DUPLICATED_OVERLAP_NT} nt! Found {} then {}",
-                    last.ref_range.display_inclusive(),
-                    ref_range.display_inclusive(),
-                )));
-            }
+            cds_start = cds_end;
 
-            // Prevent a single region of overlap from involving more than 2
-            // exons
-            if let Some(second_to_last) = exon_ranges.iter().nth_back(1) {
-                let overlap_nt = second_to_last.ref_range.end.saturating_sub(ref_range.start);
-                if overlap_nt > 0 {
-                    return Err(std::io::Error::other(format!(
-                        "A single region of overlap cannot involve more than 2 exons within a given protein product. Found {}, {}, then {}, which all overlap",
-                        second_to_last.ref_range.display_inclusive(),
-                        last.ref_range.display_inclusive(),
-                        ref_range.display_inclusive(),
-                    )));
-                }
-            }
-        }
-
-        let cds_end = cds_start + ref_range.len();
-
-        // Validity: ref_range is non-empty per guarantees from
-        // parse_coordinate_range, and they are the same length per above
-        // definition
-        exon_ranges.push(ExonCoords {
-            ref_range,
-            cds_range: cds_start..cds_end,
+            exon
         });
-        cds_start = cds_end;
-    }
 
-    // Validity: exon_ranges will be non-empty since split is always non-empty.
+        exons.collect()
+    })?;
+
     Ok(exon_ranges)
 }
 

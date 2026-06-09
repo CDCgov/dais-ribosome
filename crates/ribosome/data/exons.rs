@@ -1,6 +1,5 @@
-use std::ops::Range;
-
-use crate::ranges::{InsertionIdx, RangeExt};
+use crate::ranges::{InclusiveDisplay, InsertionIdx, RangeExt};
+use std::{cmp::Ordering, ops::Range};
 
 /// Exon specification for a protein product (ctype stripped).
 #[derive(Clone, Debug)]
@@ -33,6 +32,170 @@ pub(crate) struct Exons {
 }
 
 impl Exons {
+    /// Constructs a new [`Exons`] object from a vector of parsed coordinates.
+    ///
+    /// ## Validity
+    ///
+    /// If specified, `required_start` should contain solely characters in
+    /// `ACGT`.
+    ///
+    /// ## Errors
+    ///
+    /// - The `coords` field must be non-empty.
+    /// - The sum of all exon lengths must be a multiple of three.
+    ///
+    /// For each pair of consecutive exons:
+    ///
+    /// - The exons must be in the correct order, so that both endpoints of the
+    ///   second exon are at least the corresponding endpoints of the first exon
+    ///   (and at least one of the inequalities is strict).
+    /// - The endpoint of the first exon cannot equal the starting point of the
+    ///   next exon.
+    /// - The overlap between the two exons can be at most 2.
+    ///
+    /// For each set of three consecutive exons:
+    ///
+    /// - The three exons cannot all share a single region of overlap.
+    pub fn new(coords: Vec<ExonCoords>, required_start: Option<[u8; 3]>) -> std::io::Result<Self> {
+        // Validate coords is non-empty and total length is multiple of 3
+        let cds_len = coords
+            .last()
+            .ok_or(std::io::Error::other("The coordinates for the exon must be non-empty"))?
+            .cds_range
+            .end;
+
+        if !cds_len.is_multiple_of(3) {
+            return Err(std::io::Error::other(
+                "The length of the coding sequence (sum of all exon lengths) was not a multiple of 3.",
+            ));
+        }
+
+        let mut overlapped_regions = Vec::new();
+        let mut noncoding_regions = Vec::new();
+
+        for exons in coords.array_windows() {
+            Self::validate_two_exons(exons)?;
+            let [exon1, exon2] = exons;
+
+            // Overlapping and containing a noncoding region between them are
+            // mutually exclusive, so use "else if"
+            if let Some(overlapped) = ExonOverlapCoords::new(exon1, exon2) {
+                overlapped_regions.push(overlapped);
+            } else if let Some(noncoding) = NoncodingCoords::new(exon1, exon2) {
+                noncoding_regions.push(noncoding);
+            }
+        }
+
+        for exons in coords.array_windows() {
+            Self::validate_three_exons(exons)?;
+        }
+
+        let exons = Exons {
+            required_start,
+            coords,
+            overlapped_regions,
+            noncoding_regions,
+        };
+
+        Ok(exons)
+    }
+
+    /// A helper function for [`Exons::new`] that checks the requirements for
+    /// two consecutive exons.
+    ///
+    /// ## Errors
+    ///
+    /// - The exons must be in the correct order, so that both endpoints of the
+    ///   second exon are at least the corresponding endpoints of the first exon
+    ///   (and at least one of the inequalities is strict).
+    /// - The endpoint of the first exon cannot equal the starting point of the
+    ///   next exon.
+    /// - The overlap between the two exons can be at most 2.
+    fn validate_two_exons(exons: &[ExonCoords; 2]) -> std::io::Result<()> {
+        /// The maximum amount of overlap allowed between exons.
+        ///
+        /// SARS-CoV-2 requires -1 exon-to-exon frameshift with other viruses
+        /// reported up to -2.
+        const MAX_DUPLICATED_OVERLAP_NT: usize = 2;
+
+        let [left, right] = exons;
+
+        // Ensure correct ordering
+        match left.ref_range.relaxed_cmp(&right.ref_range) {
+            Some(Ordering::Less) => {}
+            Some(Ordering::Greater) => {
+                return Err(std::io::Error::other(format!(
+                    "Exons out of order! Found {} then {}",
+                    left.ref_range.display_inclusive(),
+                    right.ref_range.display_inclusive(),
+                )));
+            }
+            Some(Ordering::Equal) => {
+                return Err(std::io::Error::other(format!(
+                    "Found the same exon twice: {}",
+                    left.ref_range.display_inclusive()
+                )));
+            }
+            None => {
+                return Err(std::io::Error::other(format!(
+                    "One exon cannot completely contain another! Found {} then {}",
+                    left.ref_range.display_inclusive(),
+                    right.ref_range.display_inclusive(),
+                )));
+            }
+        };
+
+        // Prevent perfectly adjacent exons (there should either be overlap or
+        // non-coding region)
+        if left.ref_range.end == right.ref_range.start {
+            return Err(std::io::Error::other(format!(
+                "Two exons are perfectly adjacent, and should therefore be represented as a single exon. Found {} then {}",
+                left.ref_range.display_inclusive(),
+                right.ref_range.display_inclusive(),
+            )));
+        }
+
+        // Prevent overlapping exons that overlap by more than
+        // MAX_DUPLICATED_OVERLAP_NT
+        //
+        // Exclusive index - inclusive index is valid length
+        let overlap_nt = left.ref_range.end.saturating_sub(right.ref_range.start);
+        if overlap_nt > MAX_DUPLICATED_OVERLAP_NT {
+            return Err(std::io::Error::other(format!(
+                "Exon overlap exceeds {MAX_DUPLICATED_OVERLAP_NT} nt! Found {} then {}",
+                left.ref_range.display_inclusive(),
+                right.ref_range.display_inclusive(),
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// A helper function for [`Exons::new`] that checks the requirements for
+    /// three consecutive exons.
+    ///
+    /// ## Errors
+    ///
+    /// The three exons cannot all share a single region of overlap.
+    fn validate_three_exons(exons: &[ExonCoords; 3]) -> std::io::Result<()> {
+        // Prevent a single region of overlap from involving more than 2
+        // exons
+        let [first, middle, last] = exons;
+
+        let overlap_nt = first.ref_range.end.saturating_sub(last.ref_range.start);
+
+        if overlap_nt > 0 {
+            return Err(std::io::Error::other(format!(
+                "A single region of overlap cannot involve more than 2 exons within a given protein product. Found {}, {}, then {}, which all overlap",
+                first.ref_range.display_inclusive(),
+                middle.ref_range.display_inclusive(),
+                last.ref_range.display_inclusive(),
+            )));
+        }
+
+        Ok(())
+    }
+
     /// The coordinates of the first exon.
     #[inline]
     #[allow(dead_code)]
