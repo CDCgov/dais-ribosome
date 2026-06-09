@@ -48,6 +48,7 @@
 use crate::log;
 use clap::{Arg, ArgAction, ArgMatches, CommandFactory, FromArgMatches, Parser, parser::ValueSource};
 use std::{
+    cell::OnceCell,
     collections::{BTreeMap, btree_map::Entry},
     env::{self, current_exe},
     ffi::{OsStr, OsString},
@@ -105,16 +106,15 @@ pub trait GridCompatibleCli: Parser + Sized {
 ///
 /// The [`GridCompatibleArgs`] must contain all the output paths, and an
 /// iterator over them must be provided under [`outputs`]. When parsing and
-/// collating, task IDs are incorporated into these paths using
-/// [`get_task_output`] and [`get_task_output_temp`], which have defaults
-/// provided.
+/// collating, task IDs are incorporated into these paths using [`add_id`] and
+/// [`add_id_tmp`], which have defaults provided.
 ///
 /// The [`GridCompatibleArgs`] should not contain any writers, since the output
 /// paths may be mutated.
 ///
 /// [`outputs`]: GridCompatibleArgs::outputs
-/// [`get_task_output`]: GridCompatibleArgs::get_task_output
-/// [`get_task_output_temp`]: GridCompatibleArgs::get_task_output_temp
+/// [`add_id`]: GridCompatibleArgs::add_id
+/// [`add_id_tmp`]: GridCompatibleArgs::add_id_tmp
 pub trait GridCompatibleArgs: Sized {
     /// The underlying CLI used to form the parsed arguments.
     type Cli: GridCompatibleCli;
@@ -167,8 +167,8 @@ pub trait GridCompatibleArgs: Sized {
     /// The path for where to write the `stdout` and `stderr` streams of the
     /// job.
     ///
-    /// The task ID will be added to this path using [`get_task_output`] prior
-    /// to submission.
+    /// The task ID will be added to this path using [`add_id`] prior to
+    /// submission.
     ///
     /// ## Errors
     ///
@@ -176,7 +176,7 @@ pub trait GridCompatibleArgs: Sized {
     /// be fallible, this method is fallible to prevent implementors from
     /// needing to panic.
     ///
-    /// [`get_task_output`]: GridCompatibleArgs::get_task_output
+    /// [`add_id`]: GridCompatibleArgs::add_id
     fn log_path(&self) -> std::io::Result<PathBuf>;
 
     /// Adds the specified `id` to the `path` to get the output file for a
@@ -185,7 +185,7 @@ pub trait GridCompatibleArgs: Sized {
     /// By default, this adds the ID before the extension, but this can be
     /// overridden.
     #[must_use]
-    fn get_task_output(path: &Path, id: &str) -> PathBuf {
+    fn add_id(path: &Path, id: &str) -> PathBuf {
         let mut path = path.to_path_buf();
 
         let Some(extension) = path.extension().map(|s| s.to_os_string()) else {
@@ -220,12 +220,12 @@ pub trait GridCompatibleArgs: Sized {
     /// particular task, as well as altering the path to indicate that the file
     /// has not finished being written to.
     ///
-    /// By default, this uses [`get_task_output`] then adds a `.partial` suffix,
+    /// By default, this uses [`add_id`] then adds a `.partial` suffix,
     /// but this can be overridden.
     ///
-    /// [`get_task_output`]: GridCompatibleArgs::get_task_output
-    fn get_task_output_temp(path: &Path, id: &str) -> PathBuf {
-        let mut path = Self::get_task_output(path, id);
+    /// [`add_id`]: GridCompatibleArgs::add_id
+    fn add_id_tmp(path: &Path, id: &str) -> PathBuf {
+        let mut path = Self::add_id(path, id);
         path.add_extension("partial");
         path
     }
@@ -338,8 +338,8 @@ impl GridTaskInfo {
             task_stepsize,
             scheduler: GridScheduler::Sge,
             output_paths: args.outputs().map(|x| (*x).clone()).collect(),
-            get_task_output: T::get_task_output,
-            get_task_output_temp: T::get_task_output_temp,
+            add_id: T::add_id,
+            add_id_tmp: T::add_id_tmp,
         })
     }
 }
@@ -372,20 +372,20 @@ fn command_exists(cmd: &str) -> bool {
 /// to submit the job.
 pub struct GridRequestedInfo {
     /// The command for re-running the binary with the same arguments.
-    command:              Vec<OsString>,
+    command:      Vec<OsString>,
     /// The number of tasks to use when submitting the job.
-    task_count:           usize,
+    task_count:   usize,
     /// The scheduler to use for the grid job.
-    scheduler:            GridScheduler,
+    scheduler:    GridScheduler,
     /// The output paths that will be formed via collation.
-    output_paths:         Vec<PathBuf>,
+    output_paths: Vec<PathBuf>,
     /// The path to use for the scheduler's log file, without the placeholder
     /// for the ID added yet.
-    log_path:             PathBuf,
-    /// A pointer to [`GridCompatibleArgs::get_task_output`].
-    get_task_output:      fn(&Path, &str) -> PathBuf,
-    /// A pointer to [`GridCompatibleArgs::get_task_output_temp`].
-    get_task_output_temp: fn(&Path, &str) -> PathBuf,
+    log_path:     PathBuf,
+    /// A pointer to [`GridCompatibleArgs::add_id`].
+    add_id:       fn(&Path, &str) -> PathBuf,
+    /// A pointer to [`GridCompatibleArgs::add_id_tmp`].
+    add_id_tmp:   fn(&Path, &str) -> PathBuf,
 }
 
 impl GridRequestedInfo {
@@ -415,9 +415,23 @@ impl GridRequestedInfo {
     pub fn submit_job_sync(&self) -> Result<(), SubmitError> {
         log::ts("started, submitting grid job");
 
+        // For unclear reasons, when the output directories do not exist yet,
+        // there is sometimes a race condition causing collation to fail even
+        // though the directory ends up existing by the end of the program. To
+        // be safe, create all directories now.
+        for output in &self.output_paths {
+            if let Some(parent) = output.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_path_context("Failed to create output directory", parent)
+                    .map_err(|e| SubmitErrorRepr::Io(e.into()))?
+            }
+        }
+
+        let add_id = self.add_id;
+
         let output_cmd = match self.scheduler {
             GridScheduler::Sge => {
-                let log_path = (self.get_task_output)(&self.log_path, "$TASK_ID");
+                let log_path = add_id(&self.log_path, "$TASK_ID");
 
                 let mut cmd = Command::new("qsub");
 
@@ -437,7 +451,7 @@ impl GridRequestedInfo {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
 
-                self.print_submission_msg(self.task_count, &self.log_path, self.get_task_output);
+                self.print_submission_msg(self.task_count, &self.log_path, add_id);
 
                 cmd.output()
                     .with_context("An error using qsub occurred")
@@ -457,34 +471,37 @@ impl GridRequestedInfo {
 
         log::ts("collating data");
 
-        let mut task_errors = TaskErrors::default();
+        // Perform collation, accumulating task errors and the first IO error
+        let mut collation_task_errors = TaskErrors::default();
+        let mut collation_io_error = OnceCell::new();
 
         for output in &self.output_paths {
             match self.collate_output(output) {
                 Ok(()) => {}
                 Err(CollationError::Io(e)) => {
-                    return Err(SubmitErrorRepr::Io(
-                        e.with_path_context("Failed to collate outputs for file", output.as_path())
-                            .into(),
-                    )
-                    .into());
+                    collation_io_error.get_or_init(|| {
+                        SubmitErrorRepr::Io(
+                            e.with_path_context("Failed to collate outputs for file", output.as_path())
+                                .into(),
+                        )
+                    });
                 }
                 Err(CollationError::Task(e)) => {
-                    task_errors.merge(e);
+                    collation_task_errors.merge(e);
                 }
             }
         }
 
         // If we have confirmed that there is a specific task that failed, build
         // that error, which may involve slurping a log file.
-        let task_error = task_errors.to_string().map(|task_errors_str| {
+        let task_error = collation_task_errors.to_string().map(|task_errors_str| {
             let command_result = command_result.clone();
 
-            if let Some((first_task_failed, _)) = task_errors
+            if let Some((first_task_failed, _)) = collation_task_errors
                 .by_id
                 .iter()
                 .find(|(_, cause)| matches!(cause, TaskErrorCause::TaskFailed))
-                && let log_path = (self.get_task_output)(&self.log_path, &format!("{first_task_failed}"))
+                && let log_path = add_id(&self.log_path, &format!("{first_task_failed}"))
                 && let Ok(slurped_log) = read_to_string(log_path)
             {
                 let slurped_log = slurped_log.trim();
@@ -533,8 +550,12 @@ impl GridRequestedInfo {
             .into());
         }
 
-        // Propagate log collation error, which is less important than any other
-        // errors
+        // Propoagate collation IO error
+        if let Some(collation_io_error) = collation_io_error.take() {
+            return Err(collation_io_error.into());
+        }
+
+        // Propagate log collation error
         log_result.map_err(|e| SubmitErrorRepr::Io(e.into()))?;
 
         log::ts("finished");
@@ -544,8 +565,8 @@ impl GridRequestedInfo {
 
     /// Prints the confirmation message that a grid job has been submitted,
     /// listing the number of tasks and the log file.
-    fn print_submission_msg(&self, tasks: usize, log_path: &Path, get_task_output: fn(&Path, &str) -> PathBuf) {
-        let log_path = get_task_output(log_path, "<ID>");
+    fn print_submission_msg(&self, tasks: usize, log_path: &Path, add_id: fn(&Path, &str) -> PathBuf) {
+        let log_path = add_id(log_path, "<ID>");
         log::ts(&format!(
             "submitted synchronous job with {tasks} tasks, log files at: '{log_path}'",
             log_path = log_path.display()
@@ -561,29 +582,27 @@ impl GridRequestedInfo {
     /// is not found (or was not renamed by the task to indicate successful
     /// completion), a [`CollationError::Task`] error is returned.
     fn collate_output(&self, output: &Path) -> Result<(), CollationError> {
-        // A copy of the collated output path, which we will mutate to equal
-        // each partition output path
-        let mut partition_path = output.to_path_buf();
-
         let mut writer = BufWriter::new(File::create(output).with_context("Failed to create collated file")?);
 
         let mut task_errors = BTreeMap::new();
 
+        let add_id = self.add_id;
+        let add_id_tmp = self.add_id_tmp;
+
         for id in 1..=self.task_count {
             let id_str = format!("{id}");
 
-            partition_path.set_file_name((self.get_task_output)(output, &id_str));
+            let path = add_id(output, &id_str);
 
-            let file = match File::open(&partition_path) {
+            let file = match File::open(&path) {
                 Ok(file) => file,
                 Err(e) if e.kind() == ErrorKind::NotFound => {
-                    let cause = if partition_path
-                        .with_file_name((self.get_task_output_temp)(output, &id_str))
-                        .exists()
-                    {
+                    let tmp_file = add_id_tmp(output, &id_str);
+
+                    let cause = if tmp_file.exists() {
                         TaskErrorCause::TaskFailed
                     } else {
-                        TaskErrorCause::MissingOutputFile(partition_path.clone())
+                        TaskErrorCause::MissingOutputFile(path.clone())
                     };
 
                     task_errors.insert(id, cause);
@@ -592,16 +611,15 @@ impl GridRequestedInfo {
                 }
                 Err(e) => {
                     return Err(e
-                        .with_path_context(format!("Failed to open file for task {id}"), &partition_path)
+                        .with_path_context(format!("Failed to open file for task {id}"), &path)
                         .into());
                 }
             };
 
             let mut reader = BufReader::new(file);
             std::io::copy(&mut reader, &mut writer)
-                .with_path_context(format!("Failed to copy output from file for task {id}"), &partition_path)?;
-            std::fs::remove_file(&partition_path)
-                .with_path_context(format!("Failed to remove file for task {id}"), &partition_path)?;
+                .with_path_context(format!("Failed to copy output from file for task {id}"), &path)?;
+            std::fs::remove_file(&path).with_path_context(format!("Failed to remove file for task {id}"), &path)?;
         }
 
         if task_errors.is_empty() {
@@ -620,37 +638,32 @@ impl GridRequestedInfo {
     fn collate_log(&self) -> std::io::Result<()> {
         let mut some_printed = false;
 
-        // A copy of the collated output path, which we will mutate to equal
-        // each partition output path
-        let mut partition_path = self.log_path.to_path_buf();
-
         let mut writer = BufWriter::new(File::create(&self.log_path)?);
+
+        let add_id = self.add_id;
 
         // TODO: Different starting index? Step?
         for id in 1..=self.task_count {
-            partition_path.set_file_name((self.get_task_output)(&self.log_path, &format!("{id}")));
+            let path = add_id(&self.log_path, &format!("{id}"));
 
             Self::write_header(&mut writer, id, &mut some_printed)?;
 
-            let log_file = match File::open(&partition_path) {
+            let log_file = match File::open(&path) {
                 Ok(file) => file,
                 Err(e) if e.kind() == ErrorKind::NotFound => {
                     continue;
                 }
                 Err(e) => {
-                    return Err(e
-                        .with_path_context(format!("Failed to open log for task {id}"), partition_path)
-                        .into());
+                    return Err(e.with_path_context(format!("Failed to open log for task {id}"), path).into());
                 }
             };
 
             let mut reader = BufReader::new(log_file);
 
             std::io::copy(&mut reader, &mut writer)
-                .with_path_context(format!("Failed to copy output from log for task {id}"), &partition_path)?;
+                .with_path_context(format!("Failed to copy output from log for task {id}"), &path)?;
 
-            std::fs::remove_file(&partition_path)
-                .with_path_context(format!("Failed to remove log for task {id}"), &partition_path)?;
+            std::fs::remove_file(&path).with_path_context(format!("Failed to remove log for task {id}"), &path)?;
         }
 
         Ok(())
@@ -893,13 +906,16 @@ impl GridTask {
         P: FnOnce(&GridTaskInfo), {
         p(&self.info);
 
+        let add_id = self.info.add_id;
+        let add_id_tmp = self.info.add_id_tmp;
+
         for output_path in self.info.output_paths {
             let id = format!("{}", self.info.task_id);
-            let temp_path = (self.info.get_task_output_temp)(&output_path, &id);
-            let final_path = (self.info.get_task_output)(&output_path, &id);
-            std::fs::rename(&temp_path, &final_path).unwrap_or_die(&format!(
-                "Failed to rename {temp_path} to {final_path}",
-                temp_path = temp_path.display(),
+            let tmp_path = add_id_tmp(&output_path, &id);
+            let final_path = add_id(&output_path, &id);
+            std::fs::rename(&tmp_path, &final_path).unwrap_or_die(&format!(
+                "Failed to rename {tmp_path} to {final_path}",
+                tmp_path = tmp_path.display(),
                 final_path = final_path.display()
             ))
         }
@@ -911,17 +927,17 @@ impl GridTask {
 /// Grid array-task environment information parsed from SGE.
 #[derive(Clone, Debug)]
 pub struct GridTaskInfo {
-    pub task_id:          usize,
-    pub task_first:       usize,
-    pub task_last:        usize,
-    pub task_stepsize:    usize,
-    pub scheduler:        GridScheduler,
+    pub task_id:       usize,
+    pub task_first:    usize,
+    pub task_last:     usize,
+    pub task_stepsize: usize,
+    pub scheduler:     GridScheduler,
     /// The output paths that will be formed via collation.
-    output_paths:         Vec<PathBuf>,
-    /// A pointer to [`GridCompatibleArgs::get_task_output`].
-    get_task_output:      fn(&Path, &str) -> PathBuf,
-    /// A pointer to [`GridCompatibleArgs::get_task_output_temp`].
-    get_task_output_temp: fn(&Path, &str) -> PathBuf,
+    output_paths:      Vec<PathBuf>,
+    /// A pointer to [`GridCompatibleArgs::add_id`].
+    add_id:            fn(&Path, &str) -> PathBuf,
+    /// A pointer to [`GridCompatibleArgs::add_id_tmp`].
+    add_id_tmp:        fn(&Path, &str) -> PathBuf,
 }
 
 impl GridTaskInfo {
@@ -997,12 +1013,12 @@ impl GridInfo {
 
             // Update all the output paths to be temporary outputs for the task
             for path in args.outputs() {
-                *path = T::get_task_output_temp(path, &format!("{}", grid_info.task_id));
+                *path = T::add_id_tmp(path, &format!("{}", grid_info.task_id));
             }
 
             Ok(Some(GridInfo::Task(GridTask { info: grid_info })))
         } else if let Some(task_count) = submit_grid_job {
-            let mut grid_command: Vec<OsString> = vec![
+            let mut grid_command = vec![
                 current_exe()
                     .with_context("Failed to get the path to the current executable")?
                     .into_os_string(),
@@ -1020,7 +1036,9 @@ impl GridInfo {
                 }
 
                 for arg_matches in arg_matches {
-                    if !matches!(arg_matches.value_source(id), Some(ValueSource::CommandLine)) {
+                    if arg_matches.try_contains_id(id).is_err()
+                        || !matches!(arg_matches.value_source(id), Some(ValueSource::CommandLine))
+                    {
                         continue;
                     }
 
@@ -1059,8 +1077,8 @@ impl GridInfo {
                 scheduler,
                 output_paths: args.outputs().map(|x| (*x).clone()).collect(),
                 log_path: args.log_path()?,
-                get_task_output: T::get_task_output,
-                get_task_output_temp: T::get_task_output_temp,
+                add_id: T::add_id,
+                add_id_tmp: T::add_id_tmp,
             })))
         } else {
             Ok(None)

@@ -1,5 +1,5 @@
 use crate::par_utils::grid::{GridCompatibleArgs, GridCompatibleCli};
-use clap::{Arg, Parser};
+use clap::{Arg, Parser, builder::OsStr};
 use std::{num::NonZero, path::PathBuf};
 use zoe::prelude::rand_sequence;
 
@@ -115,7 +115,25 @@ impl GridCompatibleArgs for Args {
             .next();
 
         let output_prefix = match output_prefix_or_dir {
-            Some(output_dir) if output_dir.is_dir() => output_dir.join(temp_name()),
+            Some(output_dir) if output_dir.is_dir() => {
+                let output_dir = output_dir.join(temp_name());
+
+                // Clear previous value of --output-prefix
+                for matches in matches.iter_mut() {
+                    let _ = matches.try_clear_id("output_prefix");
+                }
+
+                // Inject the prefix as --output-prefix into the arg matches for
+                // grid submission
+                let temp_cmd = clap::Command::new("temp").arg(Arg::new("output_prefix").long("output-prefix").num_args(1));
+                matches.push(temp_cmd.get_matches_from([
+                    &OsStr::from("temp"),
+                    &OsStr::from("--output-prefix"),
+                    output_dir.as_os_str(),
+                ]));
+
+                output_dir
+            }
             Some(output_prefix) => output_prefix,
             None => {
                 let prefix = temp_name();
