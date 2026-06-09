@@ -261,7 +261,8 @@ pub fn load_codon_weights(path: &Path) -> std::io::Result<CodonWeightMatrix> {
 /// A parsed data from a single row of the `codon-position-weights.tsv` file for
 /// the module.
 struct TsvRow {
-    /// The 1-based position of the codon.
+    /// The 1-based position of the codon within the coding sequence of the
+    /// product.
     position:  u32,
     /// The uppercase IUPAC codon, with `U` substituted for `T`.
     codon:     [u8; 3],
@@ -283,7 +284,7 @@ impl FromStr for TsvRow {
     ///
     /// If any of the columns are missing or empty, then an error is returned.
     /// The position and count must successfully parse as `u32`, and the codon
-    /// must be three characters.
+    /// must be three characters. The position must also be nonzero.
     fn from_str(line: &str) -> Result<Self, Self::Err> {
         // End the iterator on empty fields, so that missing field errors appear
         let mut parts = line.split_ascii_whitespace().take_while(|s| !s.is_empty());
@@ -302,6 +303,10 @@ impl FromStr for TsvRow {
         let position = position
             .parse::<u32>()
             .with_context("Failed to parse position field (first field)")?;
+
+        if position == 0 {
+            return Err(std::io::Error::other("Found a position of 0, but position is 1-based"));
+        }
 
         let raw_codon: [u8; 3] = codon.as_bytes().try_into().map_err(|_| {
             std::io::Error::other(format!(

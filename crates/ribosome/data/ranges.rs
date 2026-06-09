@@ -943,7 +943,9 @@ fn parse_coordinate_range_from_parts(start: &str, end: &str) -> std::io::Result<
 
     // Convert to 0-based half-open range (inclusive start, exclusive end)
     let Some(start) = start.checked_sub(1) else {
-        return Err(std::io::Error::other("Start coordinate must be at least 1"));
+        return Err(std::io::Error::other(
+            "Start coordinate must be at least 1 (for 1-based inclusive ranges)",
+        ));
     };
 
     Ok(start..end)
