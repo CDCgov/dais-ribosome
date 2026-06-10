@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [assigned, opened, synchronize, reopened]
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_and_test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check changelog/version consistency
+        run: RELEASE_PKG=dais-ribosome-cli perl .github/scripts/check_versions_changelog.pl
+
+      - name: Install nightly
+        run: rustup update nightly && rustup default nightly
+
+      - name: Build workspace
+        run: cargo build --workspace --verbose
+
+      - name: Test workspace
+        run: cargo test --workspace --verbose
+
+      - name: Test Docs
+        run: cargo doc --workspace --no-deps --document-private-items --all-features
