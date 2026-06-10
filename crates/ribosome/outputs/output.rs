@@ -240,6 +240,8 @@ pub struct Product<'a> {
 impl Product<'_> {
     /// Returns the length of the full coding sequence as specified in the
     /// corresponding [`ProductSpec`].
+    ///
+    /// [`ProductSpec`]: crate::config::ProductSpec
     pub(crate) fn full_cds_len(&self) -> usize {
         self.lpad + self.cds_aligned_len + self.rpad
     }

@@ -869,6 +869,8 @@ impl<T: ParseOneBasedInclusive> ParseOneBasedInclusive for Vec<T> {
     /// implementation of [`parse_inclusive`] for `T`.
     ///
     /// [`parse_inclusive`]: ParseOneBasedInclusive::parse_inclusive
+    ///
+    /// [`HADOOP_NULL`]: https://docs.cloudera.com/cdw-runtime/cloud/impala-reference/topics/impala-textfile.html#pnavId2
     fn parse_inclusive(coords: &str) -> std::io::Result<Self> {
         if coords.is_empty() {
             return Ok(Vec::new());
