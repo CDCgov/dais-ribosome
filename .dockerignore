@@ -10,6 +10,7 @@
 **/Dockerfile
 
 out.log
+extras/
 debug/
 target/
 supp_docs/
@@ -21,14 +22,3 @@ test*
 junk*
 .nfs*
 *pem
-
-**/lib/*
-!**/lib/sswsort/
-!**/dais-ribosome/lib/sampling/partitionByField.pl
-!**/dais-ribosome/lib/editMSA/reviseTaxa.pl
-!**/dais-ribosome/lib/editMSA/codonCorrectStats.pl
-!**/dais-ribosome/lib/editMSA/stripSequences.pl
-!**/dais-ribosome/lib/convert/sam2fasta.pl
-!**/dais-ribosome/lib/convert/delim2fasta.pl
-!**/dais-ribosome/lib/convert/fa2delim.pl
-!**/dais-ribosome/lib/convert/nt2aa.pl
