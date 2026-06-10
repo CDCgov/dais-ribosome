@@ -1,6 +1,6 @@
 [[module]]
 name = "flu"
-version = "2.0-alpha"
+version = "2.0-beta"
 alternative_names = ["influenza"]
 references = "flu-references.fasta"
 weights = "flu-codon-position-weights.tsv"
