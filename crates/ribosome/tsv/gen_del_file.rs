@@ -1,10 +1,15 @@
 //! Row structs, parsers, and display implementations for the genome deletion
 //! file.
 
-use crate::data::ranges::DeletionRange;
+use crate::{data::ranges::DeletionRange, tsv::Finish};
 use csv::{Reader, ReaderBuilder};
 use serde::Deserialize;
-use std::{fmt::Display, fs::File, io::Read, path::Path};
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{BufWriter, Read, Write},
+    path::Path,
+};
 use zoe::data::err::ResultWithErrorContext;
 
 /// The data in a single row of the genome deletion file.
@@ -69,6 +74,10 @@ impl<'a> GenDelRowView<'a> {
 }
 
 impl Display for GenDelRow {
+    /// Formats the genome deletion row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`GenDelWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -79,6 +88,10 @@ impl Display for GenDelRow {
 }
 
 impl Display for GenDelRowView<'_> {
+    /// Formats the genome deletion row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`GenDelWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -120,5 +133,22 @@ impl<R: Read> Iterator for GenDelFileParser<R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.reader.deserialize().next()
+    }
+}
+
+/// A trait for specifying how a genome deletion row should be written.
+///
+/// This provides additional flexibility beyond the [`Display`] implementation,
+/// which uses TSV output. By implementing this trait for a different writer,
+/// other formats can be supported.
+pub trait GenDelWriter: Finish {
+    /// Writes the genome deletion row to the writer.
+    fn write_gen_del_row(&mut self, row: &GenDelRowView) -> std::io::Result<()>;
+}
+
+impl<W: Write> GenDelWriter for BufWriter<W> {
+    #[inline]
+    fn write_gen_del_row(&mut self, row: &GenDelRowView) -> std::io::Result<()> {
+        writeln!(self, "{row}")
     }
 }

@@ -4,7 +4,10 @@
 use crate::{
     data::ranges::StateRange,
     outputs::{MaybeComputedProduct, RibosomeOutput},
-    tsv::{DelRowView, GenDelRowView, GenInsRowView, GenSeqRowView, InsRowView, SeqRowView},
+    tsv::{
+        DelRowView, DelWriter, GenDelRowView, GenDelWriter, GenInsRowView, GenInsWriter, GenSeqRowView, GenSeqWriter,
+        InsRowView, InsWriter, SeqRowView, SeqWriter,
+    },
 };
 use std::{
     fs::File,
@@ -13,18 +16,51 @@ use std::{
 };
 use zoe::data::err::ResultWithErrorContext;
 
+// TODO: Can this eventually use IRMA-core's trait? Right now IRMA-core is not a
+// dependency
+/// A trait allowing a writer to be finished, which may include flushing,
+/// writing any footers, etc.
+pub trait Finish {
+    /// Finalizes the writer, performing flushing, writing any footers, etc.
+    fn finish(self) -> std::io::Result<()>;
+}
+
+impl<W: Write> Finish for BufWriter<W> {
+    fn finish(mut self) -> std::io::Result<()> {
+        self.flush()
+    }
+}
+
+impl<S, I, D> Finish for Writers<S, I, D>
+where
+    S: Finish,
+    I: Finish,
+    D: Finish,
+{
+    fn finish(self) -> std::io::Result<()> {
+        self.seq.finish()?;
+        self.ins.finish()?;
+        self.del.finish()
+    }
+}
+
+/// A convenience trait for a writer that is compatible with any of the output
+/// records.
+pub trait AnyWriter: SeqWriter + InsWriter + DelWriter + GenSeqWriter + GenInsWriter + GenDelWriter {}
+impl<T: SeqWriter + InsWriter + DelWriter + GenSeqWriter + GenInsWriter + GenDelWriter> AnyWriter for T {}
+
 /// A set of three writers for sequence data, insertion data, and deletion data.
 ///
 /// This same struct can be used for the product writers as well as the genome
 /// writers.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct Writers<W> {
+pub struct Writers<S, I = S, D = S> {
     /// The writer for the sequence output.
-    pub seq: W,
+    pub seq: S,
     /// The writer for the insertion output.
-    pub ins: W,
+    pub ins: I,
     /// The writer for the deletion output.
-    pub del: W,
+    pub del: D,
 }
 
 impl Writers<BufWriter<File>> {
@@ -53,8 +89,27 @@ impl Writers<BufWriter<File>> {
     }
 }
 
-impl<W: Write> Writers<W> {
-    /// Writes the product outputs for a single query to the appropriate writers.
+impl<W> Writers<W> {
+    /// Transforms all the writers using a closure.
+    pub fn map<U, F>(self, f: F) -> Writers<U>
+    where
+        F: Fn(W) -> U, {
+        Writers {
+            seq: f(self.seq),
+            ins: f(self.ins),
+            del: f(self.del),
+        }
+    }
+}
+
+impl<S, I, D> Writers<S, I, D>
+where
+    S: SeqWriter,
+    I: InsWriter,
+    D: DelWriter,
+{
+    /// Writes the product outputs for a single query to the appropriate
+    /// writers.
     pub fn write_product_output(&mut self, output: &RibosomeOutput<'_>) -> std::io::Result<()> {
         for state in &output.states {
             for product in &state.products {
@@ -69,9 +124,12 @@ impl<W: Write> Writers<W> {
                 );
 
                 match seq_row {
-                    SeqRowView::Data(seq_data) => writeln!(self.seq, "{seq_data}")?,
-                    SeqRowView::Empty(_) => {}
-                    SeqRowView::Deleted(deleted_seq_row) => writeln!(self.seq, "{deleted_seq_row}")?,
+                    SeqRowView::Data(seq_data) => self.seq.write_seq_data(&seq_data)?,
+                    SeqRowView::Empty(_) => {
+                        // TODO: When we add the ability to toggle on null
+                        // records, a method call will be needed here
+                    }
+                    SeqRowView::Deleted(deleted_seq_row) => self.seq.write_deleted_seq_row(&deleted_seq_row)?,
                 }
 
                 let computed_product = match computed_product {
@@ -84,7 +142,8 @@ impl<W: Write> Writers<W> {
                             output.query.ctype(),
                             state.reference_id,
                         );
-                        writeln!(self.del, "{del_row}")?;
+
+                        self.del.write_del_row(&del_row)?;
                         continue;
                     }
                 };
@@ -98,7 +157,7 @@ impl<W: Write> Writers<W> {
                         state.reference_id,
                     );
 
-                    writeln!(self.ins, "{ins_row}")?;
+                    self.ins.write_ins_row(&ins_row)?;
                 }
 
                 for deletion in &computed_product.deletions {
@@ -110,14 +169,21 @@ impl<W: Write> Writers<W> {
                         state.reference_id,
                     );
 
-                    writeln!(self.del, "{del_row}")?;
+                    self.del.write_del_row(&del_row)?;
                 }
             }
         }
 
         Ok(())
     }
+}
 
+impl<S, I, D> Writers<S, I, D>
+where
+    S: GenSeqWriter,
+    I: GenInsWriter,
+    D: GenDelWriter,
+{
     /// Writes the genome outputs for a single query to the appropriate writers.
     pub fn write_genome_output(&mut self, output: &RibosomeOutput<'_>) -> std::io::Result<()> {
         for state in &output.states {
@@ -131,47 +197,23 @@ impl<W: Write> Writers<W> {
                 output.formatting,
             );
 
-            writeln!(self.seq, "{seq_row}")?;
+            self.seq.write_gen_seq_row(&seq_row)?;
 
             for insertion in &genome.insertions {
                 let ins_row = GenInsRowView::new(insertion, output.query.id(), output.query.ctype(), state.reference_id);
 
-                writeln!(self.ins, "{ins_row}")?;
+                self.ins.write_gen_ins_row(&ins_row)?;
             }
 
             for del_range in &state.genome_aln_states {
                 if let StateRange::D(del) = del_range {
                     let del_row = GenDelRowView::new(del, output.query.id(), output.query.ctype(), state.reference_id);
 
-                    writeln!(self.del, "{del_row}")?;
+                    self.del.write_gen_del_row(&del_row)?;
                 }
             }
         }
 
         Ok(())
-    }
-
-    /// Transforms all the writers using a closure.
-    pub fn map<U, F>(self, f: F) -> Writers<U>
-    where
-        F: Fn(W) -> U, {
-        Writers {
-            seq: f(self.seq),
-            ins: f(self.ins),
-            del: f(self.del),
-        }
-    }
-
-    /// Flushes all the writers.
-    ///
-    /// This is also automatically called by [`write_product_output`] and
-    /// [`write_genome_output`].
-    ///
-    /// [`write_product_output`]: Writers::write_product_output
-    /// [`write_genome_output`]: Writers::write_genome_output
-    pub fn flush(&mut self) -> std::io::Result<()> {
-        self.seq.flush()?;
-        self.ins.flush()?;
-        self.del.flush()
     }
 }

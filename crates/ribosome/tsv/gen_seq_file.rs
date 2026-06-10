@@ -1,10 +1,15 @@
 //! Row structs, parsers, and display implementations for the genome sequence
 //! file.
 
-use crate::{outputs::ComputedGenome, toml::Formatting};
+use crate::{outputs::ComputedGenome, toml::Formatting, tsv::Finish};
 use csv::{Reader, ReaderBuilder};
 use serde::Deserialize;
-use std::{fmt::Display, fs::File, io::Read, path::Path};
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{BufWriter, Read, Write},
+    path::Path,
+};
 use zoe::{
     data::{err::ResultWithErrorContext, views::AsView},
     prelude::{Nucleotides, NucleotidesView},
@@ -158,6 +163,10 @@ impl<'a> GenSeqRowView<'a> {
 }
 
 impl Display for GenSeqRow {
+    /// Formats the genome sequence row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`GenSeqWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let GenSeqRow {
             query_id,
@@ -187,6 +196,10 @@ impl Display for GenSeqRow {
 }
 
 impl Display for GenSeqRowView<'_> {
+    /// Formats the genome sequence row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`GenSeqWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let GenSeqRowView {
             query_id,
@@ -287,5 +300,22 @@ impl Display for GenSeqRowDisplay<'_> {
             genome_aln_rpad = self.genome_aln_rpad,
             empty = "",
         )
+    }
+}
+
+/// A trait for specifying how a genome sequence row should be written.
+///
+/// This provides additional flexibility beyond the [`Display`] implementation,
+/// which uses TSV output. By implementing this trait for a different writer,
+/// other formats can be supported.
+pub trait GenSeqWriter: Finish {
+    /// Writes the genome sequence row to the writer.
+    fn write_gen_seq_row(&mut self, row: &GenSeqRowView) -> std::io::Result<()>;
+}
+
+impl<W: Write> GenSeqWriter for BufWriter<W> {
+    #[inline]
+    fn write_gen_seq_row(&mut self, row: &GenSeqRowView) -> std::io::Result<()> {
+        writeln!(self, "{row}")
     }
 }

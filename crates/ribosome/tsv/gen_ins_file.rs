@@ -1,10 +1,15 @@
 //! Row structs, parsers, and display implementations for the genome insertion
 //! file.
 
-use crate::outputs::ComputedGenomeInsertion;
+use crate::{outputs::ComputedGenomeInsertion, tsv::Finish};
 use csv::{Reader, ReaderBuilder};
 use serde::Deserialize;
-use std::{fmt::Display, fs::File, io::Read, path::Path};
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{BufWriter, Read, Write},
+    path::Path,
+};
 use zoe::{
     data::{err::ResultWithErrorContext, views::AsView},
     prelude::{Nucleotides, NucleotidesView},
@@ -107,6 +112,10 @@ impl<'a> GenInsRowView<'a> {
 }
 
 impl Display for GenInsRow {
+    /// Formats the genome insertion row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`GenInsWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -117,6 +126,10 @@ impl Display for GenInsRow {
 }
 
 impl Display for GenInsRowView<'_> {
+    /// Formats the genome insertion row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`GenInsWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -158,5 +171,21 @@ impl<R: Read> Iterator for GenInsFileParser<R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.reader.deserialize().next()
+    }
+}
+
+/// A trait for specifying how a genome insertion row should be written.
+///
+/// This provides additional flexibility beyond the [`Display`] implementation,
+/// which uses TSV output. By implementing this trait for a different writer,
+/// other formats can be supported.
+pub trait GenInsWriter: Finish {
+    /// Writes the genome insertion row to the writer.
+    fn write_gen_ins_row(&mut self, row: &GenInsRowView) -> std::io::Result<()>;
+}
+
+impl<W: Write> GenInsWriter for BufWriter<W> {
+    fn write_gen_ins_row(&mut self, row: &GenInsRowView) -> std::io::Result<()> {
+        writeln!(self, "{row}")
     }
 }

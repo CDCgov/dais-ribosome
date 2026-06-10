@@ -3,11 +3,16 @@
 
 use crate::{
     outputs::{ComputedDeletion, ComputedProduct, DeletedProduct},
-    tsv::{HADOOP_NULL, Nullable},
+    tsv::{Finish, HADOOP_NULL, Nullable},
 };
 use csv::{Reader, ReaderBuilder};
 use serde::Deserialize;
-use std::{fmt::Display, fs::File, io::Read, path::Path};
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{BufWriter, Read, Write},
+    path::Path,
+};
 use zoe::data::err::ResultWithErrorContext;
 
 /// The data in a single row of the product deletion file.
@@ -240,6 +245,10 @@ impl<'a> DelRowView<'a> {
 }
 
 impl Display for DelRow {
+    /// Formats the deletion row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`DelWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -262,6 +271,10 @@ impl Display for DelRow {
 }
 
 impl Display for DelRowView<'_> {
+    /// Formats the deletion row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`DelWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -315,5 +328,22 @@ impl<R: Read> Iterator for DelFileParser<R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.reader.deserialize().next()
+    }
+}
+
+/// A trait for specifying how a deletion row should be written.
+///
+/// This provides additional flexibility beyond the [`Display`] implementation,
+/// which uses TSV output. By implementing this trait for a different writer,
+/// other formats can be supported.
+pub trait DelWriter: Finish {
+    /// Writes the deletion row to the writer.
+    fn write_del_row(&mut self, row: &DelRowView) -> std::io::Result<()>;
+}
+
+impl<W: Write> DelWriter for BufWriter<W> {
+    #[inline]
+    fn write_del_row(&mut self, row: &DelRowView) -> std::io::Result<()> {
+        writeln!(self, "{row}")
     }
 }

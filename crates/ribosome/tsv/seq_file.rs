@@ -5,11 +5,17 @@ use crate::{
     outputs::{ComputedProduct, MaybeComputedProduct},
     ranges::{CdsCoord, InclusiveDisplay, parse_coords_inclusive},
     toml::Formatting,
-    tsv::Nullable,
+    tsv::{Finish, Nullable},
 };
 use csv::{Reader, ReaderBuilder};
 use serde::{Deserialize, de::Error};
-use std::{fmt::Display, fs::File, io::Read, ops::Range, path::Path};
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{BufWriter, Read, Write},
+    ops::Range,
+    path::Path,
+};
 use zoe::{
     data::{
         err::{ResultWithErrorContext, WithErrorContext},
@@ -18,6 +24,10 @@ use zoe::{
     prelude::{AminoAcids, AminoAcidsView, Len, Nucleotides, NucleotidesView},
 };
 
+/// The data in a single row of the product sequence file.
+///
+/// This may be either a complete record, or a partial record caused by an empty
+/// product ([`EmptySeqRow`]) or a fully-deleted product ([`DeletedSeqRow`]).
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum SeqRow {
     Data(SeqData),
@@ -25,7 +35,9 @@ pub enum SeqRow {
     Deleted(DeletedSeqRow),
 }
 
-/// The data in a single row of the product sequence file.
+/// The partially-null record for a product sequence file caused by the product
+/// being empty (the genome alignment did not include any portion of the
+/// product).
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct EmptySeqRow {
     /// The ID of the query.
@@ -38,7 +50,8 @@ pub struct EmptySeqRow {
     pub product_name: String,
 }
 
-/// The data in a single row of the product sequence file.
+/// The partially-null record for a product sequence file caused by the product
+/// being deleted (the alignment consisted solely of a deletion).
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct DeletedSeqRow {
     /// The ID of the query.
@@ -61,7 +74,8 @@ pub struct DeletedSeqRow {
     pub cds_aln:      Nucleotides,
 }
 
-/// The data in a single row of the product sequence file.
+/// The data in a single row of the product sequence file, without any null
+/// fields.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct SeqData {
     /// The ID of the query.
@@ -299,6 +313,11 @@ struct SeqRowRaw {
     cds_coordinates:   Nullable<String>,
 }
 
+/// The data in a single row of the product sequence file, with all variants
+/// containing borrowed values.
+///
+/// This is useful for writing a [`SeqRow`] record without needing to
+/// clone/allocate it.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum SeqRowView<'a> {
     Data(SeqDataView<'a>),
@@ -354,7 +373,8 @@ impl<'a> SeqRowView<'a> {
     }
 }
 
-/// The data in a single row of the product sequence file.
+/// The partially-null record for a product sequence file caused by the product
+/// being empty, with all fields borrowed.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct EmptySeqRowView<'a> {
     /// The ID of the query.
@@ -367,7 +387,8 @@ pub struct EmptySeqRowView<'a> {
     pub product_name: &'a str,
 }
 
-/// The data in a single row of the product sequence file.
+/// The partially-null record for a product sequence file caused by the product
+/// being deleted, with all fields borrowed.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct DeletedSeqRowView<'a> {
     /// The ID of the query.
@@ -394,11 +415,8 @@ pub struct DeletedSeqRowView<'a> {
     pub cds_aln_rpad: usize,
 }
 
-/// The data in a single row of the product sequence file, with all fields
-/// borrowed.
-///
-/// This is useful for writing a [`SeqRow`] record without needing to
-/// clone/allocate each part.
+/// The data in a single row of the product sequence file, without any null
+/// fields, and with all fields borrowed.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct SeqDataView<'a> {
     /// The ID of the query.
@@ -505,6 +523,10 @@ impl<'a> SeqDataView<'a> {
 }
 
 impl Display for SeqRow {
+    /// Formats the sequence row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`SeqWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SeqRow::Data(row) => row.fmt(f),
@@ -515,6 +537,10 @@ impl Display for SeqRow {
 }
 
 impl Display for SeqData {
+    /// Formats the sequence row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`SeqWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let SeqData {
             query_id,
@@ -557,6 +583,10 @@ impl Display for SeqData {
 }
 
 impl Display for EmptySeqRow {
+    /// Formats the sequence row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`SeqWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let EmptySeqRow {
             query_id,
@@ -578,6 +608,10 @@ impl Display for EmptySeqRow {
 }
 
 impl Display for DeletedSeqRow {
+    /// Formats the sequence row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`SeqWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let DeletedSeqRow {
             query_id,
@@ -603,6 +637,10 @@ impl Display for DeletedSeqRow {
 }
 
 impl Display for SeqRowView<'_> {
+    /// Formats the sequence row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`SeqWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SeqRowView::Data(row) => row.fmt(f),
@@ -613,6 +651,10 @@ impl Display for SeqRowView<'_> {
 }
 
 impl Display for SeqDataView<'_> {
+    /// Formats the sequence row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`SeqWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let SeqDataView {
             query_id,
@@ -657,6 +699,10 @@ impl Display for SeqDataView<'_> {
 }
 
 impl Display for EmptySeqRowView<'_> {
+    /// Formats the sequence row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`SeqWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let EmptySeqRowView {
             query_id,
@@ -678,6 +724,10 @@ impl Display for EmptySeqRowView<'_> {
 }
 
 impl Display for DeletedSeqRowView<'_> {
+    /// Formats the sequence row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`SeqWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let DeletedSeqRowView {
             query_id,
@@ -796,5 +846,44 @@ impl Display for SeqRowDisplay<'_> {
             cds_coordinates = self.cds_coordinates.display_null_or_else(|coords| coords.display_inclusive()),
             empty = ""
         )
+    }
+}
+
+/// A trait for specifying how a sequence row should be written.
+///
+/// This provides additional flexibility beyond the [`Display`] implementation,
+/// which uses TSV output. By implementing this trait for a different writer,
+/// other formats can be supported.
+pub trait SeqWriter: Finish {
+    /// Writes a sequence row containing no null fields to the writer.
+    fn write_seq_data(&mut self, data: &SeqDataView) -> std::io::Result<()>;
+
+    /// Writes a sequence row corresponding to an empty product to the writer.
+    fn write_empty_seq_row(&mut self, row: &EmptySeqRowView<'_>) -> std::io::Result<()>;
+
+    /// Writes a sequence row corresponding to a deleted product to the writer.
+    fn write_deleted_seq_row(&mut self, row: &DeletedSeqRowView<'_>) -> std::io::Result<()>;
+
+    /// Writes a sequence row to the writer.
+    fn write_seq_row(&mut self, row: &SeqRowView<'_>) -> std::io::Result<()> {
+        match row {
+            SeqRowView::Data(data) => self.write_seq_data(data),
+            SeqRowView::Empty(row) => self.write_empty_seq_row(row),
+            SeqRowView::Deleted(row) => self.write_deleted_seq_row(row),
+        }
+    }
+}
+
+impl<W: Write> SeqWriter for BufWriter<W> {
+    fn write_seq_data(&mut self, data: &SeqDataView) -> std::io::Result<()> {
+        writeln!(self, "{data}")
+    }
+
+    fn write_empty_seq_row(&mut self, row: &EmptySeqRowView<'_>) -> std::io::Result<()> {
+        writeln!(self, "{row}")
+    }
+
+    fn write_deleted_seq_row(&mut self, row: &DeletedSeqRowView<'_>) -> std::io::Result<()> {
+        writeln!(self, "{row}")
     }
 }

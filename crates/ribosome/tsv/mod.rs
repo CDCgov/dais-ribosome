@@ -1,5 +1,8 @@
-//! Structs for formatting and parsing DAIS-ribosome output in TSV format, as
-//! well as functions to write the entire TSV files from ribosome [`outputs`].
+// TODO: Rename module not to be tsv-specific, since there are now more general
+// traits
+
+//! Structs for formatting, parsing, and writing DAIS-ribosome output in TSV
+//! format.
 //!
 //! For writing TSV output, the [`Writers`] type is provided which can be used
 //! with [`write_product_output`] and [`write_genome_output`]. These functions

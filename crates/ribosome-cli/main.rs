@@ -3,7 +3,13 @@
 
 use crate::validate_paths::ValidatePaths;
 use args::Args;
-use dais_ribosome::{AnnotationModule, errors::RibosomeError, outputs::RibosomeOutput, toml::TomlConfig, tsv::Writers};
+use dais_ribosome::{
+    AnnotationModule,
+    errors::RibosomeError,
+    outputs::RibosomeOutput,
+    toml::TomlConfig,
+    tsv::{AnyWriter, Finish, Writers},
+};
 use input::{NoCtype, QueryInfo, QueryReader};
 use log::time_stamp;
 use num_cpus::init_thread_pool;
@@ -25,6 +31,7 @@ mod args;
 mod input;
 mod log;
 mod num_cpus;
+mod output;
 mod par_utils;
 mod paths;
 mod validate_paths;
@@ -284,7 +291,7 @@ fn process_queries<Q, W>(
 ) -> Result<(), ProcessingError>
 where
     Q: Iterator<Item = QueryInfo>,
-    W: Write, {
+    W: AnyWriter, {
     let mut unimplemented_ctypes = HashSet::new();
 
     for info in queries {
@@ -313,9 +320,9 @@ where
         }
     }
 
-    writers.flush()?;
-    if let Some(mut gen_writers) = gen_writers {
-        gen_writers.flush()?;
+    writers.finish()?;
+    if let Some(gen_writers) = gen_writers {
+        gen_writers.finish()?;
     }
 
     if config.list_unimplemented_ctypes {
@@ -331,13 +338,13 @@ fn process_queries_parallel<Q, W>(
 ) -> Result<(), ProcessingError>
 where
     Q: Iterator<Item = QueryInfo> + ParallelBridge + Send,
-    W: Write + Send + 'static, {
+    W: Write + AnyWriter + Send + 'static, {
     // Use process_results to properly propagate catch errors that occur in the
     // input iterator. Collect into a result that propagates all errors instead
     // of UnimplementedCtype, so that rayon can end threads early when an error
     // occurs.
 
-    let mut writers = writers.map(WriterThreaded::new);
+    let writers = writers.map(WriterThreaded::new);
     let gen_writers = gen_writers.map(|gen_writers| gen_writers.map(WriterThreaded::new));
 
     let unimplemented_ctypes = queries
@@ -365,9 +372,9 @@ where
         .flatten()
         .collect::<Result<HashSet<_>, _>>()?;
 
-    writers.flush()?;
-    if let Some(mut gen_writers) = gen_writers {
-        gen_writers.flush()?;
+    writers.finish()?;
+    if let Some(gen_writers) = gen_writers {
+        gen_writers.finish()?;
     }
 
     if config.list_unimplemented_ctypes {

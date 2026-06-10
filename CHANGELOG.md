@@ -15,6 +15,9 @@ is roughly based on [Keep a Changelog], and this project adheres to
 
 - The rewrite genome deletions rules are now applied in left to right order in
   terms of the `from` ranges, rather than the order specified in the file
+- Rather than relying on the `Write` trait, more flexible traits for writing
+  output records have been introduced and used in `write_genome_output` and
+  `write_product_output`
 
 ## [2.1.0] - 2026-08-04
 

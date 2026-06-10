@@ -1,10 +1,18 @@
 //! Row structs, parsers, and display implementations for the product insertion
 //! file.
 
-use crate::outputs::{ComputedInsertion, ComputedProduct};
+use crate::{
+    outputs::{ComputedInsertion, ComputedProduct},
+    tsv::Finish,
+};
 use csv::{Reader, ReaderBuilder};
 use serde::Deserialize;
-use std::{fmt::Display, fs::File, io::Read, path::Path};
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{BufWriter, Read, Write},
+    path::Path,
+};
 use zoe::{
     data::{err::ResultWithErrorContext, views::AsView},
     prelude::{AminoAcids, AminoAcidsView, Nucleotides, NucleotidesView},
@@ -157,6 +165,10 @@ impl<'a> InsRowView<'a> {
 }
 
 impl Display for InsRowView<'_> {
+    /// Formats the insertion row using the given formatter.
+    ///
+    /// The [`Display`] impl on this struct uses TSV format by default. However,
+    /// other formats can be supported using the [`InsWriter`] trait instead.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -206,5 +218,22 @@ impl<R: Read> Iterator for InsFileParser<R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.reader.deserialize().next()
+    }
+}
+
+/// A trait for specifying how an insertion row should be written.
+///
+/// This provides additional flexibility beyond the [`Display`] implementation,
+/// which uses TSV output. By implementing this trait for a different writer,
+/// other formats can be supported.
+pub trait InsWriter: Finish {
+    /// Writes the insertion row to the writer.
+    fn write_ins_row(&mut self, row: &InsRowView) -> std::io::Result<()>;
+}
+
+impl<W: Write> InsWriter for BufWriter<W> {
+    #[inline]
+    fn write_ins_row(&mut self, row: &InsRowView) -> std::io::Result<()> {
+        writeln!(self, "{row}")
     }
 }
