@@ -1,3 +1,5 @@
+***As a first step, this document is under governance review. When the review completes as appropriate per local and agency processes, the project team will be allowed to remove this notice. This material is draft.***
+
 # DAIS-ribosome - annotation and coordinate mapping of CDS and protein sequences for virus genomes
 
 The DAIS **ribosome** compartmentalizes the original translation engine developed for our protein analytics database. The tool was designed for use with INFLUENZA, but has been extended for use with BETACORONAVIRUS and RSV.
