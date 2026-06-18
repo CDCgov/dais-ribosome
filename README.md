@@ -1,9 +1,9 @@
 ***As a first step, this document is under governance review. When the review completes as appropriate per local and agency processes, the project team will be allowed to remove this notice. This material is draft.***
 
 <!-- omit from toc -->
-# DAIS-ribosome - annotation and coordinate mapping of CDS and protein sequences for virus genomes
+# DAIS-ribosome
 
-The DAIS **ribosome** compartmentalizes the original translation engine developed for our protein analytics database. The tool was designed for use with influenza, but has been extended for use with betacoronavirus and RSV.
+DAIS-ribosome or **ribosome** annotates CDS and protein products for supported virus genomes into database-oriented output.
 
 **Table of contents:**
 
@@ -108,27 +108,27 @@ Genome deletion output file example:
 
 ## Field descriptions
 
-| field                                    | description                                                                                                                                                                                        |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| query_id                                 | Any unique identifier for the input sequences, but likely the `flu_sequence_id`, `epi_segment_id`, raw `nt_id`, or NCBI accession.                                                                 |
-| ctype                                    | The compound type, which represents the classification level used by the module. This is the type/segment/subtype for `flu` and the taxon for `cov`.                                               |
-| reference_id                             | The ID for the coordinate reference group which was aligned against.                                                                                                                                                                                      |
-| protein                                  | The protein product or peptide derived from the gene segment.                                                                                                                                      |
-| variant_hash (aa_id)                     | The amino acid sequence ID using the MD5 hash of `aa_seq`.                                                                                                                                         |
-| has_insertion                            | Boolean indicating whether there is an insertion relative to reference in the original CDS.                                                                                                        |
-| has_shift_indel                          | Boolean indicating whether an insertion or deletion in the CDS is a non-triplet and could have induced a frameshift.                                                                               |
-| upstream_aa_pos / upstream_nt_pos        | The upstream amino acid / nucleotide position for the insertion relative to the reference coordinates.                                                                                             |
-| inserted_aa / inserted_nt                | The amino acids / nucleotides inserted.                                                                                                                                                            |
-| cds_id / genome_id                       | The nucleotide sequence ID using the sha1 hex of `cds_seq` and `genome_seq`.                                                                                                                       |
-| aa_seq / aa_aln                          | The amino acid sequence (less deletions + insertions) and the amino acid alignment (residues relative to reference only).                                                                          |
-| cds_seq / cds_aln                        | The nucleotide CDS sequence (less deletions + insertions) and the CDS alignment (bases relative to reference only).                                                                                |
-| genome_seq / genome_aln                  | The nucleotide genome sequence (less deletions + insertions) and the genome alignment (bases relative to reference only).                                                                          |
-| query_coordinates                        | Set of position ranges in the original submitted query sequence used to form `cds_seq`, including inserted query segments.                                                                         |
-| cds_coordinates                          | Set of position ranges relative to the spliced CDS. Insertions appear as singleton insertion positions.                                                                                            |
-| genome_length                            | Length of the ungapped genome sequence (including insertions) aligned via relaxed Smith-Waterman to reference. May be smaller than the original sequence file if divergent ends were hard-clipped. |
-| del_<aa/cds/nt>_<start/end/len>          | The start, end positions for amino acid, CDS, or genomic nucleotide deletions. Len is for total length.                                                                                            |
-| codon_shift                              | The number of extra nucleotides between the complete upstream codon and the insertion (0, 1, or 2).                                                                                                |
-| in_frame                                 | Specifies that the deletion contains no codon with partial deletions relative to `reference_id`.                                                                                                   |
+| field                             | description                                                                                                                                                                                        |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| query_id                          | Any unique identifier for the input sequences, but likely the `flu_sequence_id`, `epi_segment_id`, raw `nt_id`, or NCBI accession.                                                                 |
+| ctype                             | The compound type, which represents the classification level used by the module. This is the type/segment/subtype for `flu` and the taxon for `cov`.                                               |
+| reference_id                      | The ID for the coordinate reference group which was aligned against.                                                                                                                               |
+| protein                           | The protein product or peptide derived from the gene segment.                                                                                                                                      |
+| variant_hash (aa_id)              | The amino acid sequence ID using the MD5 hash of `aa_seq`.                                                                                                                                         |
+| has_insertion                     | Boolean indicating whether there is an insertion relative to reference in the original CDS.                                                                                                        |
+| has_shift_indel                   | Boolean indicating whether an insertion or deletion in the CDS is a non-triplet and could have induced a frameshift.                                                                               |
+| upstream_aa_pos / upstream_nt_pos | The upstream amino acid / nucleotide position for the insertion relative to the reference coordinates.                                                                                             |
+| inserted_aa / inserted_nt         | The amino acids / nucleotides inserted.                                                                                                                                                            |
+| cds_id / genome_id                | The nucleotide sequence ID using the sha1 hex of `cds_seq` and `genome_seq`.                                                                                                                       |
+| aa_seq / aa_aln                   | The amino acid sequence (less deletions + insertions) and the amino acid alignment (residues relative to reference only).                                                                          |
+| cds_seq / cds_aln                 | The nucleotide CDS sequence (less deletions + insertions) and the CDS alignment (bases relative to reference only).                                                                                |
+| genome_seq / genome_aln           | The nucleotide genome sequence (less deletions + insertions) and the genome alignment (bases relative to reference only).                                                                          |
+| query_coordinates                 | Set of position ranges in the original submitted query sequence used to form `cds_seq`, including inserted query segments.                                                                         |
+| cds_coordinates                   | Set of position ranges relative to the spliced CDS. Insertions appear as singleton insertion positions.                                                                                            |
+| genome_length                     | Length of the ungapped genome sequence (including insertions) aligned via relaxed Smith-Waterman to reference. May be smaller than the original sequence file if divergent ends were hard-clipped. |
+| del_<aa/cds/nt>_<start/end/len>   | The start, end positions for amino acid, CDS, or genomic nucleotide deletions. Len is for total length.                                                                                            |
+| codon_shift                       | The number of extra nucleotides between the complete upstream codon and the insertion (0, 1, or 2).                                                                                                |
+| in_frame                          | Specifies that the deletion contains no codon with partial deletions relative to `reference_id`.                                                                                                   |
 
 ## Special use of translated characters
 
@@ -266,7 +266,7 @@ I provide a brief outline of the algorithm:
 
 ### Contact Info
 
-For direct correspondence on the project, feel free to contact: [Samuel S. Shepard](mailto:sshepard@cdc.gov), Centers for Disease Control and Prevention or reach out to other [contributors](CONTRIBUTORS.md).
+For direct correspondence on the project, feel free to contact: [Samuel S. Shepard](mailto:sshepard@cdc.gov), Influenza Division, National Center for Immunization and Respiratory Diseases, Centers for Disease Control and Prevention or reach out to other [contributors](CONTRIBUTORS.md).
 
 ### Public Domain Standard Notice
 
