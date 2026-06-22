@@ -3,7 +3,7 @@ members = ["crates/ribosome", "crates/ribosome-cli"]
 resolver = "2"
 
 [workspace.package]
-version = "2.0.0-rc1"
+version = "2.0.0-rc2"
 edition = "2024"
 authors = ["Samuel S. Shepard", "William Chettleburgh"]
 rust-version = "1.96"

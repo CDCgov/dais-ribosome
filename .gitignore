@@ -1,28 +1,36 @@
-lib/
+# Legacy, dev and packaged folders
+/debug
+/lib
+/workdir
+/supp_docs
+/extras
+/sswsort_res
+/ribosome
+/target
+
+# Logs, input and output
+log*.txt
 out.log
-debug/
-lib
-workdir/
-supp_docs/
-extras/
 *.fa
 *.fasta
 *.seq
 *.ins
 *.gen
 *.del
-.DS*
-/*test*
-!/tests/
-log*.txt
 junk*
-.nfs*
 i
 d
 s
 g.*
+*.sql
+
+# Docs
 *bak
-/target
-*.pptx
-/extras
-sswsort_res/
+
+# System files
+.DS*
+.nfs*
+
+# Tests folder but not test files
+/*test*
+!/tests/

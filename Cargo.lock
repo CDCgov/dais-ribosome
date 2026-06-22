@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "dais-ribosome"
-version = "2.0.0-rc1"
+version = "2.0.0-rc2"
 dependencies = [
  "csv",
  "md5",
@@ -176,7 +176,7 @@ dependencies = [
 
 [[package]]
 name = "dais-ribosome-cli"
-version = "2.0.0-rc1"
+version = "2.0.0-rc2"
 dependencies = [
  "clap",
  "dais-ribosome",

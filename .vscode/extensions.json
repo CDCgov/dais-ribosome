@@ -2,7 +2,7 @@
     "recommendations": [
         "d9705996.perl-toolbox",
         "timonwong.shellcheck",
-        "foxundermoon.shell-format",
-        "Kaktus.perltidy-more"
+        "Kaktus.perltidy-more",
+        "lumirelle.shell-format-rev"
     ]
 }
