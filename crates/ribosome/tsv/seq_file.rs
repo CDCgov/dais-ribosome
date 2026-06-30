@@ -11,8 +11,11 @@ use csv::{Reader, ReaderBuilder};
 use serde::{Deserialize, de::Error};
 use std::{fmt::Display, fs::File, io::Read, ops::Range, path::Path};
 use zoe::{
-    data::err::{ResultWithErrorContext, WithErrorContext},
-    prelude::{AminoAcids, AminoAcidsView, DataOwned, Len, Nucleotides, NucleotidesView},
+    data::{
+        err::{ResultWithErrorContext, WithErrorContext},
+        views::AsView,
+    },
+    prelude::{AminoAcids, AminoAcidsView, Len, Nucleotides, NucleotidesView},
 };
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]

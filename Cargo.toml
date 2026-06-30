@@ -9,7 +9,7 @@ authors = ["Samuel S. Shepard", "William Chettleburgh"]
 rust-version = "1.96"
 
 [workspace.dependencies]
-zoe = { git = "https://github.com/CDCgov/zoe.git", default-features = false, features = [
+zoe = { version = "0.0.30", default-features = false, features = [
     "multiversion",
     "rand",
 ] }

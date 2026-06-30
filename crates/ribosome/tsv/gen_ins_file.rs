@@ -6,8 +6,8 @@ use csv::{Reader, ReaderBuilder};
 use serde::Deserialize;
 use std::{fmt::Display, fs::File, io::Read, path::Path};
 use zoe::{
-    data::err::ResultWithErrorContext,
-    prelude::{DataOwned, Nucleotides, NucleotidesView},
+    data::{err::ResultWithErrorContext, views::AsView},
+    prelude::{Nucleotides, NucleotidesView},
 };
 
 /// The data in a single row of the genome insertion file.

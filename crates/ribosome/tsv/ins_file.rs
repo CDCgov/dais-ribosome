@@ -6,8 +6,8 @@ use csv::{Reader, ReaderBuilder};
 use serde::Deserialize;
 use std::{fmt::Display, fs::File, io::Read, path::Path};
 use zoe::{
-    data::err::ResultWithErrorContext,
-    prelude::{AminoAcids, AminoAcidsView, DataOwned, Nucleotides, NucleotidesView},
+    data::{err::ResultWithErrorContext, views::AsView},
+    prelude::{AminoAcids, AminoAcidsView, Nucleotides, NucleotidesView},
 };
 
 /// The data in a single row of the product insertion file.

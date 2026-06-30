@@ -171,7 +171,7 @@ dependencies = [
  "serde",
  "sha1_smol",
  "toml",
- "zoe 0.0.30-dev",
+ "zoe",
 ]
 
 [[package]]
@@ -185,7 +185,7 @@ dependencies = [
  "num_cpus",
  "rayon",
  "sswsort",
- "zoe 0.0.30-dev",
+ "zoe",
 ]
 
 [[package]]
@@ -556,13 +556,13 @@ checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
 
 [[package]]
 name = "sswsort"
-version = "2.2.2"
-source = "git+https://github.com/CDCgov/sswsort.git?rev=7ea87a9efd0da7c9407eb54217a92c861eb97220#7ea87a9efd0da7c9407eb54217a92c861eb97220"
+version = "2.2.4"
+source = "git+https://github.com/CDCgov/sswsort.git?tag=v2.3.4#d4dfe8dca5221b16494b0c9f10eac5bd49eb906f"
 dependencies = [
  "foldhash 0.2.0",
  "serde",
  "toml",
- "zoe 0.0.28",
+ "zoe",
 ]
 
 [[package]]
@@ -820,17 +820,9 @@ checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zoe"
-version = "0.0.28"
+version = "0.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57c3958067310aa2f7157213a86bb32cfb83a440112b20912a0d418b33915465"
-dependencies = [
- "multiversion",
-]
-
-[[package]]
-name = "zoe"
-version = "0.0.30-dev"
-source = "git+https://github.com/CDCgov/zoe.git#3a0dd53e5e8f747919680cea851ec6ccea3c8b4f"
+checksum = "09bd1a6c01decd9eec39ee2db32c0eb327efbdcdc7fb49dea1d066aa8651b29a"
 dependencies = [
  "multiversion",
  "rand",
