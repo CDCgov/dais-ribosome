@@ -10,10 +10,13 @@
 **/Dockerfile
 
 out.log
-extras/
-debug/
-target/
-supp_docs/
+
+/extras
+/debug
+/target
+/supp_docs
+/sswsort_res
+
 *.fa
 *.fasta
 *.seq
