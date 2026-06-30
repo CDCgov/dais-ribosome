@@ -4,7 +4,7 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH
 
-RUN yum update -y && yum install -y zip git which gcc wget && yum clean all
+RUN yum update -y && yum install -y zip git which gcc && yum clean all
 
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "aarch64" ]; then  RUSTUP_SHA256="9732d6c5e2a098d3521fca8145d826ae0aaa067ef2385ead08e6feac88fa5792"; \
@@ -29,6 +29,15 @@ RUN ./.package-sswsort.sh
 RUN if [ -n "$ribosome_branch" ]; then git checkout "$ribosome_branch"; fi \
     && cargo build --workspace --profile prod \
     && cargo test --workspace
+
+FROM scratch AS artifact-export
+COPY --from=builder \
+    /build/target/prod/ribosome \
+    /build/LICENSE \
+    /build/README.md \
+    /
+COPY --from=builder /build/ribosome_res /ribosome_res
+COPY --from=builder /build/sswsort_res /sswsort_res
 
 
 # Deployment

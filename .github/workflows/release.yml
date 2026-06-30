@@ -60,6 +60,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
       - name: Log in to the Container registry
         uses: docker/login-action@v4
         with:
@@ -95,19 +98,19 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
 
-      - name: Prepare Linux Binary
+      - name: Extract Linux Artifacts
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          target: artifact-export
+          outputs: type=local,dest=./extracted
+
+      - name: Bundle Linux Artifact
         shell: bash
         run: |
-          IMAGE_TAG=$(echo "${{ env.REGISTRY }}/${{ github.repository }}:${{ github.ref_name }}-${{ matrix.arch }}" | tr '[:upper:]' '[:lower:]')
-          docker create --name temp-container "$IMAGE_TAG" \
-          && docker cp temp-container:/app/${{ env.RELEASE_BIN }} ./${{ env.RELEASE_BIN }} \
-          && docker cp temp-container:/app/ribosome_res ./ribosome_res \
-          && docker cp temp-container:/app/sswsort_res ./sswsort_res \
-          && docker rm temp-container
-
           BUNDLE_DIR="${{ env.RELEASE_CRATE }}-${{ github.ref_name }}"
-          mkdir -p "$BUNDLE_DIR"
-          mv ${{ env.RELEASE_BIN }} LICENSE README.md ribosome_res sswsort_res "$BUNDLE_DIR/"
+          mv extracted "$BUNDLE_DIR"
           tar -czf ${{ env.RELEASE_CRATE }}-linux-${{ matrix.arch }}-${{ github.ref_name }}.tar.gz "$BUNDLE_DIR"
 
       - name: Upload Linux Release Asset
@@ -124,7 +127,12 @@ jobs:
     permissions:
       packages: write
       contents: read
+      id-token: write
+      attestations: write
     steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
       - name: Log in to the Container registry
         uses: docker/login-action@v4
         with:
@@ -143,6 +151,7 @@ jobs:
             type=raw,value=${{ github.ref_name }}
 
       - name: Create and push manifests
+        id: manifest
         shell: bash
         env:
           DOCKER_METADATA_OUTPUT_ANNOTATIONS: ${{ steps.meta.outputs.annotations }}
@@ -160,9 +169,32 @@ jobs:
 
           docker buildx imagetools create "${annotations[@]}" --tag "$VERSION" "$VERSION_X86" "$VERSION_ARM"
 
+          # Tags latest / version share the same digest
+          DIGEST="$(docker buildx imagetools inspect "$VERSION" --format '{{.Manifest.Digest}}')"
+          {
+            echo "signed_manifest=${REPO}@${DIGEST}"
+            echo "repo=${REPO}"
+            echo "digest=${DIGEST}"
+          } >> "$GITHUB_OUTPUT"
+
           if [[ "${{ github.ref_name }}" != "test" ]]; then
             docker buildx imagetools create --tag "$LATEST" "$VERSION"
           fi
+
+      - name: Sign image manifest
+        shell: bash
+        env:
+          SIGNED_MANIFEST: ${{ steps.manifest.outputs.signed_manifest }}
+        run: |
+          cosign sign --yes "$SIGNED_MANIFEST"
+
+      - name: Attest image provenance
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.manifest.outputs.repo }}
+          subject-digest: ${{ steps.manifest.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
 
       - name: Login to DockerHub
         uses: docker/login-action@v4
@@ -203,6 +235,10 @@ jobs:
           rustup default nightly
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
+      - name: Download sswsort_res
+        shell: bash
+        run: ./.package-sswsort.sh
+
       - name: Build
         shell: bash
         run: |
@@ -211,10 +247,13 @@ jobs:
       - name: Package Binary
         shell: bash
         run: |
-          lipo -create -output ${{ env.RELEASE_BIN }} \
+          BUNDLE_DIR="${{ env.RELEASE_CRATE }}-${{ github.ref_name }}"
+          mkdir -p "$BUNDLE_DIR"
+          lipo -create -output "$BUNDLE_DIR/${{ env.RELEASE_BIN }}" \
             target/aarch64-apple-darwin/prod/${{ env.RELEASE_BIN }} \
             target/x86_64-apple-darwin/prod/${{ env.RELEASE_BIN }}
-          tar -czf ${{ env.RELEASE_CRATE }}-apple-universal-${{ github.ref_name }}.tar.gz ${{ env.RELEASE_BIN }}
+          mv LICENSE README.md ribosome_res sswsort_res "$BUNDLE_DIR/"
+          tar -czf ${{ env.RELEASE_CRATE }}-apple-universal-${{ github.ref_name }}.tar.gz "$BUNDLE_DIR"
 
       - name: Upload Release Asset
         shell: bash

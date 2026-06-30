@@ -12,6 +12,7 @@ DAIS-ribosome or **ribosome** annotates CDS and protein products for supported v
 - [CLI Usage](#cli-usage)
   - [Bare Metal](#bare-metal)
   - [Container](#container)
+    - [Verifying images on `ghcr.io`](#verifying-images-on-ghcrio)
   - [Grid](#grid)
 - [Installation](#installation)
 - [Methodology](#methodology)
@@ -207,6 +208,26 @@ docker run --rm -v $(pwd):/data -t cdcgov/dais-ribosome:latest ribosome flu.fast
 
 # Alter the scratch directory to use our mount
 docker run --rm -v $(pwd):/data -e IFX_WORK_DIR=/data -t cdcgov/dais-ribosome:latest ribosome flu.fasta
+```
+
+#### Verifying images on `ghcr.io`
+
+While we publish to both `ghcr.io` and Docker Hub, please use the former for
+cryptographic verification of the image signature and SLSA build provenance
+attestation. Verification with Sigstore [cosign](https://github.com/sigstore/cosign):
+
+```bash
+# Replace with the version of interest
+TAG=test
+
+cosign verify --new-bundle-format ghcr.io/cdcgov/dais-ribosome:$TAG \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github[.]com/CDCgov/dais-ribosome/[.]github/workflows/release[.]yml@refs/tags/.+$'
+
+cosign verify-attestation --new-bundle-format --type slsaprovenance1 \
+  ghcr.io/cdcgov/dais-ribosome:$TAG \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github[.]com/CDCgov/dais-ribosome/[.]github/workflows/release[.]yml@refs/tags/.+$'
 ```
 
 ### Grid
