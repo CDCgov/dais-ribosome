@@ -32,9 +32,7 @@ RUN if [ -n "$ribosome_branch" ]; then git checkout "$ribosome_branch"; fi \
 
 
 # Deployment
-FROM dhi.io/debian-base:bookworm AS base
-
-USER 0
+FROM dhi.io/debian-base:trixie-dev AS base
 
 ARG APT_MIRROR_NAME=
 RUN if [ -n "$APT_MIRROR_NAME" ]; then sed -i.bak -E '/security/! s^https?://.+?/(debian|ubuntu)^http://'"$APT_MIRROR_NAME"'/\1^' /etc/apt/sources.list && grep '^deb' /etc/apt/sources.list; fi
@@ -42,7 +40,7 @@ RUN apt-get update --allow-releaseinfo-change --fix-missing \
     && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y procps \
     && apt clean autoclean \
     && apt autoremove --yes \
-    && rm -rf /var/lib/{apt,dpkg,cache,log}/
+    && rm -rf /var/lib/apt/lists/* /var/cache/* /var/log/* /tmp/* /var/tmp/*
 
 WORKDIR /app
 COPY --from=builder \
@@ -55,6 +53,7 @@ COPY --from=builder \
     /build/CONTRIBUTORS.md \
     /build/README.md \
     /app/
+
 COPY --from=builder /build/sswsort_res /app/sswsort_res
 COPY --from=builder /build/ribosome_res /app/ribosome_res
 
