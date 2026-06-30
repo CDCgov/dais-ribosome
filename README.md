@@ -134,13 +134,15 @@ Translation produces [standard amino acid codes] with the two non-standard
 exceptions listed below.  The translation engine also stops when it encounters a
 stop codon.
 
-| Character | Interpretation                         |
-| --------- | -------------------------------------- |
-| **.**     | Missing alignment data (non-standard)  |
-| **-**     | Gap in alignment (standard)            |
-| **~**     | Partial codon (non-standard)           |
-| **X**     | Ambiguous codon translation (standard) |
-| **\***    | Stop codon (standard)                  |
+| Character | Interpretation                                                                                                                                                                  |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **.**     | On left: padding to ensure aligned sequence outputs are in the proper coordinates. On right (optional): padding to ensure the output spans the full reference coordinate space. |
+| **-**     | Gap in alignment                                                                                                                                                                |
+| **~**     | Partial codon                                                                                                                                                                   |
+| **X**     | Ambiguous codon translation                                                                                                                                                     |
+| **\***    | Stop codon                                                                                                                                                                      |
+
+_Note:_ `.` conveys custom semantics; `~` is non-IUPAC.
 
 ## CLI Usage
 
