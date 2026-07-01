@@ -11,7 +11,7 @@ path = "main.rs"
 doc = false
 
 [dependencies]
-sswsort = { git = "https://github.com/CDCgov/sswsort.git", tag = "v2.3.4" }
+sswsort = { git = "https://github.com/CDCgov/sswsort.git", tag = "v2.2.4" }
 zoe = { workspace = true }
 dais-ribosome = { path = "../ribosome" }
 clap = { version = "4", features = ["derive"] }

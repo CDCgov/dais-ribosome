@@ -36,7 +36,7 @@ bases without gaps.
 Below is an example. For a full example, see the [flu
 module](ribosome_res/flu/flu-references.fasta).
 
-```
+```fasta
 >CALI07|A_HA_H1|FJ981613
 ATGAAGGCAATACTAGTAGTTCTGCTATATACATTTGCAACCGCAAA...
 >CALI07|A_HA_H1|FJ981613
@@ -79,7 +79,7 @@ Below is an example of the TSV contents. For a full example, see the [flu
 module](ribosome_res/flu/flu-cds-spec.tsv).
 
 | reference_id | ctype   | product_name | coords          | required_beginning |
-|--------------|---------|--------------|-----------------|--------------------|
+| ------------ | ------- | ------------ | --------------- | ------------------ |
 | CALI07       | A_HA_H1 | HA-signal    | 1..51           |                    |
 | CALI07       | A_HA_H1 | HA           | 52..1701        |                    |
 | CALI07       | A_HA_H1 | HA1          | 52..1032        |                    |
@@ -121,7 +121,7 @@ TSV:
 
 1. The codon number (or amino acid position) represented as a 1-based integer.
    Positions are with respect to the coordinate space for the reference and
-   product listed in the section header. 
+   product listed in the section header.
 2. The complete codon, containing solely IUPAC characters (and no gaps).
 3. The observation count (or relative weight) of the codon, with higher values
    indicating a greater preference for that site.
@@ -135,7 +135,7 @@ To save space, consider filtering codons with minimal observations or weights
 Below is an example. For a full example, see the [flu
 module](ribosome_res/flu/flu-codon-position-weights.tsv).
 
-```
+```tsv
 #CALI07|HA
 1	GAC	19768
 1	GAT	9

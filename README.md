@@ -295,5 +295,4 @@ This repository is not a source of government records, but is a copy to increase
 Please refer to [CDC's Template Repository](https://github.com/CDCgov/template) for more information about [contributing to this repository](https://github.com/CDCgov/template/blob/main/CONTRIBUTING.md), [public domain notices and disclaimers](https://github.com/CDCgov/template/blob/main/DISCLAIMER.md), and [code of conduct](https://github.com/CDCgov/template/blob/main/code-of-conduct.md).
 
 [standard amino acid codes]: https://www.bioinformatics.org/sms/iupac.html
-[IRMA]: https://github.com/CDCgov/irma
 [Zoe]: https://github.com/CDCgov/zoe

@@ -1,4 +1,4 @@
-## Changes to Module Configuration/Specification Formats
+# Changes to Module Configuration/Specification Formats
 
 In `v1`, the specifications for a module were represented by 4 files in `spec`:
 
@@ -11,7 +11,7 @@ In `v2`, the references, specifications, and codon/position weights are stored
 in files under `ribosome_res/<MODULE>/`. The module is then defined in
 `modules.toml`, where paths to the previous files and the sequence alignment
 weights are specified. The TOML file also allows for customization of the rules
-and formatting used by the module. 
+and formatting used by the module.
 
 Notably, the reference sequences no longer need to be reorganized into a `refs`
 directory structure. This removes the need for the `rebuild` and makes editing
@@ -19,14 +19,14 @@ the reference sequences more direct.
 
 In `v1`, the product specifications TSV file had rows of the form:
 
-```
+```tsv
 <Compound Type> \t <Protein> \t <Reference ID>|<Protein> \t <Coords> \t <Required Beginning>
 ```
 
 Here, `|` represents a literal character and `<Required Beginning>` is optional.
 `v2` changes this format to:
 
-```
+```tsv
 <Reference ID> \t <Compound Type> \t <Protein> \t <Coords> \t <Required Beginning>
 ```
 
@@ -53,7 +53,7 @@ When an alignment does not fully span all the exons of a product, padding (`.`)
 is added to the start and/or end of the aligned sequence outputs. In the extreme
 case where there is no intersection between the exons and the alignment, an
 "empty product" is produced. Ribosome v2 has more consistent behavior for both
-these cases:  
+these cases:
 
 - In the case of an empty product, the previous version output `cds_aln` and
   `aa_aln` consisting of all `.`. The new version filters this output.
