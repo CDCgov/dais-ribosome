@@ -110,7 +110,7 @@ jobs:
         shell: bash
         run: |
           BUNDLE_DIR="${{ env.RELEASE_CRATE }}-${{ github.ref_name }}"
-          mv extracted "$BUNDLE_DIR"
+          mv extracted/export "$BUNDLE_DIR"
           tar -czf ${{ env.RELEASE_CRATE }}-linux-${{ matrix.arch }}-${{ github.ref_name }}.tar.gz "$BUNDLE_DIR"
 
       - name: Upload Linux Release Asset

@@ -31,13 +31,15 @@ RUN if [ -n "$ribosome_branch" ]; then git checkout "$ribosome_branch"; fi \
     && cargo test --workspace
 
 FROM scratch AS artifact-export
+
 COPY --from=builder \
     /build/target/prod/ribosome \
     /build/LICENSE \
     /build/README.md \
-    /
-COPY --from=builder /build/ribosome_res /ribosome_res
-COPY --from=builder /build/sswsort_res /sswsort_res
+    /export/
+
+COPY --from=builder /build/ribosome_res /export/ribosome_res
+COPY --from=builder /build/sswsort_res /export/sswsort_res
 
 
 # Deployment
