@@ -124,7 +124,7 @@ impl<'a> AnnotationModule<'a> {
         let query_seq = query.nucleotides();
 
         if self.rules.try_stop_extension
-            && genome_aln.uanligned_ref_tail() == 0
+            && genome_aln.unaligned_ref_tail() == 0
             && genome_aln.unaligned_query_tail() >= 3
             && let Some(last_aligned_codon) = query_seq.slice(genome_aln.aln_query_range()).get_tail_codon()
             // Do not extend past known stop codon
@@ -194,7 +194,7 @@ impl<'a> AnnotationModule<'a> {
                 genome_aln.extend_left(unaligned_pre);
             }
 
-            let unaligned_ref_post = genome_aln.uanligned_ref_tail();
+            let unaligned_ref_post = genome_aln.unaligned_ref_tail();
             let unaligned_post = genome_aln.unaligned_query_tail().min(unaligned_ref_post);
             if unaligned_ref_post <= limit {
                 genome_aln.extend_right(unaligned_post);
@@ -226,7 +226,7 @@ trait AlignmentExt {
     fn unaligned_query_tail(&self) -> usize;
 
     /// Returns the number of unaligned bases at the end of the reference.
-    fn uanligned_ref_tail(&self) -> usize;
+    fn unaligned_ref_tail(&self) -> usize;
 
     /// Returns an owned copy of the aligned query range.
     fn aln_query_range(&self) -> Range<usize>;
@@ -241,7 +241,7 @@ impl<T> AlignmentExt for Alignment<T> {
         self.query_len - self.query_range.end
     }
 
-    fn uanligned_ref_tail(&self) -> usize {
+    fn unaligned_ref_tail(&self) -> usize {
         self.ref_len - self.ref_range.end
     }
 

@@ -1,6 +1,6 @@
 [[module]]
 name = "flu"
-version = "2.0-beta"
+version = "2.0"
 alternative_names = ["influenza"]
 references = "flu-references.fasta"
 weights = "flu-codon-position-weights.tsv"
@@ -18,6 +18,7 @@ B_HA = { match = 10, mismatch = 1, gap_open = 50, gap_extend = 1 }
 
 [[module]]
 name = "cov"
+version = "1.0"
 alternative_names = ["cov-beta", "covid", "sc2", "betacoronavirus"]
 references = "cov-references.fasta"
 weights = "cov-codon-position-weights.tsv"
@@ -33,6 +34,7 @@ default = { match = 1, mismatch = 1, gap_open = 8, gap_extend = 1 }
 
 [[module]]
 name = "rsv"
+version = "1.0"
 references = "rsv-references.fasta"
 weights = "rsv-codon-position-weights.tsv"
 cds_spec = "rsv-cds-spec.tsv"
