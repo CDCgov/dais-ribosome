@@ -45,12 +45,11 @@ impl<'a> Product<'a> {
             [CdsStateRange::D(del)] => {
                 let del_len = del.len();
 
-                let cds_aln = std::iter::repeat_n(b'-', del_len).collect();
+                let cds_aln: Nucleotides = std::iter::repeat_n(b'.', self.lpad)
+                    .chain(std::iter::repeat_n(b'-', del_len))
+                    .collect();
 
-                let mut aa_aln: AminoAcids = std::iter::repeat_n(b'-', del_len / 3).collect();
-                if !del_len.is_multiple_of(3) {
-                    aa_aln.push(b'~');
-                }
+                let aa_aln = cds_aln.to_aa_iter().collect();
 
                 let deletion = ComputedDeletion::new(del);
 
