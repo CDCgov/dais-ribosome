@@ -65,6 +65,27 @@ these cases:
 If a query sequence fails to align at all to a reference sequence (e.g., the
 query is all `N`), then this output is filtered.
 
+## Output Files
+
+Ribosome v2 generates six output files: three product-level and three
+genome-level. The defaults (0 argument) file extensions for v2 have changed to:
+
+| Level   | Sequence               | Insertion              | Deletion               |
+| ------- | ---------------------- | ---------------------- | ---------------------- |
+| Product | `<PREFIX>.seq.txt`     | `<PREFIX>.ins.txt`     | `<PREFIX>.del.txt`     |
+| Genome  | `<PREFIX>.gen_seq.txt` | `<PREFIX>.gen_ins.txt` | `<PREFIX>.gen_del.txt` |
+
+The `<PREFIX>` can be specified with `--output-prefix` or otherwise be randomly
+chosen. The choice of 0, 1, 4 or 6 arguments determines how data are written and
+is summarized here:
+
+| Arguments provided                         | Product outputs   | Genome outputs                                        |
+| ------------------------------------------ | ----------------- | ----------------------------------------------------- |
+| 0                                          | Defaults as above | Defaults as above                                     |
+| 3 (product paths)                          | As given          | None                                                  |
+| 4 (3 product paths + 1 genome path prefix) | As given          | *Legacy* format: `<PATH>`, `<PATH>.ins`, `<PATH>.del` |
+| 6 (3 product + 3 genome paths)             | As given          | As given *(new in v2)*                                |
+
 ## Improvements to Frame Fixing (or Indel Shifting) Code
 
 The frame fixing code is responsible for shifting out-of-frame indels to improve

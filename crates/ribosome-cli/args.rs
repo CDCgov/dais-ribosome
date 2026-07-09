@@ -1,3 +1,4 @@
+use crate::log::time_stamp;
 use crate::par_utils::grid::{GridCompatibleArgs, GridCompatibleCli};
 use clap::{Arg, Parser, builder::OsStr};
 use std::{num::NonZero, path::PathBuf};
@@ -25,17 +26,15 @@ pub struct Cli {
     #[arg(requires_all = ["sequence_output", "insertion_output"])]
     pub deletion_output: Option<PathBuf>,
 
-    /// Genomic file output prefix for sequences, insertion, and deletion.
-    pub genomic_output_prefix: Option<PathBuf>,
+    /// Genome sequence, insertion, and deletion output paths.
+    /// Passing a single genome output prefix still works but is deprecated.
+    #[arg(num_args = 0..=3, action = clap::ArgAction::Set, value_names = ["GENOME_SEQ", "GENOME_INS", "GENOME_DEL"])]
+    pub genome_outputs: Vec<PathBuf>,
 
     /// The prefix to use for naming the output files (or an existing folder in
     /// which to place them).
     #[arg(long, conflicts_with = "sequence_output")]
     pub output_prefix: Option<PathBuf>,
-
-    /// Skips generated genome output when `--output-prefix` is specified.
-    #[arg(long, conflicts_with = "genomic_output_prefix")]
-    pub skip_genome: bool,
 
     /// Name of the alignment module
     #[arg(short, long, default_value = "flu")]
@@ -103,10 +102,15 @@ impl GridCompatibleArgs for Args {
     }
 
     fn from_cli_with_matches(cli: Cli, matches: &mut Vec<clap::ArgMatches>) -> std::io::Result<Self> {
+        let genome_output_prefix = match cli.genome_outputs.as_slice() {
+            [prefix] => Some(prefix.clone()),
+            _ => None,
+        };
+
         let output_prefix_or_dir = cli
             .output_prefix
             .into_iter()
-            .chain(cli.genomic_output_prefix.clone())
+            .chain(genome_output_prefix.clone())
             .chain(cli.sequence_output.as_ref().map(|p| p.with_extension("")))
             .chain(cli.insertion_output.as_ref().map(|p| p.with_extension("")))
             .chain(cli.deletion_output.as_ref().map(|p| p.with_extension("")))
@@ -145,32 +149,42 @@ impl GridCompatibleArgs for Args {
             }
         };
 
+        let genome_output = match cli.genome_outputs.as_slice() {
+            [] if let Some(_) = cli.sequence_output => None,
+            [] => Some((
+                output_prefix.with_added_extension("gen_seq.txt"),
+                output_prefix.with_added_extension("gen_ins.txt"),
+                output_prefix.with_added_extension("gen_del.txt"),
+            )),
+            [genome_prefix] => {
+                time_stamp(
+                    "Warning: using the genome output prefix is deprecated, provide explicit genome output paths instead.",
+                    true,
+                );
+                Some((
+                    genome_prefix.to_owned(),
+                    genome_prefix.with_added_extension("ins"),
+                    genome_prefix.with_added_extension("del"),
+                ))
+            }
+            [seq, ins, del] => Some((seq.clone(), ins.clone(), del.clone())),
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "Expected either no genome output arguments, one genomic output prefix, or three genome output files.",
+                ));
+            }
+        };
+
         let sequence_output = cli
             .sequence_output
-            .unwrap_or_else(|| output_prefix.with_added_extension("seq"));
+            .unwrap_or_else(|| output_prefix.with_added_extension("seq.txt"));
         let insertion_output = cli
             .insertion_output
-            .unwrap_or_else(|| output_prefix.with_added_extension("ins"));
+            .unwrap_or_else(|| output_prefix.with_added_extension("ins.txt"));
         let deletion_output = cli
             .deletion_output
-            .unwrap_or_else(|| output_prefix.with_added_extension("del"));
-
-        let product_output = (sequence_output, insertion_output, deletion_output);
-
-        let genome_prefix = cli
-            .genomic_output_prefix
-            .as_ref()
-            .or((!cli.skip_genome).then_some(&output_prefix));
-
-        let genome_output = if let Some(genome_prefix) = genome_prefix {
-            let seq = genome_prefix.with_added_extension("gen_seq.txt");
-            let ins = genome_prefix.with_added_extension("gen_ins.txt");
-            let del = genome_prefix.with_added_extension("gen_del.txt");
-
-            Some((seq, ins, del))
-        } else {
-            None
-        };
+            .unwrap_or_else(|| output_prefix.with_added_extension("del.txt"));
 
         Ok(Self {
             data_file: cli.data_file,
@@ -180,7 +194,7 @@ impl GridCompatibleArgs for Args {
             submit_grid_job: cli.submit_grid_job,
             verbose: cli.verbose,
             assume_default_ctype: cli.assume_default_ctype,
-            product_output,
+            product_output: (sequence_output, insertion_output, deletion_output),
             genome_output,
         })
     }

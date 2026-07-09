@@ -59,7 +59,7 @@ DAIS-ribosome or **ribosome** annotates CDS and protein products for supported v
 
 ## Output data
 
-**Output** for `dais-ribosome` consists of three product tab-delimited files: `.seq` for sequence-related data, `.ins` for insertions, and `.del` for deletions. Genome `.gen_seq.txt`, `.gen_ins.txt`, and `.gen_del.txt` files are also written unless skipped. An insertion file output example:
+**Output** for `dais-ribosome` consists of three product tab-delimited files: `.seq.txt` for sequence-related data, `.ins.txt` for insertions, and `.del.txt` for deletions. Genome `.gen_seq.txt`, `.gen_ins.txt`, and `.gen_del.txt` files are also written unless skipped. An insertion file output example:
 
 | query_id | ctype | reference_id | product_name | upstream_aa_pos | inserted_nt | inserted_aa | upstream_nt_pos | codon_shift |
 | -------- | ----- | ------------ | ------------ | --------------- | ----------- | ----------- | --------------- | ----------- |
@@ -152,50 +152,49 @@ _Note:_ `.` conveys custom semantics; `~` is non-IUPAC.
 Execute `./ribosome --help` for the latest options. For example:
 
 ```bash
-Usage: ribosome [OPTIONS] <DATA_FILE> [SEQUENCE_OUTPUT] [INSERTION_OUTPUT] [DELETION_OUTPUT] [GENOMIC_OUTPUT_PREFIX]
+Usage: ribosome [OPTIONS] <DATA_FILE> [SEQUENCE_OUTPUT] [INSERTION_OUTPUT] [DELETION_OUTPUT] [GENOME_SEQ] [GENOME_INS] [GENOME_DEL]
 
 Arguments:
-  <DATA_FILE>              Data file to annotate in TSV or FASTA format.†
-  [SEQUENCE_OUTPUT]        CDS and AA output, including coordinate mapping information, as a filename or path
-  [INSERTION_OUTPUT]       Insertion output filename or path
-  [DELETION_OUTPUT]        Deletion output filename or path
-  [GENOMIC_OUTPUT_PREFIX]  Genomic file output prefix for sequences, insertion, and deletion
+  <DATA_FILE>
+          Data file to annotate in TSV or FASTA format.†
+
+  [SEQUENCE_OUTPUT]
+          CDS and AA output, including coordinate mapping information, as a filename or path
+
+  [INSERTION_OUTPUT]
+          Insertion output filename or path
+
+  [DELETION_OUTPUT]
+          Deletion output filename or path
+
+  [GENOME_SEQ] [GENOME_INS] [GENOME_DEL]
+          Genome sequence, insertion, and deletion output paths. Passing a single genome output prefix still works but is deprecated
 
 Options:
       --output-prefix <OUTPUT_PREFIX>
           The prefix to use for naming the output files (or an existing folder in which to place them)
-      --skip-genome
-          Skips generated genome output when `--output-prefix` is specified
+
   -m, --module <MODULE>
-          Name of the alignment module [default: flu]
+          Name of the alignment module
+
+          [default: flu]
+
   -T, --threads <THREADS>
           Run in simultaneous multi-threaded mode
+
   -G, --is-grid-task
-          Automatically detect the array task id from SGE or Slurm environment variables and write partition files for downstream collation
+          Automatically detect the array task id from SGE or Slurm environment variables and write partition files for downstream collation.
+
+          Output files are required and will be suffixed with a partition id.
+
   -S, --submit-grid-job <SUBMIT_GRID_JOB>
           Submit and block on a grid engine (SGE or Slurm) array job of the specified size
+
       --verbose
           Prints warning messages to stderr
+
       --assume-default-ctype <ASSUME_DEFAULT_CTYPE>
           A default ctype to use if any input records are not annotated. If not specified, an SSWSort module will be used to classify the query if a module exists, otherwise an error is produced
-  -h, --help
-          Print help (see more with '--help')
-  -V, --version
-          Print version
-
-† For classified FASTA:  >ID|ctype
-  and classified TSV:    ID<TAB>ctype<TAB>sequence
-```
-
-Examples:
-
-```bash
-# defaults to flu and random output file prefix
-./ribosome simple.fasta
-# specify output files
-./ribosome flu.fasta out.seq out.ins out.del
-# change the module to cov and get genome alignments
-./ribosome --module cov cov.txt out.seq out.ins out.del out.genome
 ```
 
 ### Container
@@ -204,7 +203,7 @@ Images are available both on ghcr.io and Docker hub.
 
 ```bash
 # Use /tmp in the container
-docker run --rm -v $(pwd):/data -t cdcgov/dais-ribosome:latest ribosome flu.fasta t1.seq t1.ins t1.del t1.gen
+docker run --rm -v $(pwd):/data -t cdcgov/dais-ribosome:latest ribosome flu.fasta t1.seq.txt t1.ins.txt t1.del.txt t1.gen
 
 # Alter the scratch directory to use our mount
 docker run --rm -v $(pwd):/data -e IFX_WORK_DIR=/data -t cdcgov/dais-ribosome:latest ribosome flu.fasta
@@ -240,7 +239,7 @@ sophisticated wrapper using `--is-grid-task` for the executors.
 ```bash
 # 100 tasks or partitions are created for the job array but results will be
 # concatenated and removed at the end.
-./ribosome flu.fasta out.seq out.ins out.del --submit-grid-job 100
+./ribosome flu.fasta out.seq.txt out.ins.txt out.del.txt --submit-grid-job 100
 ```
 
 ## Installation

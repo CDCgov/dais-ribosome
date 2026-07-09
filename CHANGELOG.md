@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file. The format
 is roughly based on [Keep a Changelog], and this project adheres to
 [Semantic Versioning].
 
+## [2.0.1] - 2026-07-10
+
+### Added
+
+- Adds 6 argument invocation for genome-level output files
+
+### Changed
+
+- Reverts 4 argument handling to v1 style
+- We removed `--skip-genome` and revert to the v1 style by omitting genome args
+
+### Fixes
+
 ## [2.0.0] - 2026-07-08
 
 ### Changed
@@ -182,6 +195,7 @@ is roughly based on [Keep a Changelog], and this project adheres to
 
 <!-- Versions -->
 
+[2.0.1]: https://github.com/CDCgov/dais-ribosome/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/CDCgov/dais-ribosome/compare/v1.7.1...v2.0.0
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
