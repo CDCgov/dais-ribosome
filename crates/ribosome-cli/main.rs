@@ -14,7 +14,7 @@ use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use sswsort::SSWSortModule;
 use std::{collections::HashSet, error::Error, fmt::Display, io::Write, path::PathBuf};
 use zoe::{
-    data::err::{Fail, GetCode, OrFail, ResultWithErrorContext, WithErrorContext},
+    data::err::{Fail, GetCode, OrFail, ResultWithErrorContext},
     iter_utils::ProcessResultsExt,
     unwrap_or_return_some_err,
 };
@@ -95,14 +95,6 @@ fn main() {
             // Handle any errors in the query iterator or the processing
             match result {
                 Ok(Ok(())) => {}
-                Ok(Err(ProcessingError::NoCtype(err))) => {
-                    log::ts("annotation failed");
-                    let err = std::io::Error::from(err.with_context(format!(
-                        "All ctypes must be specified since SSWSort does not have a module for: {module}",
-                        module = args.module
-                    )));
-                    err.fail()
-                }
                 Ok(Err(err)) => {
                     log::ts("annotation failed");
                     err.fail()
@@ -132,14 +124,6 @@ fn main() {
     // Handle any errors in the query iterator or the processing
     match result {
         Ok(Ok(())) => {}
-        Ok(Err(ProcessingError::NoCtype(err))) => {
-            log::ts("annotation failed");
-            let err = std::io::Error::from(err.with_context(format!(
-                "All ctypes must be specified since SSWSort does not have a module for: {module}",
-                module = args.module
-            )));
-            err.fail()
-        }
         Ok(Err(err)) => {
             log::ts("annotation failed");
             err.fail()
@@ -159,7 +143,7 @@ fn main() {
 /// other configuration.
 pub struct BinaryConfig<'a> {
     /// The strategy to use for assigning a `ctype` to unannotated inputs.
-    classification:            Option<ClassificationStrategy>,
+    classification:            ClassificationStrategy,
     /// The module to use for performing annotation and translation.
     annotation:                AnnotationModule<'a>,
     /// Whether to display warnings.
@@ -172,9 +156,17 @@ pub struct BinaryConfig<'a> {
 /// The possible ways of handling a missing ctype in an incoming record.
 pub enum ClassificationStrategy {
     /// Attempt to classify the ctype using the given SSWSort module.
-    SswSort(SSWSortModule),
+    Sswsort(SSWSortModule),
     /// Use a default ctype.
     Default(String),
+    /// No classification strategy is present due to no corresponding SSWSort
+    /// module.
+    NoneNoModule {
+        /// The module that was requested but was not present.
+        module: String,
+    },
+    /// No classification strategy is present due to SSWSort not being present.
+    NoneNoSswsort,
 }
 
 impl ClassificationStrategy {
@@ -191,26 +183,28 @@ impl ClassificationStrategy {
     /// propagated. If a module with the requested name is found, then any
     /// errors opening the references are also propagated. Context is added to
     /// all errors.
-    pub fn new(args: &Args, module: &str) -> std::io::Result<Option<Self>> {
+    pub fn new(args: &Args, module: &str) -> std::io::Result<Self> {
         if let Some(default) = &args.assume_default_ctype {
-            return Ok(Some(ClassificationStrategy::Default(default.clone())));
+            return Ok(ClassificationStrategy::Default(default.clone()));
         }
 
         let sswsort_toml_path = PathBuf::from("sswsort_res/config.toml");
 
-        let sswsort_module = if sswsort_toml_path.exists() {
+        if sswsort_toml_path.exists() {
             let config = sswsort::TomlConfig::from_path(&sswsort_toml_path)
                 .with_path_context("Failed to parse SSWSort TOML", sswsort_toml_path)?;
             if let Some(params) = config.get(module) {
-                Some(SSWSortModule::new(params).with_context("Failed to load SSWSort reference sequences")?)
+                Ok(ClassificationStrategy::Sswsort(
+                    SSWSortModule::new(params).with_context("Failed to load SSWSort reference sequences")?,
+                ))
             } else {
-                None
+                Ok(ClassificationStrategy::NoneNoModule {
+                    module: module.to_string(),
+                })
             }
         } else {
-            None
-        };
-
-        Ok(sswsort_module.map(ClassificationStrategy::SswSort))
+            Ok(ClassificationStrategy::NoneNoSswsort)
+        }
     }
 }
 

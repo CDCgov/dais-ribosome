@@ -126,19 +126,24 @@ impl QueryInfo {
     /// If `classification` is `None` and the `ctype` field of the query is
     /// missing, then [`NoCtype`] is returned.
     pub fn classify_and_prepare(
-        mut self, classification: &Option<ClassificationStrategy>, verbose: bool,
+        mut self, classification: &ClassificationStrategy, verbose: bool,
     ) -> Result<Option<QueryRecord>, NoCtype> {
         let ctype = match (self.ctype, classification) {
             (Some(ctype), _) => ctype,
-            (None, Some(ClassificationStrategy::SswSort(module))) => {
+            (None, ClassificationStrategy::Sswsort(module)) => {
                 let classification = module.classify(&self.sequence);
                 let Some(ctype) = handle_classification(&classification, &self.id, &mut self.sequence, verbose) else {
                     return Ok(None);
                 };
                 ctype
             }
-            (None, Some(ClassificationStrategy::Default(default_ctype))) => default_ctype.clone(),
-            (None, None) => return Err(NoCtype { id: self.id }),
+            (None, ClassificationStrategy::Default(default_ctype)) => default_ctype.clone(),
+            (None, ClassificationStrategy::NoneNoModule { module }) => {
+                return Err(NoCtype::no_module(self.id, module.clone()));
+            }
+            (None, ClassificationStrategy::NoneNoSswsort) => {
+                return Err(NoCtype::no_sswsort(self.id));
+            }
         };
 
         match QueryRecord::new(self.id, self.sequence, ctype) {
@@ -153,21 +158,130 @@ impl QueryInfo {
     }
 }
 
-/// An error caused by the absense of a ctype within an input file.
+/// The inner error caused by the absense of a ctype within an input file,
+/// without context for why the missing ctype is an issue.
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct NoCtype {
+struct NoCtypeInner {
     /// The ID of the record in the file.
     pub id: String,
 }
 
-impl Display for NoCtype {
+/// An error caused by the absense of a ctype within an input file, assuming
+/// SSWSort is present but the requested module is not.
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct NoCtypeNoModule {
+    /// The inner error.
+    inner:  NoCtypeInner,
+    /// The requested module which is not present.
+    module: String,
+}
+
+/// An error caused by the absense of a ctype within an input file, and for
+/// which SSWSort resources are not present.
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct NoCtypeNoSswsort {
+    /// The inner error.
+    inner: NoCtypeInner,
+}
+
+impl Display for NoCtypeInner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "A query was missing a ctype: {id}", id = self.id)
     }
 }
 
-impl Error for NoCtype {}
-impl GetCode for NoCtype {}
+impl Error for NoCtypeInner {}
+impl GetCode for NoCtypeInner {}
+
+impl Display for NoCtypeNoModule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "All ctypes must be specified since SSWSort does not have a module for: {module}",
+            module = self.module
+        )
+    }
+}
+
+impl Error for NoCtypeNoModule {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.inner)
+    }
+}
+
+impl GetCode for NoCtypeNoModule {
+    fn get_code(&self) -> i32 {
+        self.inner.get_code()
+    }
+}
+
+impl Display for NoCtypeNoSswsort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "All ctypes must be specified since the SSWSort are not present")
+    }
+}
+
+impl Error for NoCtypeNoSswsort {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.inner)
+    }
+}
+
+impl GetCode for NoCtypeNoSswsort {
+    fn get_code(&self) -> i32 {
+        self.inner.get_code()
+    }
+}
+
+/// An error caused by the absense of a ctype within an input file, either due
+/// to missing SSWSort resources or a module not being present.
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub enum NoCtype {
+    NoModule(NoCtypeNoModule),
+    NoSswsort(NoCtypeNoSswsort),
+}
+
+impl NoCtype {
+    fn no_module(id: String, module: String) -> NoCtype {
+        NoCtype::NoModule(NoCtypeNoModule {
+            inner: NoCtypeInner { id },
+            module,
+        })
+    }
+
+    fn no_sswsort(id: String) -> NoCtype {
+        NoCtype::NoSswsort(NoCtypeNoSswsort {
+            inner: NoCtypeInner { id },
+        })
+    }
+}
+
+impl Display for NoCtype {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NoCtype::NoModule(err) => write!(f, "{err}"),
+            NoCtype::NoSswsort(err) => write!(f, "{err}"),
+        }
+    }
+}
+
+impl Error for NoCtype {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            NoCtype::NoModule(err) => err.source(),
+            NoCtype::NoSswsort(err) => err.source(),
+        }
+    }
+}
+
+impl GetCode for NoCtype {
+    fn get_code(&self) -> i32 {
+        match self {
+            NoCtype::NoModule(err) => err.get_code(),
+            NoCtype::NoSswsort(err) => err.get_code(),
+        }
+    }
+}
 
 /// A reader for a FASTA file containing query data, parsing it into
 /// [`QueryInfo`].
