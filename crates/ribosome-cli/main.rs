@@ -47,7 +47,7 @@ fn main() {
 
     // Determine the classification strategy, which may involve loading SSWSort
     // module
-    let classification = ClassificationStrategy::new(&args).unwrap_or_fail();
+    let classification = ClassificationStrategy::new(&args, annotation_module.name).unwrap_or_fail();
 
     // Handle a request to submit a grid job
     let grid_info = match grid_info {
@@ -191,7 +191,7 @@ impl ClassificationStrategy {
     /// propagated. If a module with the requested name is found, then any
     /// errors opening the references are also propagated. Context is added to
     /// all errors.
-    pub fn new(args: &Args) -> std::io::Result<Option<Self>> {
+    pub fn new(args: &Args, module: &str) -> std::io::Result<Option<Self>> {
         if let Some(default) = &args.assume_default_ctype {
             return Ok(Some(ClassificationStrategy::Default(default.clone())));
         }
@@ -201,7 +201,7 @@ impl ClassificationStrategy {
         let sswsort_module = if sswsort_toml_path.exists() {
             let config = sswsort::TomlConfig::from_path(&sswsort_toml_path)
                 .with_path_context("Failed to parse SSWSort TOML", sswsort_toml_path)?;
-            if let Some(params) = config.get(&args.module) {
+            if let Some(params) = config.get(module) {
                 Some(SSWSortModule::new(params).with_context("Failed to load SSWSort reference sequences")?)
             } else {
                 None
