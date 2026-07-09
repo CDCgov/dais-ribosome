@@ -1,7 +1,12 @@
-use crate::log::time_stamp;
-use crate::par_utils::grid::{GridCompatibleArgs, GridCompatibleCli};
+use crate::{
+    log::time_stamp,
+    par_utils::grid::{GridCompatibleArgs, GridCompatibleCli},
+};
 use clap::{Arg, Parser, builder::OsStr};
-use std::{num::NonZero, path::PathBuf};
+use std::{
+    num::NonZero,
+    path::{Path, PathBuf},
+};
 use zoe::prelude::rand_sequence;
 
 #[derive(Debug, Parser)]
@@ -79,46 +84,46 @@ impl GridCompatibleCli for Cli {
     }
 }
 
-/// A parsed version of [`Cli`] with all the output paths fully resolved.
-pub struct Args {
-    pub data_file:            PathBuf,
-    pub output_prefix:        PathBuf,
-    pub module:               String,
-    pub threads:              Option<NonZero<usize>>,
-    pub submit_grid_job:      Option<usize>,
-    pub verbose:              bool,
-    pub assume_default_ctype: Option<String>,
-    /// The sequence, insertion, and deletion output paths for the products
-    pub product_output:       (PathBuf, PathBuf, PathBuf),
-    /// The sequence, insertion, and deletion output paths for the genome
-    pub genome_output:        Option<(PathBuf, PathBuf, PathBuf)>,
+/// A helper enum for differentiating the two major cases for the output files:
+/// positional arguments are specified, or no positional arguments are specified
+/// (in which case a provided or randomized prefix must be used).
+enum CliOutputs {
+    Positional {
+        sequence_output:  PathBuf,
+        insertion_output: PathBuf,
+        deletion_output:  PathBuf,
+        genome_outputs:   Vec<PathBuf>,
+    },
+    Prefix {
+        prefix: PathBuf,
+    },
 }
 
-impl GridCompatibleArgs for Args {
-    type Cli = Cli;
-
-    fn from_cli(cli: Self::Cli) -> std::io::Result<Self> {
-        Self::from_cli_with_matches(cli, &mut Vec::new())
-    }
-
-    fn from_cli_with_matches(cli: Cli, matches: &mut Vec<clap::ArgMatches>) -> std::io::Result<Self> {
-        let genome_output_prefix = match cli.genome_outputs.as_slice() {
-            [prefix] => Some(prefix.clone()),
-            _ => None,
-        };
-
-        let output_prefix_or_dir = cli
-            .output_prefix
-            .into_iter()
-            .chain(genome_output_prefix.clone())
-            .chain(cli.sequence_output.as_ref().map(|p| p.with_extension("")))
-            .chain(cli.insertion_output.as_ref().map(|p| p.with_extension("")))
-            .chain(cli.deletion_output.as_ref().map(|p| p.with_extension("")))
-            .next();
-
-        let output_prefix = match output_prefix_or_dir {
-            Some(output_dir) if output_dir.is_dir() => {
-                let output_dir = output_dir.join(temp_name());
+impl CliOutputs {
+    /// Parses the outputs from `cli` into [`CliOutputs`], generating a random
+    /// prefix and updating `matches` with it if needed.
+    fn new(cli: &Cli, matches: &mut Vec<clap::ArgMatches>) -> Self {
+        if let Some(sequence_output) = &cli.sequence_output {
+            Self::Positional {
+                sequence_output:  sequence_output.clone(),
+                insertion_output: cli
+                    .insertion_output
+                    .as_ref()
+                    .expect("Sequence output requires insertion output")
+                    .clone(),
+                deletion_output:  cli
+                    .deletion_output
+                    .as_ref()
+                    .expect("Sequence output requires deletion output")
+                    .clone(),
+                genome_outputs:   cli.genome_outputs.clone(),
+            }
+        } else if let Some(prefix) = &cli.output_prefix {
+            // Check whether the specified prefix is a directory, in which case
+            // we must randomize the prefix within it
+            if prefix.is_dir() {
+                // Join output directory with random prefix
+                let prefix = prefix.join(temp_name());
 
                 // Clear previous value of --output-prefix
                 for matches in matches.iter_mut() {
@@ -131,71 +136,132 @@ impl GridCompatibleArgs for Args {
                 matches.push(temp_cmd.get_matches_from([
                     &OsStr::from("temp"),
                     &OsStr::from("--output-prefix"),
-                    output_dir.as_os_str(),
+                    prefix.as_os_str(),
                 ]));
 
-                output_dir
+                Self::Prefix { prefix }
+            } else {
+                Self::Prefix { prefix: prefix.clone() }
             }
-            Some(output_prefix) => output_prefix,
-            None => {
-                let prefix = temp_name();
+        } else {
+            // Generate random prefix
+            let prefix = temp_name();
 
-                // Inject the prefix as --output-prefix into the arg matches for
-                // grid submission
-                let temp_cmd = clap::Command::new("temp").arg(Arg::new("output_prefix").long("output-prefix").num_args(1));
-                matches.push(temp_cmd.get_matches_from(["temp", "--output-prefix", &prefix]));
+            // Inject the prefix as --output-prefix into the arg matches for
+            // grid submission
+            let temp_cmd = clap::Command::new("temp").arg(Arg::new("output_prefix").long("output-prefix").num_args(1));
+            matches.push(temp_cmd.get_matches_from(["temp", "--output-prefix", &prefix]));
 
-                prefix.into()
+            // Set output_prefix in Cli
+            Self::Prefix {
+                prefix: PathBuf::from(prefix),
             }
+        }
+    }
+}
+
+/// A parsed version of [`Cli`] with all the output paths fully resolved.
+pub struct Args {
+    pub data_file:            PathBuf,
+    pub module:               String,
+    pub threads:              Option<NonZero<usize>>,
+    pub submit_grid_job:      Option<usize>,
+    pub verbose:              bool,
+    pub assume_default_ctype: Option<String>,
+    /// The sequence, insertion, and deletion output paths for the products
+    pub product_output:       (PathBuf, PathBuf, PathBuf),
+    /// The sequence, insertion, and deletion output paths for the genome
+    pub genome_output:        Option<(PathBuf, PathBuf, PathBuf)>,
+    /// The path to the log file to use for grid jobs
+    pub grid_log_file:        PathBuf,
+}
+
+impl GridCompatibleArgs for Args {
+    type Cli = Cli;
+
+    fn from_cli(cli: Self::Cli) -> std::io::Result<Self> {
+        Self::from_cli_with_matches(cli, &mut Vec::new())
+    }
+
+    fn from_cli_with_matches(cli: Cli, matches: &mut Vec<clap::ArgMatches>) -> std::io::Result<Self> {
+        // Parse the outputs into one of two cases: positional arguments, or no
+        // positional arguments and a prefix used instead
+        let outputs = CliOutputs::new(&cli, matches);
+
+        // Get the product outputs
+        let product_output = match &outputs {
+            CliOutputs::Positional {
+                sequence_output,
+                insertion_output,
+                deletion_output,
+                ..
+            } => (sequence_output.clone(), insertion_output.clone(), deletion_output.clone()),
+            CliOutputs::Prefix { prefix } => (
+                prefix.with_added_extension("seq.txt"),
+                prefix.with_added_extension("ins.txt"),
+                prefix.with_added_extension("del.txt"),
+            ),
         };
 
-        let genome_output = match cli.genome_outputs.as_slice() {
-            [] if let Some(_) = cli.sequence_output => None,
-            [] => Some((
-                output_prefix.with_added_extension("gen_seq.txt"),
-                output_prefix.with_added_extension("gen_ins.txt"),
-                output_prefix.with_added_extension("gen_del.txt"),
+        // Get the genome outputs
+        let genome_output = match &outputs {
+            CliOutputs::Positional { genome_outputs, .. } => match genome_outputs.as_slice() {
+                [] => None,
+                [genome_prefix] => {
+                    time_stamp(
+                        "Warning: using the genome output prefix is deprecated, provide explicit genome output paths instead.",
+                        true,
+                    );
+                    Some((
+                        genome_prefix.to_owned(),
+                        genome_prefix.with_added_extension("ins"),
+                        genome_prefix.with_added_extension("del"),
+                    ))
+                }
+                [seq, ins, del] => Some((seq.clone(), ins.clone(), del.clone())),
+                _ => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "Expected either no genome output arguments, one genomic output prefix, or three genome output files.",
+                    ));
+                }
+            },
+            CliOutputs::Prefix { prefix } => Some((
+                prefix.with_added_extension("gen_seq.txt"),
+                prefix.with_added_extension("gen_ins.txt"),
+                prefix.with_added_extension("gen_del.txt"),
             )),
-            [genome_prefix] => {
-                time_stamp(
-                    "Warning: using the genome output prefix is deprecated, provide explicit genome output paths instead.",
-                    true,
-                );
-                Some((
-                    genome_prefix.to_owned(),
-                    genome_prefix.with_added_extension("ins"),
-                    genome_prefix.with_added_extension("del"),
-                ))
-            }
-            [seq, ins, del] => Some((seq.clone(), ins.clone(), del.clone())),
-            _ => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "Expected either no genome output arguments, one genomic output prefix, or three genome output files.",
-                ));
-            }
         };
 
-        let sequence_output = cli
-            .sequence_output
-            .unwrap_or_else(|| output_prefix.with_added_extension("seq.txt"));
-        let insertion_output = cli
-            .insertion_output
-            .unwrap_or_else(|| output_prefix.with_added_extension("ins.txt"));
-        let deletion_output = cli
-            .deletion_output
-            .unwrap_or_else(|| output_prefix.with_added_extension("del.txt"));
+        // For grid code, get the prefix used for the log file
+        let grid_prefix = match outputs {
+            CliOutputs::Positional { sequence_output, .. } => get_prefix(&sequence_output),
+            CliOutputs::Prefix { prefix } => prefix,
+        };
+
+        // Get the log file path
+        let grid_log_file = {
+            let mut filename = grid_prefix
+                .file_name()
+                .ok_or(std::io::Error::other(format!(
+                    "Failed to find filename in path: {}",
+                    grid_prefix.display()
+                )))?
+                .to_os_string();
+            filename.push("_ribosome_log.txt");
+            grid_prefix.with_file_name(filename)
+        };
 
         Ok(Self {
             data_file: cli.data_file,
-            output_prefix,
             module: cli.module,
             threads: cli.threads,
             submit_grid_job: cli.submit_grid_job,
             verbose: cli.verbose,
             assume_default_ctype: cli.assume_default_ctype,
-            product_output: (sequence_output, insertion_output, deletion_output),
+            product_output,
             genome_output,
+            grid_log_file,
         })
     }
 
@@ -219,16 +285,7 @@ impl GridCompatibleArgs for Args {
     ///
     /// The `output_prefix` cannot end in `..`.
     fn log_path(&self) -> std::io::Result<PathBuf> {
-        let mut file_name = self
-            .output_prefix
-            .file_name()
-            .ok_or(std::io::Error::other(format!(
-                "Failed to find filename in path: {}",
-                self.output_prefix.display()
-            )))?
-            .to_os_string();
-        file_name.push("_ribosome_log.txt");
-        Ok(self.output_prefix.with_file_name(file_name))
+        Ok(self.grid_log_file.clone())
     }
 }
 
@@ -239,4 +296,20 @@ fn temp_name() -> String {
     let seed = getrandom::u64().unwrap_or(now);
     let seq = rand_sequence(alpha, 32, seed);
     String::from_utf8_lossy_owned(seq)
+}
+
+/// Infers the output prefix to use from the sequence file by stripping one
+/// extension (followed by another if it is `seq`).
+fn get_prefix(sequence_output: &Path) -> PathBuf {
+    if sequence_output.extension().is_some() {
+        let out = sequence_output.with_extension("");
+
+        if out.extension().map(std::ffi::OsStr::as_encoded_bytes) == Some(b"seq") {
+            out.with_extension("")
+        } else {
+            out
+        }
+    } else {
+        sequence_output.to_path_buf()
+    }
 }
