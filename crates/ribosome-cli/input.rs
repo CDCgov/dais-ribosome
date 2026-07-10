@@ -217,7 +217,7 @@ impl GetCode for NoCtypeNoModule {
 
 impl Display for NoCtypeNoSswsort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "All ctypes must be specified since the SSWSort are not present")
+        write!(f, "All ctypes must be specified since the SSWSort resouces are not present")
     }
 }
 

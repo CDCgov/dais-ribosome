@@ -14,6 +14,7 @@ is roughly based on [Keep a Changelog], and this project adheres to
 
 - Reverts 4 argument handling to v1 style
 - We removed `--skip-genome` and revert to the v1 style by omitting genome args
+- The codon-position weights file is now optional in the TOML, and a warning is issued by the binary if the file is unspecified or empty
 
 ### Fixes
 

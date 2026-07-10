@@ -26,7 +26,7 @@ pub struct TomlConfig {
 }
 
 impl TomlConfig {
-    /// Load configuration from a TOML file.
+    /// Loads configuration from a TOML file.
     ///
     /// ## Errors
     ///
@@ -38,6 +38,12 @@ impl TomlConfig {
         Ok(std::fs::read_to_string(path)
             .and_then(|raw_toml| Ok(toml::from_str::<TomlConfig>(&raw_toml).with_type_context::<TomlConfig>()?))
             .with_path_context("Failed to parse TOML file", path)?)
+    }
+
+    /// Looks up a module by name (or alternative name). `None` is returned if
+    /// no module had the given name.
+    pub fn get(&self, module_name: &str) -> Option<&ConfiguredModule> {
+        self.modules.iter().find(|&m| m.matches_name(module_name))
     }
 
     /// Find a module by name, returning it along with the paths to other
@@ -55,9 +61,7 @@ impl TomlConfig {
         let mut others = Vec::new();
 
         for m in &self.modules {
-            if m.name.eq_ignore_ascii_case(name)
-                || m.alternative_names.iter().any(|alt_name| name.eq_ignore_ascii_case(alt_name))
-            {
+            if m.matches_name(name) {
                 selected = Some(m);
             } else {
                 let ref_path = modules_dir.join(&m.name).join(&m.references);
@@ -145,7 +149,7 @@ pub struct ConfiguredModule {
     pub references:        PathBuf,
     // The path containing the codon-position weights. This should be a relative
     // path within the module folder.
-    pub weights:           PathBuf,
+    pub weights:           Option<PathBuf>,
     /// The file name for the TSV file containing the coding sequence (CDS)
     /// specifications. This should be a relative path within the module folder.
     pub cds_spec:          PathBuf,
@@ -161,6 +165,18 @@ pub struct ConfiguredModule {
     /// Collection of alignment weights for the module (and specific compound
     /// types within it).
     pub alignment:         AlignmentWeights,
+}
+
+impl ConfiguredModule {
+    /// Returns whether the specified name matches the module name or any of its
+    /// alternative names.
+    fn matches_name(&self, name: &str) -> bool {
+        self.name.eq_ignore_ascii_case(name)
+            || self
+                .alternative_names
+                .iter()
+                .any(|alt_name| name.eq_ignore_ascii_case(alt_name))
+    }
 }
 
 /// The supported alignment methods in DAIS-ribosome.

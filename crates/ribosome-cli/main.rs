@@ -45,6 +45,13 @@ fn main() {
     let annotation_module = AnnotationModule::new(&parsed_toml, &toml_path, &args.module)
         .unwrap_or_die(&format!("Failed to build module '{}'", args.module));
 
+    if !annotation_module.have_weights() {
+        time_stamp(
+            "Warning: no codon-position weights were found, so flu A codon usage ranks will be used.",
+            true,
+        );
+    }
+
     // Determine the classification strategy, which may involve loading SSWSort
     // module
     let classification = ClassificationStrategy::new(&args, annotation_module.name).unwrap_or_fail();

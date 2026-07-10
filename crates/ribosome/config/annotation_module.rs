@@ -40,9 +40,10 @@ pub struct AnnotationModule<'a> {
     /// files, used in for providing warning messages when unrecognized compound
     /// types are encountered.
     pub(crate) other_modules:    Vec<(&'a String, PathBuf)>,
-
     /// Compound type map for iteration-based processing.
-    pub(crate) ctype_map: HashMap<String, Vec<ReferenceGroup<'a>>>,
+    pub(crate) ctype_map:        HashMap<String, Vec<ReferenceGroup<'a>>>,
+    /// Do we have codon-position weights to work with
+    pub(crate) have_weights:     bool,
 }
 
 impl<'a> AnnotationModule<'a> {
@@ -58,8 +59,8 @@ impl<'a> AnnotationModule<'a> {
     /// - The requested `module_name` must be present in the config.
     /// - The reference file in the config must exist within the module's folder
     ///   and be parsed successfully.
-    /// - The codon position weights file must exist within the module's folder
-    ///   and be parsed successfully.
+    /// - The codon position weights file if specified must exist within the
+    ///   module's folder and be parsed successfully.
     /// - The CDS specifications file must exist within the module's folder and
     ///   be parsed successfully.
     pub fn new(config: &'a TomlConfig, toml_path: &Path, module_name: &str) -> std::io::Result<AnnotationModule<'a>> {
@@ -79,17 +80,29 @@ impl<'a> AnnotationModule<'a> {
         // Get path to module folder
         let module_root = modules_dir.join(&module.name);
 
-        // Get paths to files within module folder
-        let references_path = module_root.join(&module.references);
-        let weights_path = module_root.join(&module.weights);
-        let cds_spec_path = module_root.join(&module.cds_spec);
+        // Load the reference sequences
+        let references = {
+            let references_path = module_root.join(&module.references);
+            load_references(&references_path)
+                .with_path_context("Failed to load the references from file", &references_path)?
+        };
 
-        let references = load_references(&references_path)
-            .with_path_context("Failed to load the references from file", &references_path)?;
-        let mut codon_weights = load_codon_weights(&weights_path)
-            .with_path_context("Failed to load the codon position weights from file", weights_path)?;
-        let mut cds_spec =
-            load_cds_spec(&cds_spec_path).with_path_context("Failed to load the CDS specs from file", cds_spec_path)?;
+        // Load the codon weights if specified in TOML
+        let mut codon_weights = if let Some(weights) = &module.weights {
+            let weights_path = module_root.join(weights);
+            load_codon_weights(&weights_path)
+                .with_path_context("Failed to load the codon position weights from file", weights_path)?
+        } else {
+            CodonWeightMatrix::new()
+        };
+
+        let have_weights = !codon_weights.is_empty();
+
+        // Load the CDS specs
+        let mut cds_spec = {
+            let cds_spec_path = module_root.join(&module.cds_spec);
+            load_cds_spec(&cds_spec_path).with_path_context("Failed to load the CDS specs from file", cds_spec_path)?
+        };
 
         let mut ctype_map: HashMap<String, Vec<ReferenceGroup>> = HashMap::new();
 
@@ -125,7 +138,13 @@ impl<'a> AnnotationModule<'a> {
             formatting: &module.formatting,
             rules: &module.rules,
             other_modules,
+            have_weights,
         })
+    }
+
+    /// Do we have codon-position weights to work with
+    pub fn have_weights(&self) -> bool {
+        self.have_weights
     }
 
     /// Finds the best local Smith-Waterman alignment for a query sequence
