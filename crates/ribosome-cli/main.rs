@@ -12,7 +12,7 @@ use par_utils::{
 use paths::find_modules_toml;
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use sswsort::SSWSortModule;
-use std::{collections::HashSet, error::Error, fmt::Display, io::Write, path::PathBuf};
+use std::{collections::HashSet, error::Error, fmt::Display, io::Write, path::Path};
 use zoe::{
     data::err::{Fail, GetCode, OrFail, ResultWithErrorContext},
     iter_utils::ProcessResultsExt,
@@ -54,7 +54,7 @@ fn main() {
 
     // Determine the classification strategy, which may involve loading SSWSort
     // module
-    let classification = ClassificationStrategy::new(&args, annotation_module.name).unwrap_or_fail();
+    let classification = ClassificationStrategy::new(&args, annotation_module.name, &toml_path).unwrap_or_fail();
 
     // Handle a request to submit a grid job
     let grid_info = match grid_info {
@@ -190,12 +190,18 @@ impl ClassificationStrategy {
     /// propagated. If a module with the requested name is found, then any
     /// errors opening the references are also propagated. Context is added to
     /// all errors.
-    pub fn new(args: &Args, module: &str) -> std::io::Result<Self> {
+    pub fn new(args: &Args, module: &str, dais_toml_path: &Path) -> std::io::Result<Self> {
         if let Some(default) = &args.assume_default_ctype {
             return Ok(ClassificationStrategy::Default(default.clone()));
         }
 
-        let sswsort_toml_path = PathBuf::from("sswsort_res/config.toml");
+        let sswsort_toml_path = if let Some(ribosome_res_path) = dais_toml_path.parent()
+            && let Some(parent) = ribosome_res_path.parent()
+        {
+            parent.join("sswsort_res/config.toml")
+        } else {
+            return Ok(ClassificationStrategy::NoneNoSswsort);
+        };
 
         if sswsort_toml_path.exists() {
             let config = sswsort::TomlConfig::from_path(&sswsort_toml_path)

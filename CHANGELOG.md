@@ -20,6 +20,7 @@ is roughly based on [Keep a Changelog], and this project adheres to
 
 - Fixes bug causing alternative or uppercase module names to fail to load the corresponding SSWSort module
 - The error message for failing to find an SSWSort module now distinguishes between the module not being present and the SSWSort resources not being present
+- `sswsort_res` is now searched for in the same directory as `ribosome_res`, instead of using the current working directory
 
 ## [2.0.0] - 2026-07-08
 

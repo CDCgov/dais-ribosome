@@ -209,3 +209,18 @@ The following is a list of the field paths that can be specified:
 See
 [*Zoe*](https://docs.rs/zoe/0.0.29/zoe/alignment/sw/index.html#affine-gap-penalties)
 for more details on the affine gap penalty.
+
+## Sequence Classification
+
+To support unclassified input sequences, a corresponding
+[SSWSort](https://github.com/CDCgov/sswsort) module should be created with the
+same name as the DAIS-ribosome module. Otherwise, the DAIS-ribosome module will
+only work for classified input sequences or when `--assume-default-ctype` is
+passed.
+
+When using SSWSort, DAIS-ribosome requires that the `sswsort_res` folder is
+located in the same directory as the `ribosome_res` folder. Otherwise, the
+SSWSort modules may fail to be located, and an error may be issued for
+unclassified input sequences at runtime. Note that the `install.sh` script
+automatically handles loading the `sswsort_res` folder from the GitHub
+repository.
