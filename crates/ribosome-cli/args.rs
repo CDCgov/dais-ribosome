@@ -94,9 +94,7 @@ enum CliOutputs {
         deletion_output:  PathBuf,
         genome_outputs:   Vec<PathBuf>,
     },
-    Prefix {
-        prefix: PathBuf,
-    },
+    Prefix(PathBuf),
 }
 
 impl CliOutputs {
@@ -139,9 +137,9 @@ impl CliOutputs {
                     prefix.as_os_str(),
                 ]));
 
-                Self::Prefix { prefix }
+                Self::Prefix(prefix)
             } else {
-                Self::Prefix { prefix: prefix.clone() }
+                Self::Prefix(prefix.clone())
             }
         } else {
             // Generate random prefix
@@ -153,9 +151,7 @@ impl CliOutputs {
             matches.push(temp_cmd.get_matches_from(["temp", "--output-prefix", &prefix]));
 
             // Set output_prefix in Cli
-            Self::Prefix {
-                prefix: PathBuf::from(prefix),
-            }
+            Self::Prefix(PathBuf::from(prefix))
         }
     }
 }
@@ -169,9 +165,9 @@ pub struct Args {
     pub verbose:              bool,
     pub assume_default_ctype: Option<String>,
     /// The sequence, insertion, and deletion output paths for the products
-    pub product_output:       (PathBuf, PathBuf, PathBuf),
+    pub product_output:       [PathBuf; 3],
     /// The sequence, insertion, and deletion output paths for the genome
-    pub genome_output:        Option<(PathBuf, PathBuf, PathBuf)>,
+    pub genome_output:        Option<[PathBuf; 3]>,
     /// The path to the log file to use for grid jobs
     pub grid_log_file:        PathBuf,
 }
@@ -195,12 +191,12 @@ impl GridCompatibleArgs for Args {
                 insertion_output,
                 deletion_output,
                 ..
-            } => (sequence_output.clone(), insertion_output.clone(), deletion_output.clone()),
-            CliOutputs::Prefix { prefix } => (
-                prefix.with_added_extension("seq.txt"),
-                prefix.with_added_extension("ins.txt"),
-                prefix.with_added_extension("del.txt"),
-            ),
+            } => [sequence_output.clone(), insertion_output.clone(), deletion_output.clone()],
+            CliOutputs::Prefix(path) => [
+                path.with_added_extension("seq.txt"),
+                path.with_added_extension("ins.txt"),
+                path.with_added_extension("del.txt"),
+            ],
         };
 
         // Get the genome outputs
@@ -212,13 +208,13 @@ impl GridCompatibleArgs for Args {
                         "Warning: using the genome output prefix is deprecated, provide explicit genome output paths instead.",
                         true,
                     );
-                    Some((
+                    Some([
                         genome_prefix.to_owned(),
                         genome_prefix.with_added_extension("ins"),
                         genome_prefix.with_added_extension("del"),
-                    ))
+                    ])
                 }
-                [seq, ins, del] => Some((seq.clone(), ins.clone(), del.clone())),
+                [seq, ins, del] => Some([seq.clone(), ins.clone(), del.clone()]),
                 _ => {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
@@ -226,17 +222,17 @@ impl GridCompatibleArgs for Args {
                     ));
                 }
             },
-            CliOutputs::Prefix { prefix } => Some((
-                prefix.with_added_extension("gen_seq.txt"),
-                prefix.with_added_extension("gen_ins.txt"),
-                prefix.with_added_extension("gen_del.txt"),
-            )),
+            CliOutputs::Prefix(path) => Some([
+                path.with_added_extension("gen_seq.txt"),
+                path.with_added_extension("gen_ins.txt"),
+                path.with_added_extension("gen_del.txt"),
+            ]),
         };
 
         // For grid code, get the prefix used for the log file
         let grid_prefix = match outputs {
             CliOutputs::Positional { sequence_output, .. } => get_prefix(&sequence_output),
-            CliOutputs::Prefix { prefix } => prefix,
+            CliOutputs::Prefix(path) => path,
         };
 
         // Get the log file path
@@ -252,6 +248,20 @@ impl GridCompatibleArgs for Args {
             grid_prefix.with_file_name(filename)
         };
 
+        // Look for path duplicates in the upper triangle of paths
+        let mut c1 = product_output.iter().chain(genome_output.iter().flatten());
+        while let Some(p1) = c1.next() {
+            let c2 = c1.clone();
+            for p2 in c2 {
+                if p1 == p2 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "No two paths can be the same.",
+                    ));
+                }
+            }
+        }
+
         Ok(Self {
             data_file: cli.data_file,
             module: cli.module,
@@ -265,18 +275,8 @@ impl GridCompatibleArgs for Args {
         })
     }
 
-    fn outputs(&mut self) -> impl Iterator<Item = &mut PathBuf> {
-        [
-            &mut self.product_output.0,
-            &mut self.product_output.1,
-            &mut self.product_output.2,
-        ]
-        .into_iter()
-        .chain(
-            self.genome_output
-                .iter_mut()
-                .flat_map(move |genome_output| [&mut genome_output.0, &mut genome_output.1, &mut genome_output.2]),
-        )
+    fn outputs_mut(&mut self) -> impl Iterator<Item = &mut PathBuf> {
+        self.product_output.iter_mut().chain(self.genome_output.iter_mut().flatten())
     }
 
     /// See [`GridCompatibleArgs::log_path`].

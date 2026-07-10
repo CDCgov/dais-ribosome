@@ -74,9 +74,9 @@ fn main() {
         .unwrap_or_fail();
 
     // Open the writers
-    let (seq, ins, del) = args.product_output;
+    let [seq, ins, del] = args.product_output;
     let writers = Writers::from_paths(seq, ins, del).unwrap_or_die("Failed to create product output files");
-    let gen_writers = if let Some((seq, ins, del)) = args.genome_output {
+    let gen_writers = if let Some([seq, ins, del]) = args.genome_output {
         Some(Writers::from_paths(seq, ins, del).unwrap_or_die("Failed to create genome output files"))
     } else {
         None

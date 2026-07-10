@@ -162,7 +162,7 @@ pub trait GridCompatibleArgs: Sized {
     ///
     /// This function must not mutate `self`. Instead, it should directly return
     /// mutable references to the output paths.
-    fn outputs(&mut self) -> impl Iterator<Item = &mut PathBuf>;
+    fn outputs_mut(&mut self) -> impl Iterator<Item = &mut PathBuf>;
 
     /// The path for where to write the `stdout` and `stderr` streams of the
     /// job.
@@ -337,7 +337,7 @@ impl GridTaskInfo {
             task_last,
             task_stepsize,
             scheduler: GridScheduler::Sge,
-            output_paths: args.outputs().map(|x| (*x).clone()).collect(),
+            output_paths: args.outputs_mut().map(|x| (*x).clone()).collect(),
             add_id: T::add_id,
             add_id_tmp: T::add_id_tmp,
         })
@@ -1012,7 +1012,7 @@ impl GridInfo {
             let grid_info = GridTaskInfo::new(args)?;
 
             // Update all the output paths to be temporary outputs for the task
-            for path in args.outputs() {
+            for path in args.outputs_mut() {
                 *path = T::add_id_tmp(path, &format!("{}", grid_info.task_id));
             }
 
@@ -1075,7 +1075,7 @@ impl GridInfo {
                 command: grid_command,
                 task_count,
                 scheduler,
-                output_paths: args.outputs().map(|x| (*x).clone()).collect(),
+                output_paths: args.outputs_mut().map(|x| (*x).clone()).collect(),
                 log_path: args.log_path()?,
                 add_id: T::add_id,
                 add_id_tmp: T::add_id_tmp,
