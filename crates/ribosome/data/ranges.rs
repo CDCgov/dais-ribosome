@@ -459,10 +459,6 @@ impl StateRange {
     /// ranges will form an ordered partition of `query_range` and `ref_range`
     /// without overlap or gap. The alignment must only contain the operations
     /// `MIDS=X`.
-    ///
-    /// Furthermore, excluding soft clipping, the first/last states must be `M`,
-    /// so that the output also has the first and last states as
-    /// [`StateRange::M`].
     pub(crate) fn state_ranges_from_aligment<T>(alignment: &Alignment<T>) -> Vec<Self> {
         // This will be a slight overestimate due to the possible presence of
         // clipping.

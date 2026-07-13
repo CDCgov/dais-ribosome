@@ -2,13 +2,11 @@ use crate::{
     config::{annotation_module::ReferenceGroup, toml::Formatting},
     data::{
         QueryRecord,
-        ranges::{CdsStateRange, InsertionIdx, StateRange},
+        ranges::{CdsStateRange, StateRange},
     },
     hashing::nt_id_iupac,
     outputs::{ComputedGenome, ComputedGenomeInsertion},
-    ranges::InsertionRange,
 };
-use std::ops::Range;
 use zoe::prelude::*;
 
 /// The genome alignments and products for a single query against all reference
@@ -56,9 +54,6 @@ pub struct GenomeAndProductStates<'a> {
     /// This will begin and end with match states.
     pub genome_aln_states: Vec<StateRange>,
 
-    /// The range of the stop extension within the query, if present.
-    pub stop_extension_query_range: Option<Range<usize>>,
-
     /// The amount of left padding in the genome alignment.
     ///
     /// This is the number of bases in the reference sequence that were not
@@ -86,8 +81,7 @@ impl<'a> GenomeAndProductStates<'a> {
     /// In debug mode, this panics if `genome_aln_states` does not begin and end
     /// with a match state.
     pub(crate) fn new(
-        references: &'a ReferenceGroup, genome_aln_states: Vec<StateRange>, stop_extension: Option<InsertionRange>,
-        products: Vec<Product<'a>>,
+        references: &'a ReferenceGroup, genome_aln_states: Vec<StateRange>, products: Vec<Product<'a>>,
     ) -> Self {
         #[cfg(debug_assertions)]
         {
@@ -115,7 +109,6 @@ impl<'a> GenomeAndProductStates<'a> {
             reference_id: &references.reference_id,
             ref_len,
             genome_aln_states,
-            stop_extension_query_range: stop_extension.map(|ins| ins.query_range),
             lpad,
             rpad,
             products,
@@ -151,16 +144,6 @@ impl<'a> GenomeAndProductStates<'a> {
                     genome_aln.pad_end(b'-', del.ref_range.len());
                 }
             }
-        }
-
-        if let Some(ref ext_range) = self.stop_extension_query_range {
-            let nt_insertion_idx = InsertionIdx::from_right_idx(self.ref_len);
-            let slice = &query[ext_range.clone()];
-            genome_seq.extend_from_slice(slice);
-            has_insertion = true;
-
-            // Validity: slice is from QueryRecord
-            insertions.push(ComputedGenomeInsertion::new(nt_insertion_idx, slice));
         }
 
         // Validity: genome_seq contains unaligned uppercase IUPAC since
