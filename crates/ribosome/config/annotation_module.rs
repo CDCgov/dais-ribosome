@@ -19,7 +19,7 @@ use std::{
 };
 use zoe::{
     alignment::{Alignment, SharedProfiles},
-    data::err::ResultWithErrorContext,
+    data::err::{ErrorWithContext, ResultWithErrorContext, WithSubitem},
     iter_utils::ProcessResultsExt,
     prelude::*,
 };
@@ -130,6 +130,51 @@ impl<'a> AnnotationModule<'a> {
                     &mut codon_weights,
                 )?);
             }
+        }
+
+        // Confirm that all the specifications were paired with references
+        if let Some(RefKey {
+            reference_id,
+            compound_type,
+        }) = cds_spec.keys().next()
+        {
+            return Err(std::io::Error::other(format!(
+                "Reference ID {reference_id} and compound type {compound_type} were found in the CDS specs file but not in the reference file!"
+            )));
+        }
+
+        // Confirm that all codon weights were paired with references
+        if let Some(SpecKey {
+            reference_id,
+            product_name,
+        }) = codon_weights.keys().next()
+        {
+            let ctypes = ctype_map
+                .into_iter()
+                .filter_map(|(ctype, ref_groups)| {
+                    ref_groups
+                        .into_iter()
+                        .any(|ref_group| &ref_group.reference_id == reference_id)
+                        .then_some(ctype)
+                })
+                .collect::<Vec<_>>();
+
+            let Some((first, rest)) = ctypes.split_first() else {
+                return Err(std::io::Error::other(format!(
+                    "Reference ID {reference_id} was found in the codon-position weights file but not in the reference file"
+                )));
+            };
+
+            let mut ctype_str = first.clone();
+
+            for ctype in rest {
+                ctype_str.push_str(", ");
+                ctype_str.push_str(ctype);
+            }
+
+            return Err(ErrorWithContext::new(format!(
+                "Reference ID {reference_id} and product {product_name} was found in the codon-position weights file but not in the specs file!"
+            )).with_subitem(format!("The following ctypes are present for {reference_id} in the specs but none had the specified product:")).with_subitem(ctype_str).into());
         }
 
         Ok(AnnotationModule {

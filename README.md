@@ -188,7 +188,7 @@ Options:
           Output files are required and will be suffixed with a partition id.
 
   -S, --submit-grid-job <SUBMIT_GRID_JOB>
-          Submit and block on a grid engine (SGE or Slurm) array job of the specified size
+          Submit and block on a grid engine (SGE) array job of the specified size
 
       --verbose
           Prints warning messages to stderr
