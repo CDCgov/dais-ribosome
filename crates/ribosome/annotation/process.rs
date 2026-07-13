@@ -79,7 +79,12 @@ impl<'a> AnnotationModule<'a> {
                 products.push(product);
             }
 
-            states.push(GenomeAndProductStates::new(ref_id_data, genome_aln_states, products));
+            states.push(GenomeAndProductStates::new(
+                ref_id_data,
+                genome_aln_states,
+                products,
+                genome_aln.states,
+            ));
         }
 
         Ok(RibosomeOutput {

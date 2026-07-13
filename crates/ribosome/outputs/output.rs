@@ -7,7 +7,7 @@ use crate::{
     hashing::nt_id_iupac,
     outputs::{ComputedGenome, ComputedGenomeInsertion},
 };
-use zoe::prelude::*;
+use zoe::{alignment::AlignmentStates, prelude::*};
 
 /// The genome alignments and products for a single query against all reference
 /// IDs.
@@ -69,6 +69,9 @@ pub struct GenomeAndProductStates<'a> {
 
     /// Contains all relevant product data, including the protein name.
     pub products: Vec<Product<'a>>,
+
+    /// The sequence alignment for the genome, as produced by *Zoe*.
+    pub zoe_genome_aln: AlignmentStates,
 }
 
 impl<'a> GenomeAndProductStates<'a> {
@@ -82,6 +85,7 @@ impl<'a> GenomeAndProductStates<'a> {
     /// with a match state.
     pub(crate) fn new(
         references: &'a ReferenceGroup, genome_aln_states: Vec<StateRange>, products: Vec<Product<'a>>,
+        zoe_genome_aln: AlignmentStates,
     ) -> Self {
         #[cfg(debug_assertions)]
         {
@@ -112,6 +116,7 @@ impl<'a> GenomeAndProductStates<'a> {
             lpad,
             rpad,
             products,
+            zoe_genome_aln,
         }
     }
 
