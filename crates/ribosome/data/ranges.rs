@@ -567,7 +567,19 @@ pub(crate) trait RangeExt: Sized {
     fn strict_cmp(&self, other: &Self) -> Option<Ordering>;
 
     /// Compares the positions of the ranges, returning `None` if one range
-    /// contains the other as a strict subset. Overlap is permitted.
+    /// strictly contains the other's endpoints.
+    ///
+    /// Overlap and shared boundaries are permitted.
+    ///
+    /// ## Examples
+    ///
+    /// ```ignore
+    /// assert_eq!((0..2).relaxed_cmp(&(2..4)), Some(Ordering::Less));
+    /// assert_eq!((0..3).relaxed_cmp(&(2..5)), Some(Ordering::Less));
+    /// assert_eq!((2..4).relaxed_cmp(&(0..4)), Some(Ordering::Greater));
+    /// assert_eq!((1..3).relaxed_cmp(&(0..4)), None);
+    /// assert_eq!((0..4).relaxed_cmp(&(0..4)), Some(Ordering::Equal));
+    /// ```
     #[must_use]
     fn relaxed_cmp(&self, other: &Self) -> Option<Ordering>;
 
