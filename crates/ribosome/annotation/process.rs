@@ -179,18 +179,18 @@ impl<'a> AnnotationModule<'a> {
 trait AlignmentExt {
     /// Extends the alignment to the left by `by_length` bases.
     ///
-    /// In the case where clipping at the start of the query and reference
-    /// sequences both occurred, the left side of the alignment can be
-    /// "extended" by converting some number of these bases to match states.
-    /// This method does not alter the score field.
+    /// In the case where there were unaligned residues at the start of both the
+    /// query and reference, the left side of the alignment can be "extended" by
+    /// converting some number of these bases to match states. This method does
+    /// not alter the score field.
     fn extend_left(&mut self, by_length: usize);
 
     /// Extends the alignment to the right by `by_length` bases.
     ///
-    /// In the case where clipping at the end of the query and reference
-    /// sequences both occurred, the right side of the alignment can be
-    /// "extended" by converting some number of these bases to match states.
-    /// This method does not alter the score field.
+    /// In the case where there were unaligned residues at the end of both the
+    /// query and reference, the right side of the alignment can be "extended"
+    /// by converting some number of these bases to match states. This method
+    /// does not alter the score field.
     fn extend_right(&mut self, by_length: usize);
 
     /// Returns the number of unaligned bases at the end of the query.

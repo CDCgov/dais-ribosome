@@ -275,19 +275,17 @@ pub struct Rules {
     #[serde(default)]
     pub chew_to_start: bool,
 
-    /// If there are soft clipped nucleotides within the specified limit on
-    /// either side of the alignment, then extend the alignment with match
+    /// If there are unaligned residues within the specified limit on either
+    /// side of the reference alignment, then extend the alignment with match
     /// states to add them. Setting this to 0 disables the rule.
     ///
     /// When mismatches are present near either end of the query/reference,
     /// local alignment can cause the ends of the query/reference to not be
-    /// included. This method _decreases_ the optimality of the alignment from a
-    /// Smith-Waterman standpoint, but may produce better products or genome
-    /// alignments.
-    ///
-    /// Specifically, to extend the alignment on a side, either the number of
-    /// clipped bases in the query _or_ the number of clipped bases in the
-    /// reference must be at most the specified limit.
+    /// included. This rule separately examines the left and right ends of the
+    /// alignment. If a side of the reference contains at most
+    /// `repairable_end_limit` unaligned residues, the alignment on that side is
+    /// extended to add back as many residues as can be represented without
+    /// exceeding the boundaries of the reference or query.
     ///
     /// This rule may add back the bases removed by `chew_to_start`.
     #[serde(default)]

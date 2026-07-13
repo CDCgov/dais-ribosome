@@ -13,6 +13,7 @@ is roughly based on [Keep a Changelog], and this project adheres to
 ### Fixes
 
 - Fixed stack overflow when the CDS specs have a large number of comments or blank lines
+- Fixed incorrect documentation on the `repairable_end_limit` rule within the library
 
 ## [2.0.1] - 2026-07-10
 
