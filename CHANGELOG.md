@@ -10,8 +10,13 @@ is roughly based on [Keep a Changelog], and this project adheres to
 
 - `zoe_genome_aln` is now a field of `GenomeAndProductStates` to provide access to the genome alignment and CIGAR string
 
+### Changed
+
+- Unrecognized fields in the TOML file are now rejected during parsing
+
 ### Fixes
 
+- Fixed incorrect TOML field for `try_stop_extension` in the flu module, causing stop extension to not apply
 - Fixed stack overflow when the CDS specs have a large number of comments or blank lines
 - Fixed incorrect documentation on the `repairable_end_limit` rule within the library
 

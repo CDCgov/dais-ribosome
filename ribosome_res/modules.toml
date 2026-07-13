@@ -8,7 +8,7 @@ cds_spec = "flu-cds-spec.tsv"
 alignment_method = "one-pass"
 
 [module.rules]
-list_contig_stop_extension = true
+try_stop_extension = true
 chew_to_start = true
 repairable_end_limit = 9
 

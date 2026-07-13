@@ -135,6 +135,7 @@ impl<'de> Deserialize<'de> for TomlConfig {
 
 /// Configuration for a single annotation module (e.g., `flu`, `cov`, or `rsv`).
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ConfiguredModule {
     /// The name of the module (e.g., `flu`, `cov`, or `rsv`). This must
     /// correspond to a folder in `ribosome_res`.
@@ -223,6 +224,7 @@ impl AlignmentWeights {
 /// downstream applications which expect sequences of a given length (or the
 /// same length, such as multiple sequence alignment programs).
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Formatting {
     /// Whether to add right padding to the amino acid sequence.
     #[serde(default = "pad_default")]
@@ -254,6 +256,7 @@ impl Default for Formatting {
 
 /// Rules allowing customization of the annotation process.
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Rules {
     /// If the genome alignment reaches the end of the reference but does not
     /// end in a stop codon as expected, then this rule causes the alignment to
@@ -298,7 +301,7 @@ pub struct Rules {
 ///
 /// At least one of `gap_open` or `gap_extend` must be nonzero, to ensure that
 /// optimal local alignments do not begin or end with indels.
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct AlignmentParams {
     /// The weight matrix for alignment.
     ///
@@ -323,6 +326,7 @@ pub struct AlignmentParams {
 /// A helper type for parsing [`AlignmentParams`] that does not impose any
 /// conditions or checking on the integers.
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct AlignmentParamsRaw {
     #[serde(rename = "match")]
     match_score: i8,
