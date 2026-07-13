@@ -335,20 +335,21 @@ impl Iterator for TsvReader {
     /// Any errors parsing the row with [`TsvRow::from_str`] are propagated with
     /// context (including the line and line number).
     fn next(&mut self) -> Option<Self::Item> {
-        let (line_idx, line) = self.lines.next()?;
-        let line = unwrap_or_return_some_err!(line);
-        let line = line.trim();
+        for (line_idx, line) in self.lines.by_ref() {
+            let line = unwrap_or_return_some_err!(line);
+            let line = line.trim();
 
-        // Skip empty lines and comments
-        if line.is_empty() || line.starts_with('#') {
-            return self.next();
+            // Ensure line is non-empty and is not a comment line
+            if !line.is_empty() && !line.starts_with('#') {
+                return Some(
+                    line.parse()
+                        .with_context(format!("Failed to parse line {line_num}: {line}", line_num = line_idx + 1))
+                        .map_err(Into::into),
+                );
+            }
         }
 
-        Some(
-            line.parse()
-                .with_context(format!("Failed to parse line {line_num}: {line}", line_num = line_idx + 1))
-                .map_err(Into::into),
-        )
+        None
     }
 }
 

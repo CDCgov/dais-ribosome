@@ -10,6 +10,10 @@ is roughly based on [Keep a Changelog], and this project adheres to
 
 - `zoe_genome_aln` is now a field of `GenomeAndProductStates` to provide access to the genome alignment and CIGAR string
 
+### Fixes
+
+- Fixed stack overflow when the CDS specs have a large number of comments or blank lines
+
 ## [2.0.1] - 2026-07-10
 
 ### Added
