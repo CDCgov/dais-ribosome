@@ -691,10 +691,12 @@ fn pick_insertion_shift(
 ///
 /// If the deletion crosses over a region where adjacent exons overlap, then the
 /// deletion may not shift in a way that would cause the deletion to no longer
-/// fully span that region.
+/// fully span that region. Similarly, a deletion cannot shift in a way that
+/// causes it to intersect one of the overlapping regions when it did not
+/// before.
 ///
-/// Similarly, a deletion cannot shift in a way that causes it to intersect one
-/// of the overlapping regions when it did not before.
+/// If the deletion partially intersects a region where adjacent exons overlap,
+/// then it may not shift in either direction.
 fn pick_deletion_shift(
     left_match: &CdsMatchRange, del: &CdsDeletionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,
@@ -726,21 +728,39 @@ fn pick_deletion_shift(
 
         // Limit max_left_shift and max_right_shift due to the deletion
         // spanning overlapping exons
-        let mut spanned_overlaps =
-            product_spec.exons.overlapped_regions.iter().filter(|overlap| {
+        {
+            let mut intersected_overlaps = product_spec.exons.overlapped_regions.iter().filter(|overlap| {
                 del.cds_range.overlaps(&overlap.cds_range1) || del.cds_range.overlaps(&overlap.cds_range2)
             });
-        if let Some(first) = spanned_overlaps.next() {
-            let last = spanned_overlaps.next_back().unwrap_or(first);
 
-            let overlap_cds_start = first.cds_range1.start;
-            let overlap_cds_end = last.cds_range2.end;
+            // Get the first region of overlapping exons that is intersected by
+            // the deletion
+            if let Some(first) = intersected_overlaps.next() {
+                // Get the last region of overlapping exons that is intersected
+                // by the deletion
+                let last = intersected_overlaps.next_back().unwrap_or(first);
 
-            let deletion_before_overlap = overlap_cds_start - del.cds_range.start;
-            let deletion_after_overlap = del.cds_range.end - overlap_cds_end;
+                // Get the most extreme points in the ranges: the start of the
+                // first, and the end of the last. These limit the ability of
+                // the deletion to shift, since it cannot shift through these
+                // overlapping regions
+                let overlap_cds_start = first.cds_range1.start;
+                let overlap_cds_end = last.cds_range2.end;
 
-            max_left_shift = max_left_shift.min(deletion_before_overlap);
-            max_right_shift = max_right_shift.min(deletion_after_overlap);
+                // If the deletion partially intersects the overlapping regions,
+                // then we cannot shift
+                if !del.cds_range.is_superset_of(&(overlap_cds_start..overlap_cds_end)) {
+                    return None;
+                }
+
+                // Get the amount of overhang that the deletion has past the
+                // extreme points above, if any
+                let deletion_before_overlap = overlap_cds_start - del.cds_range.start;
+                let deletion_after_overlap = del.cds_range.end - overlap_cds_end;
+
+                max_left_shift = max_left_shift.min(deletion_after_overlap);
+                max_right_shift = max_right_shift.min(deletion_before_overlap);
+            }
         }
 
         // Get the number of bases between the deletion and the closest

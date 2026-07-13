@@ -6,9 +6,9 @@ use crate::{
     ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, InsertionIdx},
 };
 
-/// A purely empty [`Exons`] struct for use in the below unit-tests. Note
-/// that this invalidates the assumptions on [`Exons`], but is acceptable
-/// for these tests since the `exons` field is not accessed.
+/// A purely empty [`Exons`] struct for use in the below unit-tests. Note that
+/// this invalidates the assumptions on [`Exons`], but is acceptable for these
+/// tests since the `exons` field is not accessed.
 const EMPTY_EXONS: Exons = Exons {
     required_start:     None,
     coords:             Vec::new(),
