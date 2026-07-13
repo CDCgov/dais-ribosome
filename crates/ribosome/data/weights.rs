@@ -15,10 +15,11 @@ use zoe::{
         ByteMap,
         err::{ResultWithErrorContext, WithErrorContext},
     },
+    iter_utils::ProcessResultsExt,
     prelude::{Nucleotides, NucleotidesView},
 };
 
-/// Map from spec key to codon position weights.
+/// A map from spec keys to codon-position weights.
 pub type CodonWeightMatrix = HashMap<SpecKey, CodonPositionWeights>;
 
 /// A map counting the occurrence of different codons at each position in the
@@ -161,7 +162,7 @@ pub(crate) static DEFAULT_CODON_STATS: LazyLock<HashMap<[u8; 3], u32>> = LazyLoc
 /// The file format uses pipe-delimited headers to start new sections:
 ///
 /// ```text
-/// reference_id|protein
+/// #reference_id|protein
 /// position<TAB>codon<TAB>count
 /// ...
 /// ```
@@ -179,83 +180,7 @@ pub(crate) static DEFAULT_CODON_STATS: LazyLock<HashMap<[u8; 3], u32>> = LazyLoc
 pub fn load_codon_weights(path: &Path) -> std::io::Result<CodonWeightMatrix> {
     let file = File::open(path)?;
     let reader = std::io::BufReader::new(file);
-
-    let mut all_matrices = HashMap::new();
-    let mut current_weights = CodonPositionWeights::new();
-    let mut current_key = None;
-    let mut current_raw_codons = HashSet::new();
-
-    for (line_idx, line) in reader.lines().enumerate() {
-        let line = line?;
-        let line = line.trim_ascii();
-
-        if line.contains('|') {
-            // Save previous section if it exists
-            if let Some(key) = current_key.take()
-                && !current_weights.is_empty()
-            {
-                all_matrices.insert(key, std::mem::take(&mut current_weights));
-            }
-
-            // Parse new section header
-            let line = line.trim_start_matches('#').trim_ascii();
-            let mut parts = line.split('|').map(|s| s.trim_ascii());
-
-            let (Some(reference_id), Some(product_name)) = (parts.next(), parts.next()) else {
-                return Err(std::io::Error::other(format!(
-                    "Invalid weight matrix header. Expected reference_id|protein, found {line}"
-                )));
-            };
-
-            current_key = Some(SpecKey::new(reference_id, product_name));
-            current_raw_codons = HashSet::new();
-
-            continue;
-        } else if line.is_empty() {
-            continue;
-        }
-
-        // Parse weight entry: position<TAB>codon<TAB>count
-        let row = line
-            .parse::<TsvRow>()
-            .with_context(format!("Failed to parse line {line_num}: {line}", line_num = line_idx + 1))?;
-
-        // Validity: the codon is uppercase IUPAC with U substituted for T
-        if let Err(e) = current_weights.insert(row.position, row.codon, row.count) {
-            let normalized = row.codon;
-
-            if let Some(other) = current_raw_codons.into_iter().find(|raw_codon| {
-                if let Ok(raw_codon) = normalize_codon(*raw_codon) {
-                    raw_codon == normalized
-                } else {
-                    false
-                }
-            }) {
-                return Err(e
-                    .with_context(format!(
-                        "Both {} and {} were found in the specs",
-                        NucleotidesView::from(&other),
-                        NucleotidesView::from(&row.raw_codon)
-                    ))
-                    .into());
-            } else {
-                // This branch should never happen, but just in case we handle
-                // it
-                return Err(e);
-            }
-        }
-
-        current_raw_codons.insert(row.raw_codon);
-    }
-
-    // Save final section
-    if let Some(key) = current_key
-        && !current_weights.is_empty()
-    {
-        all_matrices.insert(key, current_weights);
-    }
-
-    Ok(all_matrices)
+    CodonWeightMatrixParser::from_reader(reader).map(|out| out.0)
 }
 
 /// A parsed data from a single row of the `codon-position-weights.tsv` file for
@@ -358,4 +283,210 @@ fn normalize_codon(mut codon: [u8; 3]) -> std::io::Result<[u8; 3]> {
     }
 
     Ok(codon)
+}
+
+/// A trait providing an abstraction for reading multi-section TSV files,
+/// parsing them into `Self`.
+pub trait FromMultiSectionTsv: Sized {
+    /// The type containing the data for a section header.
+    type SectionHeader;
+
+    /// The type of a parsed line, which should implement `FromStr` to describe
+    /// how it is parsed.
+    type Line: FromStr<Err = std::io::Error>;
+
+    /// Constructs a new empty `Self`, from which [`process_section`] will
+    /// should data.
+    fn new() -> Self;
+
+    /// Determines whether a line corresponds to a section header, and if so,
+    /// parses it and returns `Some`.
+    fn parse_section_header(line: &str) -> std::io::Result<Option<Self::SectionHeader>>;
+
+    /// Adds the data for the given section to `self`.
+    fn process_section(
+        &mut self, header: Self::SectionHeader, lines: impl Iterator<Item = Self::Line>,
+    ) -> std::io::Result<()>;
+
+    /// Parses the multi-sectioned TSV into `Self` from the given `reader`.
+    ///
+    /// ## Errors
+    ///
+    /// See the implementor for possible errors on parsing lines, parsing
+    /// section headers, and processing a section. Parsing errors typically
+    /// include context including the line number and failing line.
+    fn from_reader<R: BufRead>(reader: R) -> std::io::Result<Self> {
+        let mut out = Self::new();
+
+        reader.lines().process_results(|iter| {
+            // Enumerate the lines for error messages, trim & filter empty, and
+            // make it peekable for detecting headers
+            let mut lines = iter
+                .enumerate()
+                .filter_map(|(line_idx, line)| {
+                    let line = line.trim_ascii();
+                    (!line.is_empty()).then_some((line_idx, line.to_owned()))
+                })
+                .peekable();
+
+            // Empty file is ok
+            let Some((line_idx, mut current_header_line)) = lines.next() else {
+                return Ok(());
+            };
+
+            // Parse header for first line
+            let Some(mut current_header) = Self::parse_section_header(&current_header_line)? else {
+                return Err(std::io::Error::other(format!(
+                    "Failed to parse section header at line {line_num}: {current_header_line}",
+                    line_num = line_idx + 1
+                )));
+            };
+
+            loop {
+                // The next header and line, if found
+                let mut next_header = None;
+
+                // Get iterator of all regular lines under the current header,
+                // aborting when a header is found and storing it to next_header
+                let iter = std::iter::from_fn(|| {
+                    let (line_idx, line) = lines.next()?;
+
+                    match Self::parse_section_header(&line) {
+                        Ok(Some(header)) => {
+                            next_header = Some((header, line));
+                            None
+                        }
+                        Ok(None) => Some(line.parse().with_context(format!(
+                            "Failed to parse TSV data on line {line_num}: {line}",
+                            line_num = line_idx + 1
+                        ))),
+                        Err(e) => Some(Err(e.with_context(format!(
+                            "Failed to parse section header at line {line_num}: {line}",
+                            line_num = line_idx + 1
+                        )))),
+                    }
+                });
+
+                // Process the header + lines
+                iter.process_results(|iter| out.process_section(current_header, iter))?
+                    .with_context(format!("Failed to parse the data for section: {current_header_line}"))?;
+
+                match next_header {
+                    Some((header, header_line)) => {
+                        current_header = header;
+                        current_header_line = header_line;
+                    }
+                    None => break,
+                }
+            }
+
+            Ok(())
+        })??;
+
+        Ok(out)
+    }
+}
+
+/// A wrapper type around [`CodonWeightMatrix`] for which
+/// [`FromMultiSectionTsv`] is implemented.
+struct CodonWeightMatrixParser(CodonWeightMatrix);
+
+impl FromMultiSectionTsv for CodonWeightMatrixParser {
+    type SectionHeader = SpecKey;
+    type Line = TsvRow;
+
+    fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    /// Determines whether a line corresponds to a section header by determining
+    /// whether it contains `|`. Leading `#` are stripped.
+    ///
+    /// ## Errors
+    ///
+    /// The header must contain at least two non-empty parts separated by `|`.
+    fn parse_section_header(line: &str) -> std::io::Result<Option<SpecKey>> {
+        line.contains('|')
+            .then(|| {
+                // Parse new section header
+                let line = line.trim_start_matches('#').trim_ascii();
+                let mut parts = line.split('|').map(str::trim_ascii).take_while(|str| !str.is_empty());
+
+                let (Some(reference_id), Some(product_name)) = (parts.next(), parts.next()) else {
+                    return Err(std::io::Error::other(format!(
+                        "Invalid weight matrix header. Expected reference_id|protein, found {line}"
+                    )));
+                };
+
+                Ok(SpecKey {
+                    reference_id: reference_id.to_string(),
+                    product_name: product_name.to_string(),
+                })
+            })
+            .transpose()
+    }
+
+    /// Adds the data for the given section to `self`.
+    ///
+    /// ## Errors
+    ///
+    /// The given [`SpecKey`] must not already be in the hashmap. No sections
+    /// can be non-empty, and no sections can contain duplicate codon-position
+    /// pairs.
+    fn process_section(&mut self, key: SpecKey, rows: impl Iterator<Item = TsvRow>) -> std::io::Result<()> {
+        match self.0.entry(key) {
+            Entry::Occupied(entry) => {
+                let SpecKey {
+                    reference_id,
+                    product_name,
+                } = entry.key();
+
+                Err(std::io::Error::other(format!(
+                    "A duplicate section for reference ID {reference_id} and product {product_name} was found"
+                )))
+            }
+            Entry::Vacant(entry) => {
+                let mut weights = CodonPositionWeights::new();
+                let mut raw_codons = HashSet::new();
+
+                for row in rows {
+                    let insert_res = weights.insert(row.position, row.codon, row.count);
+
+                    if let Err(e) = insert_res {
+                        let normalized = row.codon;
+
+                        let other_raw_codon = raw_codons.into_iter().find(|other_raw| {
+                            normalize_codon(*other_raw).is_ok_and(|other_normalized| other_normalized == normalized)
+                        });
+
+                        let Some(other_raw_codon) = other_raw_codon else {
+                            return Err(e);
+                        };
+
+                        if row.raw_codon != other_raw_codon {
+                            return Err(e
+                                .with_context(format!(
+                                    "Both {} and {} were found in the specs",
+                                    NucleotidesView::from(&other_raw_codon),
+                                    NucleotidesView::from(&row.raw_codon)
+                                ))
+                                .into());
+                        }
+
+                        return Err(e);
+                    }
+
+                    raw_codons.insert(row.raw_codon);
+                }
+
+                if weights.is_empty() {
+                    return Err(std::io::Error::other("No data was found under the header"));
+                }
+
+                entry.insert(weights);
+
+                Ok(())
+            }
+        }
+    }
 }
