@@ -1,8 +1,5 @@
 use crate::{
-    data::{
-        exons::{ExonCoords, Exons},
-        keys::RefKey,
-    },
+    data::{exons::Exons, keys::RefKey},
     ranges::parse_coords_inclusive,
 };
 use std::{
@@ -19,7 +16,6 @@ use zoe::{
         SanitizeBase,
         err::{ErrorWithContext, ResultWithErrorContext, WithSubitem},
     },
-    iter_utils::ProcessResultsExt,
     prelude::RefineDNAStrat,
     unwrap_or_return_some_err,
 };
@@ -89,7 +85,7 @@ struct TsvRow {
 
     /// A list of the exon coordinates in column 4 (e.g., `55..1683`,
     /// `1..33;689..1024`).
-    coords: Vec<ExonCoords>,
+    coords: Vec<Range<usize>>,
 
     /// An optional required codon at the start in column 5 (e.g., `ATG`).
     ///
@@ -135,8 +131,8 @@ impl FromStr for TsvRow {
         let product_name = product_name.to_string();
         let ctype = ctype.to_string();
 
-        // Parse coordinate ranges (e.g., 1..54 or 1..36;692..1027)
-        let coords = parse_exon_coords(coords)?;
+        // Parse reference ranges (e.g., 1..54 or 1..36;692..1027)
+        let coords = parse_coords_inclusive::<Range<usize>>(coords).collect::<Result<_, _>>()?;
 
         // Parse optional required start codon
         let required_start = match required_start {
@@ -309,48 +305,6 @@ impl Iterator for TsvReader {
 
         None
     }
-}
-
-/// Parses a non-empty semicolon-delimited list of 1-based end-inclusive
-/// reference ranges, converting them to 0-based [`ExonCoords`] ranges.
-///
-/// The length of the coding sequence is the sum of the lengths of all the
-/// reference ranges. The `cds_range` fields of the resulting [`ExonCoords`]
-/// partition this length, starting from 0.
-///
-/// ## Errors
-///
-/// - Each range must successfully parse
-/// - The ranges must be in order, with at most 2 nt of overlap
-/// - The ranges must not be perfectly adjacent (all ranges must either overlap
-///   or have a non-coding region between them)
-/// - A single region of overlap cannot involve more than 2 ranges
-fn parse_exon_coords(coords: &str) -> std::io::Result<Vec<ExonCoords>> {
-    let mut cds_start = 0;
-
-    let ref_ranges = parse_coords_inclusive::<Range<usize>>(coords);
-
-    let exon_ranges = ref_ranges.process_results(|iter| {
-        let exons = iter.map(|ref_range| {
-            let cds_end = cds_start + ref_range.len();
-
-            // Validity: ref_range is non-empty per guarantees from
-            // parse_coordinate_range, and they are the same length per above
-            // definition
-            let exon = ExonCoords {
-                ref_range,
-                cds_range: cds_start..cds_end,
-            };
-
-            cds_start = cds_end;
-
-            exon
-        });
-
-        exons.collect()
-    })?;
-
-    Ok(exon_ranges)
 }
 
 trait BufReaderExt {

@@ -56,7 +56,32 @@ impl Exons {
     /// For each set of three consecutive exons:
     ///
     /// - The three exons cannot all share a single region of overlap.
-    pub fn new(coords: Vec<ExonCoords>, required_start: Option<[u8; 3]>) -> std::io::Result<Self> {
+    pub fn new<I>(ref_ranges: I, required_start: Option<[u8; 3]>) -> std::io::Result<Self>
+    where
+        I: IntoIterator<Item = Range<usize>>, {
+        // Convert reference ranges into exon coordinates
+        let coords = {
+            let mut cds_start = 0;
+
+            let exons = ref_ranges.into_iter().map(|ref_range| {
+                if ref_range.is_empty() {
+                    return Err(std::io::Error::other("An empty exon was specified!"));
+                }
+
+                let cds_end = cds_start + ref_range.len();
+
+                let exon = ExonCoords {
+                    ref_range,
+                    cds_range: cds_start..cds_end,
+                };
+
+                cds_start = cds_end;
+                Ok(exon)
+            });
+
+            exons.collect::<Result<Vec<_>, _>>()?
+        };
+
         // Validate coords is non-empty and total length is multiple of 3
         let cds_len = coords
             .last()
