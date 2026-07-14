@@ -13,6 +13,8 @@ is roughly based on [Keep a Changelog], and this project adheres to
 ### Changed
 
 - Unrecognized fields in the TOML file are now rejected during parsing
+- Duplicate sections and keys in the codon-position weights file are now rejected
+- No data may appear before the first header in the codon-position weights file
 
 ### Fixes
 

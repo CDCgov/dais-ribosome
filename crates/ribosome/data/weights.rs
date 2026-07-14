@@ -285,116 +285,11 @@ fn normalize_codon(mut codon: [u8; 3]) -> std::io::Result<[u8; 3]> {
     Ok(codon)
 }
 
-/// A trait providing an abstraction for reading multi-section TSV files,
-/// parsing them into `Self`.
-pub trait FromMultiSectionTsv: Sized {
-    /// The type containing the data for a section header.
-    type SectionHeader;
-
-    /// The type of a parsed line, which should implement `FromStr` to describe
-    /// how it is parsed.
-    type Line: FromStr<Err = std::io::Error>;
-
-    /// Constructs a new empty `Self`, from which [`process_section`] will
-    /// should data.
-    fn new() -> Self;
-
-    /// Determines whether a line corresponds to a section header, and if so,
-    /// parses it and returns `Some`.
-    fn parse_section_header(line: &str) -> std::io::Result<Option<Self::SectionHeader>>;
-
-    /// Adds the data for the given section to `self`.
-    fn process_section(
-        &mut self, header: Self::SectionHeader, lines: impl Iterator<Item = Self::Line>,
-    ) -> std::io::Result<()>;
-
-    /// Parses the multi-sectioned TSV into `Self` from the given `reader`.
-    ///
-    /// ## Errors
-    ///
-    /// See the implementor for possible errors on parsing lines, parsing
-    /// section headers, and processing a section. Parsing errors typically
-    /// include context including the line number and failing line.
-    fn from_reader<R: BufRead>(reader: R) -> std::io::Result<Self> {
-        let mut out = Self::new();
-
-        reader.lines().process_results(|iter| {
-            // Enumerate the lines for error messages, trim & filter empty, and
-            // make it peekable for detecting headers
-            let mut lines = iter
-                .enumerate()
-                .filter_map(|(line_idx, line)| {
-                    let line = line.trim_ascii();
-                    (!line.is_empty()).then_some((line_idx, line.to_owned()))
-                })
-                .peekable();
-
-            // Empty file is ok
-            let Some((line_idx, mut current_header_line)) = lines.next() else {
-                return Ok(());
-            };
-
-            // Parse header for first line
-            let Some(mut current_header) = Self::parse_section_header(&current_header_line)? else {
-                return Err(std::io::Error::other(format!(
-                    "Failed to parse section header at line {line_num}: {current_header_line}",
-                    line_num = line_idx + 1
-                )));
-            };
-
-            loop {
-                // The next header and line, if found
-                let mut next_header = None;
-
-                // Get iterator of all regular lines under the current header,
-                // aborting when a header is found and storing it to next_header
-                let iter = std::iter::from_fn(|| {
-                    let (line_idx, line) = lines.next()?;
-
-                    match Self::parse_section_header(&line) {
-                        Ok(Some(header)) => {
-                            next_header = Some((header, line));
-                            None
-                        }
-                        Ok(None) => Some(line.parse().with_context(format!(
-                            "Failed to parse TSV data on line {line_num}: {line}",
-                            line_num = line_idx + 1
-                        ))),
-                        Err(e) => Some(Err(e.with_context(format!(
-                            "Failed to parse section header at line {line_num}: {line}",
-                            line_num = line_idx + 1
-                        )))),
-                    }
-                });
-
-                // Process the header + lines
-                iter.process_results(|iter| out.process_section(current_header, iter))?
-                    .with_context(format!("Failed to parse the data for section: {current_header_line}"))?;
-
-                match next_header {
-                    Some((header, header_line)) => {
-                        current_header = header;
-                        current_header_line = header_line;
-                    }
-                    None => break,
-                }
-            }
-
-            Ok(())
-        })??;
-
-        Ok(out)
-    }
-}
-
 /// A wrapper type around [`CodonWeightMatrix`] for which
 /// [`FromMultiSectionTsv`] is implemented.
 struct CodonWeightMatrixParser(CodonWeightMatrix);
 
-impl FromMultiSectionTsv for CodonWeightMatrixParser {
-    type SectionHeader = SpecKey;
-    type Line = TsvRow;
-
+impl CodonWeightMatrixParser {
     fn new() -> Self {
         Self(HashMap::new())
     }
@@ -488,5 +383,83 @@ impl FromMultiSectionTsv for CodonWeightMatrixParser {
                 Ok(())
             }
         }
+    }
+
+    /// Parses the multi-sectioned TSV into `Self` from the given `reader`.
+    ///
+    /// ## Errors
+    ///
+    /// See [`parse_section_header`], [`TsvRow::from_str`], and
+    /// [`process_section`]. Context including the line number and failing line
+    /// is added for parsing errors.
+    fn from_reader<R: BufRead>(reader: R) -> std::io::Result<Self> {
+        let mut out = Self::new();
+
+        reader.lines().process_results(|iter| {
+            // Enumerate the lines for error messages, trim & filter empty, and
+            // make it peekable for detecting headers
+            let mut lines = iter
+                .enumerate()
+                .filter_map(|(line_idx, line)| {
+                    let line = line.trim_ascii();
+                    (!line.is_empty()).then_some((line_idx, line.to_owned()))
+                })
+                .peekable();
+
+            // Empty file is ok
+            let Some((line_idx, mut current_header_line)) = lines.next() else {
+                return Ok(());
+            };
+
+            // Parse header for first line
+            let Some(mut current_header) = Self::parse_section_header(&current_header_line)? else {
+                return Err(std::io::Error::other(format!(
+                    "Failed to parse section header at line {line_num}: {current_header_line}",
+                    line_num = line_idx + 1
+                )));
+            };
+
+            loop {
+                // The next header and line, if found
+                let mut next_header = None;
+
+                // Get iterator of all regular lines under the current header,
+                // aborting when a header is found and storing it to next_header
+                let iter = std::iter::from_fn(|| {
+                    let (line_idx, line) = lines.next()?;
+
+                    match Self::parse_section_header(&line) {
+                        Ok(Some(header)) => {
+                            next_header = Some((header, line));
+                            None
+                        }
+                        Ok(None) => Some(line.parse().with_context(format!(
+                            "Failed to parse TSV data on line {line_num}: {line}",
+                            line_num = line_idx + 1
+                        ))),
+                        Err(e) => Some(Err(e.with_context(format!(
+                            "Failed to parse section header at line {line_num}: {line}",
+                            line_num = line_idx + 1
+                        )))),
+                    }
+                });
+
+                // Process the header + lines
+                iter.process_results(|iter| out.process_section(current_header, iter))?
+                    .with_context(format!("Failed to parse the data for section: {current_header_line}"))?;
+
+                match next_header {
+                    Some((header, header_line)) => {
+                        current_header = header;
+                        current_header_line = header_line;
+                    }
+                    None => break,
+                }
+            }
+
+            Ok(())
+        })??;
+
+        Ok(out)
     }
 }
