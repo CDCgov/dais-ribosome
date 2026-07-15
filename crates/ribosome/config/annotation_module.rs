@@ -41,6 +41,8 @@ pub struct AnnotationModule<'a> {
     /// types are encountered.
     pub(crate) other_modules:    Vec<(&'a String, PathBuf)>,
     /// Compound type map for iteration-based processing.
+    ///
+    /// The keys of the map (ctypes) will not contain tabs.
     pub(crate) ctype_map:        HashMap<String, Vec<ReferenceGroup<'a>>>,
     /// Do we have codon-position weights to work with
     pub(crate) have_weights:     bool,
@@ -192,7 +194,7 @@ impl<'a> AnnotationModule<'a> {
         for (module_name, ref_path) in &self.other_modules {
             if let Ok(reader) = FastaReader::from_path(ref_path) {
                 for fasta_result in reader.flatten() {
-                    if let Some(key) = RefKey::parse(&fasta_result.name)
+                    if let Ok(key) = RefKey::parse(&fasta_result.name)
                         && ctype == key.compound_type
                     {
                         return Some(module_name);
@@ -215,6 +217,8 @@ pub type AlignmentProfiles<'a> = SharedProfiles<'a, 32, 16, 8, 5>;
 #[derive(Debug)]
 pub(crate) struct ReferenceGroup<'a> {
     /// The shared reference ID of the reference sequences.
+    ///
+    /// This field will not contain tabs.
     pub(crate) reference_id:  String,
     /// The shared length of the reference sequences.
     pub(crate) length:        usize,

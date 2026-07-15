@@ -134,6 +134,10 @@ pub struct InsRowView<'a> {
 impl<'a> InsRowView<'a> {
     /// Creates a new [`InsRowView`] by extracting the relevant fields from the
     /// [`ComputedInsertion`] and [`ComputedProduct`].
+    ///
+    /// ## Validity
+    ///
+    /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
     pub fn new(
         insertion: &'a ComputedInsertion, product: &'a ComputedProduct, query_id: &'a str, ctype: &'a str,
         reference_id: &'a str,

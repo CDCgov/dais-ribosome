@@ -44,6 +44,10 @@ pub struct RibosomeOutput<'a> {
 #[derive(Debug)]
 pub struct GenomeAndProductStates<'a> {
     /// The ID for the reference group which was aligned against.
+    ///
+    /// ## Validity
+    ///
+    /// This field may not contain any tabs.
     pub reference_id: &'a str,
 
     /// The length of the reference sequence.

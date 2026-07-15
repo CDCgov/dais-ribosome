@@ -3,7 +3,11 @@
 use crate::data::keys::RefKey;
 use std::{collections::HashMap, path::Path};
 use zoe::{
-    data::{err::WithErrorContext, fasta::FastaSeq, nucleotides::CheckNucleotides},
+    data::{
+        err::{ResultWithErrorContext, WithErrorContext},
+        fasta::FastaSeq,
+        nucleotides::CheckNucleotides,
+    },
     prelude::{FastaReader, IsValidDNA, Nucleotides},
 };
 
@@ -20,9 +24,10 @@ use zoe::{
 ///
 /// ## Errors
 ///
-/// All IO errors are propagated without path context. An error is also returned
-/// if a sequence name doesn't match the expected format, with context including
-/// the expected format and header.
+/// - All IO errors are propagated without path context.
+/// - The reference ID and compound type cannot contain tabs.
+/// - The sequence name must match the expected format.
+/// - The sequence must contain IUPAC bases, and no gaps can be present.
 pub fn load_references(path: &Path) -> std::io::Result<HashMap<RefKey, Vec<Nucleotides>>> {
     let data = FastaReader::from_path(path)?;
     let mut refs = HashMap::new();
@@ -49,11 +54,7 @@ pub fn load_references(path: &Path) -> std::io::Result<HashMap<RefKey, Vec<Nucle
             return Err(e.into());
         }
 
-        let key = RefKey::parse(&name).ok_or_else(|| {
-            std::io::Error::other(format!(
-                "Reference FASTA header must have format '<reference_id>|<compound_type>', but found '{name}'",
-            ))
-        })?;
+        let key = RefKey::parse(&name).with_context("Failed to parse FASTA header")?;
 
         refs.entry(key).or_insert_with(Vec::new).push(sequence);
     }

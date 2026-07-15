@@ -61,6 +61,7 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
         let exons = Exons::new(coords, required_start)
             .with_context(format!("Failed to parse {ctype} product for reference ID {reference_id}"))?;
 
+        // Validity: the fields do not contain tabs since they are from TSV file
         let key = RefKey::new(reference_id, ctype);
         cds_specs.entry(key).or_default().push((product_name, exons));
     }
@@ -73,6 +74,8 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
 }
 
 /// The parsed data from a single row of the `cds-spec.tsv` file for the module.
+///
+/// No fields will contain any tabs, since that is the delimiter for the file.
 #[derive(Clone, Debug)]
 struct TsvRow {
     /// The reference ID in column 1 (e.g., `ANHUI01`, `PHUKET3073`).

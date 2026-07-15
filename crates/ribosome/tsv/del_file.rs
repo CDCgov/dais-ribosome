@@ -183,6 +183,10 @@ impl<'a> DelRowView<'a> {
     /// [`ComputedDeletion`] and [`ComputedProduct`].
     ///
     /// The `variant_hash` and `cds_id` fields will be `Some`.
+    ///
+    /// ## Validity
+    ///
+    /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
     pub fn new(
         deletion: &'a ComputedDeletion, product: &'a ComputedProduct<'a>, query_id: &'a str, ctype: &'a str,
         reference_id: &'a str,
@@ -208,6 +212,10 @@ impl<'a> DelRowView<'a> {
     /// [`DeletedProduct`].
     ///
     /// The `variant_hash` and `cds_id` fields will be `None`.
+    ///
+    /// ## Validity
+    ///
+    /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
     pub fn from_deleted_product(
         product: &'a DeletedProduct<'a>, query_id: &'a str, ctype: &'a str, reference_id: &'a str,
     ) -> Self {

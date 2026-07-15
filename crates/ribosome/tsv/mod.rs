@@ -13,6 +13,11 @@
 //! (useful for parsing) and a view struct (useful for writing without
 //! re-allocating).
 //!
+//! ## Validity
+//!
+//! To ensure the [`Display`] impls function as intended, none of the TSV record
+//! structs may contain tabs in their fields.
+//!
 //! [`outputs`]: crate::outputs
 //! [`RibosomeOutput`]: crate::outputs::RibosomeOutput
 //! [`write_product_output`]: Writers::write_product_output

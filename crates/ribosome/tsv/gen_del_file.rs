@@ -52,6 +52,10 @@ pub struct GenDelRowView<'a> {
 impl<'a> GenDelRowView<'a> {
     /// Creates a new [`GenDelRowView`] by extracting the relevant fields from
     /// the [`DeletionRange`].
+    ///
+    /// ## Validity
+    ///
+    /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
     pub fn new(deletion: &'a DeletionRange, query_id: &'a str, ctype: &'a str, reference_id: &'a str) -> GenDelRowView<'a> {
         Self {
             query_id,

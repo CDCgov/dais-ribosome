@@ -134,6 +134,10 @@ pub struct GenSeqRowView<'a> {
 impl<'a> GenSeqRowView<'a> {
     /// Creates a new [`GenSeqRowView`] by extracting the relevant fields from
     /// the [`ComputedGenome`].
+    ///
+    /// ## Validity
+    ///
+    /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
     pub fn new(
         genome: &'a ComputedGenome, query_id: &'a str, ctype: &'a str, reference_id: &'a str, formatting: &'a Formatting,
     ) -> Self {

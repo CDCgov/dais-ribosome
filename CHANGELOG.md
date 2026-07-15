@@ -21,6 +21,8 @@ is roughly based on [Keep a Changelog], and this project adheres to
 - Fixed incorrect TOML field for `try_stop_extension` in the flu module, causing stop extension to not apply
 - Fixed stack overflow when the CDS specs have a large number of comments or blank lines
 - Fixed incorrect documentation on the `repairable_end_limit` rule within the library
+- Tabs in FASTA-file query IDs are now replaced with a space in the output files 
+- Tabs in reference IDs are now rejected with an error
 
 ## [2.0.1] - 2026-07-10
 

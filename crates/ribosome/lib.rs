@@ -12,7 +12,7 @@ pub use config::{annotation_module::AnnotationModule, toml};
 pub use data::{NoNucleotides, QueryRecord, ranges};
 
 use std::ops::ControlFlow;
-use zoe::{alignment::AlignmentStates, data::cigar::Ciglet};
+use zoe::{alignment::AlignmentStates, data::cigar::Ciglet, search::replace_all_bytes};
 
 trait IteratorExt: Iterator {
     fn take_until_inclusive<F>(self, f: F) -> TakeUntilInclusive<Self, F>
@@ -176,6 +176,31 @@ impl AlignmentStatesExt for AlignmentStates {
             }
         } else {
             self.add_inc_op(inc, b'M');
+        }
+    }
+}
+
+/// An extension trait for [`String`] providing the ability to replace bytes.
+pub trait StringMut {
+    /// Replaces all instances of `needle` with `replacement`.
+    ///
+    /// ## Panics
+    ///
+    /// Panics if `needle` and `replacement` are not ASCII bytes.
+    fn replace_ascii_bytes(&mut self, needle: u8, replacement: u8);
+}
+
+impl StringMut for String {
+    fn replace_ascii_bytes(&mut self, needle: u8, replacement: u8) {
+        assert!(needle.is_ascii());
+        assert!(replacement.is_ascii());
+
+        // SAFETY: `needle` and `replacement` are ASCII bytes. ASCII bytes never
+        // occur inside UTF-8 multibyte sequences, so replacing one ASCII byte
+        // with another preserves the String's UTF-8 invariant.
+        unsafe {
+            let bytes = self.as_bytes_mut();
+            replace_all_bytes(bytes, needle, replacement);
         }
     }
 }

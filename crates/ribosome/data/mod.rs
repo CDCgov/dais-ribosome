@@ -5,6 +5,7 @@ pub(crate) mod keys;
 pub mod ranges;
 pub(crate) mod weights;
 
+use crate::StringMut;
 use std::{error::Error, fmt::Display};
 use zoe::{
     data::{ByteMap, RetainSequence, err::GetCode},
@@ -15,7 +16,7 @@ use zoe::{
 /// data.
 #[derive(Debug)]
 pub struct QueryRecord {
-    /// The ID of the query.
+    /// The ID of the query, containing no tabs.
     id:          String,
     /// The nucleotides sequence, containing unaligned, uppercase IUPAC. `U` is
     /// preserved in addition to `T`.
@@ -30,6 +31,7 @@ impl QueryRecord {
     ///
     /// The sequence is sanitized as follows:
     ///
+    /// - Any tabs in the `id` are replaced with a space
     /// - DNA IUPAC is preserved/uppercased (including preserving `U`)
     /// - Any other alphabetic bytes are mapped to uppercase `N`
     /// - Any non-alphabetic bytes are filtered
@@ -38,17 +40,25 @@ impl QueryRecord {
     ///
     /// If the sequence is empty after sanitization, [`NoNucleotides`] is
     /// returned.
-    pub fn new(id: String, sequence: Vec<u8>, ctype: String) -> Result<Self, NoNucleotides> {
+    pub fn new(mut id: String, sequence: Vec<u8>, ctype: String) -> Result<Self, NoNucleotides> {
+        // Note: the ctype may in fact contain tabs, such as due to
+        // --assume-default-ctype. The specs cannot have a tab in the ctype, so
+        // this will fail to match anything and will not invalidate TSV output
+
         let nucleotides = sanitize_seq(sequence);
 
         if nucleotides.is_empty() {
             return Err(NoNucleotides { id });
         }
 
+        id.replace_ascii_bytes(b'\t', b' ');
+
         Ok(Self { id, nucleotides, ctype })
     }
 
-    /// Returns the ID of the query.
+    /// Returns the sanitized ID of the query.
+    ///
+    /// This will not contain any tabs.
     #[inline]
     pub fn id(&self) -> &String {
         &self.id
@@ -61,6 +71,8 @@ impl QueryRecord {
     }
 
     /// Returns the compound type of the query.
+    ///
+    /// This will not contain any tabs
     #[inline]
     pub fn ctype(&self) -> &String {
         &self.ctype

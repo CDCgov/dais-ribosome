@@ -309,6 +309,10 @@ pub enum SeqRowView<'a> {
 impl<'a> SeqRowView<'a> {
     /// Creates a new [`SeqRowView`] by extracting the relevant fields from the
     /// [`MaybeComputedProduct`].
+    ///
+    /// ## Validity
+    ///
+    /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
     pub fn new(
         product: &'a MaybeComputedProduct<'a>, query_id: &'a str, ctype: &'a str, reference_id: &'a str,
         formatting: &'a Formatting,
@@ -460,6 +464,10 @@ pub struct SeqDataView<'a> {
 impl<'a> SeqDataView<'a> {
     /// Creates a new [`SeqDataView`] by extracting the relevant fields from the
     /// [`ComputedProduct`].
+    ///
+    /// ## Validity
+    ///
+    /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
     pub fn new(
         product: &'a ComputedProduct<'a>, query_id: &'a str, ctype: &'a str, reference_id: &'a str,
         formatting: &'a Formatting,

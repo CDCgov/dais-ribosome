@@ -91,6 +91,10 @@ pub struct GenInsRowView<'a> {
 impl<'a> GenInsRowView<'a> {
     /// Creates a new [`GenInsRowView`] by extracting the relevant fields from
     /// the [`ComputedGenomeInsertion`].
+    ///
+    /// ## Validity
+    ///
+    /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
     pub fn new(insertion: &'a ComputedGenomeInsertion, query_id: &'a str, ctype: &'a str, reference_id: &'a str) -> Self {
         Self {
             query_id,
