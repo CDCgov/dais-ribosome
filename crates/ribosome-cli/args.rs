@@ -49,15 +49,14 @@ pub struct Cli {
     #[arg(short = 'T', long)]
     pub threads: Option<NonZero<usize>>,
 
-    /// Automatically detect the array task id from SGE or Slurm environment
-    /// variables and write partition files for downstream collation.
+    /// Automatically detect the array task id from SGE environment variables
+    /// and write partition files for downstream collation.
     ///
     /// Output files are required and will be suffixed with a partition id.
     #[arg(short = 'G', long, conflicts_with_all = ["threads", "submit_grid_job"])]
     pub is_grid_task: bool,
 
-    /// Submit and block on a grid engine (SGE or Slurm) array job of the
-    /// specified size.
+    /// Submit and block on a grid engine (SGE) array job of the specified size.
     #[arg(short = 'S', long, conflicts_with_all = ["threads", "is_grid_task"])]
     pub submit_grid_job: Option<usize>,
 

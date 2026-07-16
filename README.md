@@ -183,7 +183,7 @@ Options:
           Run in simultaneous multi-threaded mode
 
   -G, --is-grid-task
-          Automatically detect the array task id from SGE or Slurm environment variables and write partition files for downstream collation.
+          Automatically detect the array task id from SGE environment variables and write partition files for downstream collation.
 
           Output files are required and will be suffixed with a partition id.
 
