@@ -1,5 +1,6 @@
 #![feature(string_from_utf8_lossy_owned, bufreader_peek, try_trait_v2, iter_intersperse)]
 
+use crate::validate_paths::ValidatePaths;
 use args::Args;
 use dais_ribosome::{AnnotationModule, errors::RibosomeError, outputs::RibosomeOutput, toml::TomlConfig, tsv::Writers};
 use input::{NoCtype, QueryInfo, QueryReader};
@@ -19,12 +20,13 @@ use zoe::{
     unwrap_or_return_some_err,
 };
 
-pub mod args;
-pub mod input;
-pub mod log;
-pub mod num_cpus;
-pub mod par_utils;
-pub mod paths;
+mod args;
+mod input;
+mod log;
+mod num_cpus;
+mod par_utils;
+mod paths;
+mod validate_paths;
 
 // If we later want to match the shell script, we can use:
 // <https://docs.rs/git-version/latest/git_version/macro.git_describe.html>
@@ -34,6 +36,8 @@ fn main() {
     // Parse the arguments, get grid info, adjust paths based on task ID, open
     // writers.
     let (args, grid_info) = Args::parse_maybe_grid().unwrap_or_fail();
+
+    args.validate_paths().unwrap_or_fail();
 
     // Find the full file-system path to ribosome_res/modules.toml
     let toml_path = find_modules_toml().unwrap_or_fail();

@@ -1,6 +1,7 @@
 use crate::{
     log::time_stamp,
     par_utils::grid::{GridCompatibleArgs, GridCompatibleCli},
+    validate_paths::ValidatePaths,
 };
 use clap::{Arg, Parser, builder::OsStr};
 use std::{
@@ -171,6 +172,19 @@ pub struct Args {
     pub grid_log_file:        PathBuf,
 }
 
+impl ValidatePaths for Args {
+    fn inputs(&self) -> impl IntoIterator<Item = &PathBuf> {
+        [&self.data_file]
+    }
+
+    fn outputs(&self) -> impl IntoIterator<Item = &PathBuf> {
+        let product_output = self.product_output.iter();
+        let genome_output = self.genome_output.iter().flatten();
+
+        product_output.chain(genome_output)
+    }
+}
+
 impl GridCompatibleArgs for Args {
     type Cli = Cli;
 
@@ -246,20 +260,6 @@ impl GridCompatibleArgs for Args {
             filename.push("_ribosome_log.txt");
             grid_prefix.with_file_name(filename)
         };
-
-        // Look for path duplicates in the upper triangle of paths
-        let mut c1 = product_output.iter().chain(genome_output.iter().flatten());
-        while let Some(p1) = c1.next() {
-            let c2 = c1.clone();
-            for p2 in c2 {
-                if p1 == p2 {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "No two paths can be the same.",
-                    ));
-                }
-            }
-        }
 
         Ok(Self {
             data_file: cli.data_file,

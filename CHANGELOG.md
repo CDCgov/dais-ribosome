@@ -24,6 +24,7 @@ is roughly based on [Keep a Changelog], and this project adheres to
 - Tabs in FASTA-file query IDs are now replaced with a space in the output files 
 - Tabs in reference IDs are now rejected with an error
 - Sections in the specs file or codon-position weights file that do not match each other or the reference file now throw an error
+- An error is now thrown if any file is both an input and an output, or if any output files coincide
 
 ## [2.0.1] - 2026-07-10
 

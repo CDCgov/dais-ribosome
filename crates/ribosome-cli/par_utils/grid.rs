@@ -268,6 +268,7 @@ pub trait GridCompatibleArgs: Sized {
     /// See [`from_cli`] for any other errors.
     ///
     /// [`from_cli`]: GridCompatibleArgs::from_cli
+    #[allow(dead_code)]
     fn parse_from_maybe_grid<I, T>(itr: I) -> std::io::Result<(Self, Option<GridInfo>)>
     where
         I: IntoIterator<Item = T>,
@@ -931,6 +932,7 @@ pub struct GridTaskInfo {
     pub task_first:    usize,
     pub task_last:     usize,
     pub task_stepsize: usize,
+    #[allow(dead_code)]
     pub scheduler:     GridScheduler,
     /// The output paths that will be formed via collation.
     output_paths:      Vec<PathBuf>,
