@@ -4,11 +4,11 @@ All notable changes to this project will be documented in this file. The format
 is roughly based on [Keep a Changelog], and this project adheres to
 [Semantic Versioning].
 
-## [2.0.2] - TBD
+## [2.0.2] - 2026-07-17
 
 ### Added
 
-- `zoe_genome_aln` is now a field of `GenomeAndProductStates` to provide access to the genome alignment and CIGAR string
+- Library change: `zoe_genome_aln` is now a field of `GenomeAndProductStates` to provide access to the genome alignment and CIGAR string
 
 ### Changed
 
@@ -19,13 +19,13 @@ is roughly based on [Keep a Changelog], and this project adheres to
 ### Fixes
 
 - Fixed incorrect TOML field for `try_stop_extension` in the flu module, causing stop extension to not apply
-- Fixed overflow when deletions near -2 ribosomal frameshifts occur
-- Fixed stack overflow when the CDS specs have a large number of comments or blank lines
-- Fixed incorrect documentation on the `repairable_end_limit` rule within the library
 - Tabs in FASTA-file query IDs are now replaced with a space in the output files 
-- Tabs in reference IDs are now rejected with an error
 - Sections in the specs file or codon-position weights file that do not match each other or the reference file now throw an error
+- Fixed stack overflow when the CDS specs have a large number of comments or blank lines
+- Tabs in reference IDs are now rejected with an error
 - An error is now thrown if any file is both an input and an output, or if any output files coincide
+- Fixed incorrect documentation on the `repairable_end_limit` rule within the library
+- Fixed overflow when deletions near -2 ribosomal frameshifts occur
 
 ## [2.0.1] - 2026-07-10
 

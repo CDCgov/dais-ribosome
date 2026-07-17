@@ -1,4 +1,5 @@
 #![feature(string_from_utf8_lossy_owned, bufreader_peek, try_trait_v2, iter_intersperse)]
+#![allow(stable_features)]
 
 use crate::validate_paths::ValidatePaths;
 use args::Args;

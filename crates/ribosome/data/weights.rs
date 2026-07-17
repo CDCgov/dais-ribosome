@@ -285,8 +285,7 @@ fn normalize_codon(mut codon: [u8; 3]) -> std::io::Result<[u8; 3]> {
     Ok(codon)
 }
 
-/// A wrapper type around [`CodonWeightMatrix`] for which
-/// [`FromMultiSectionTsv`] is implemented.
+/// A wrapper type around [`CodonWeightMatrix`] used for parsing.
 struct CodonWeightMatrixParser(CodonWeightMatrix);
 
 impl CodonWeightMatrixParser {
@@ -392,6 +391,9 @@ impl CodonWeightMatrixParser {
     /// See [`parse_section_header`], [`TsvRow::from_str`], and
     /// [`process_section`]. Context including the line number and failing line
     /// is added for parsing errors.
+    ///
+    /// [`parse_section_header`]: CodonWeightMatrixParser::parse_section_header
+    /// [`process_section`]: CodonWeightMatrixParser::process_section
     fn from_reader<R: BufRead>(reader: R) -> std::io::Result<Self> {
         let mut out = Self::new();
 

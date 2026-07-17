@@ -65,6 +65,8 @@ impl<'a> AnnotationModule<'a> {
     ///   module's folder and be parsed successfully.
     /// - The CDS specifications file must exist within the module's folder and
     ///   be parsed successfully.
+    /// - All information in the files must correspond to information in the
+    ///   other files.
     pub fn new(config: &'a TomlConfig, toml_path: &Path, module_name: &str) -> std::io::Result<AnnotationModule<'a>> {
         // Get path to ribosome_res directory
         let modules_dir = toml_path
