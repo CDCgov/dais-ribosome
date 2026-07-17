@@ -10,10 +10,11 @@ use crate::{
     },
     data::{
         QueryRecord,
-        ranges::{CdsStateRange, RangeExt, StateRange},
+        ranges::{CdsStateRange, InsertionIdx, InsertionRange, RangeExt, StateRange},
     },
     errors::RibosomeError,
     outputs::{GenomeAndProductStates, Product, RibosomeOutput},
+    ranges::CdsInsertionRange,
 };
 use std::ops::Range;
 use zoe::{alignment::Alignment, data::types::nucleotides::CodonExtension, prelude::*};
@@ -51,7 +52,7 @@ impl<'a> AnnotationModule<'a> {
 
             // Compute the stop extension, which requires that the genome
             // alignment extended to the end of the reference
-            self.rule_stop_extension(&query, &mut genome_aln);
+            let stop_extension = self.rule_stop_extension(&query, &genome_aln);
 
             // Validity: requirements met based on best_alignment guarantees
             let genome_aln_states = StateRange::state_ranges_from_aligment(&genome_aln);
@@ -76,12 +77,29 @@ impl<'a> AnnotationModule<'a> {
                     continue;
                 }
 
+                // Add stop extension from genome alignment if applicable
+                if let Some(ext) = &stop_extension
+                    && product_spec.exons.last().ref_range.end == ext.ref_index.right()
+                {
+                    // If the genome alignment and the exons both extends to the
+                    // end of the reference, so should the product alignment
+                    debug_assert_eq!(product.rpad, 0);
+
+                    let stop_extension = CdsInsertionRange {
+                        cds_index:   InsertionIdx::from_right_idx(product_spec.exons.cds_len()),
+                        query_range: ext.query_range.clone(),
+                    };
+
+                    product.product_ranges.push(CdsStateRange::I(stop_extension));
+                }
+
                 products.push(product);
             }
 
             states.push(GenomeAndProductStates::new(
                 ref_id_data,
                 genome_aln_states,
+                stop_extension,
                 products,
                 genome_aln.states,
             ));
@@ -95,14 +113,13 @@ impl<'a> AnnotationModule<'a> {
         })
     }
 
-    /// Adds the stop extension to the genome alignment if the
-    /// [`try_stop_extension`] rule is set.
+    /// Computes the stop extension if the [`try_stop_extension`] rule is set.
     ///
-    /// The stop extension if added will have length at least 3. The last three
-    /// insertions will correspond to the stop codon in `query`.
+    /// If `Some`, the returned range will have length at least 3. The last
+    /// three indices will correspond to the stop codon in `query`.
     ///
     /// [`try_stop_extension`]: crate::config::toml::Rules::try_stop_extension
-    fn rule_stop_extension(&self, query: &QueryRecord, genome_aln: &mut Alignment<u32>) {
+    fn rule_stop_extension(&self, query: &QueryRecord, genome_aln: &Alignment<u32>) -> Option<InsertionRange> {
         let query_seq = query.nucleotides();
 
         if self.rules.try_stop_extension
@@ -113,9 +130,20 @@ impl<'a> AnnotationModule<'a> {
             && !last_aligned_codon.is_std_stop_codon()
             && let Some(stop_codon_index) = query_seq.slice(genome_aln.query_range.end..).find_next_aa_in_frame(b'*')
         {
-            let inc = stop_codon_index + 3;
+            // The exclusive end of the last alignment range is the inclusive
+            // start of the insertion
+            let start_index = genome_aln.query_range.end;
 
-            genome_aln.states.add_inc_op(inc, b'I');
+            // Convert inclusive start of codon to exclusive end of codon
+            let end_index = genome_aln.query_range.end + stop_codon_index + 3;
+
+            Some(InsertionRange {
+                // The insertion is before the end (ref_range.end)
+                ref_index:   InsertionIdx::from_right_idx(genome_aln.ref_range.end),
+                query_range: start_index..end_index,
+            })
+        } else {
+            None
         }
     }
 
