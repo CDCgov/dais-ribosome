@@ -15,7 +15,7 @@ if [ -n "$1" ]; then
     fi
 fi
 
-cargo build --profile prod \
+cargo +nightly build --profile prod \
     && cp target/prod/$app . \
     && ./.package-sswsort.sh \
     || {

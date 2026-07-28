@@ -244,17 +244,24 @@ sophisticated wrapper using `--is-grid-task` for the executors.
 
 ## Installation
 
-***DAIS-ribosome*** [is packaged in all releases since v2.0.0](https://github.com/CDCgov/dais-ribosome/releases). To compile and install yourself, first install [rustup](https://forge.rust-lang.org/infra/other-installation-methods.html), and then:
+***DAIS-ribosome*** [is packaged in all releases since v2.0.0][releases]. A release can be
+used with the following steps:
 
-```bash
-rustup toolchain install nightly
-git clone https://github.com/CDCgov/dais-ribosome
-cd dais-ribosome
-cargo +nightly b -r
+1. Download the `tar.gz` file for your platform from the [release
+   page][releases]
+2. Unzip it with `tar -xzfv path/to/tar.gz`
+3. The binary can be run within that folder, such as `./ribosome --help`. If the
+   binary is moved to a new location, ensure that `ribosome_res` and
+   `sswsort_res` are also moved.
 
-# Installed here:
-ls -l target/release/ribosome
-```
+Alternatively, you can compile and install DAIS-ribosome yourself with the
+following steps:
+
+1. Install [rustup]
+2. Add the `nightly` toolchain with `rustup toolchain install nightly`
+3. Clone DAIS-ribosome using `git clone https://github.com/CDCgov/dais-ribosome`
+4. Enter the directory for DAIS-ribosome with `cd dais-ribosome`
+5. Run `./install.sh` to compile DAIS-ribosome and fetch SSWSort resources
 
 For RHEL 8 compatible Linux distributions, you can either rebuild from the
 included
@@ -316,3 +323,5 @@ Please refer to [CDC's Template Repository](https://github.com/CDCgov/template) 
 
 [standard amino acid codes]: https://www.bioinformatics.org/sms/iupac.html
 [Zoe]: https://github.com/CDCgov/zoe
+[releases]: https://github.com/CDCgov/dais-ribosome/releases
+[rustup]: https://forge.rust-lang.org/infra/other-installation-methods.html
