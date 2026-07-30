@@ -1,5 +1,5 @@
 use dais_ribosome::{AnnotationModule, errors::UnimplementedCtype};
-use jiff::Timestamp;
+use jiff::Zoned;
 use std::collections::{HashMap, HashSet};
 
 const PROG: &str = "RIBOSOME";
@@ -14,12 +14,12 @@ pub fn time_stamp(message: &str, use_stderr: bool) {
     if use_stderr {
         eprintln!(
             "[{now}] {pad}{PROG} :: {message}",
-            now = Timestamp::now().strftime("%Y-%m-%d %k:%M:%S")
+            now = Zoned::now().strftime("%Y-%m-%d %k:%M:%S")
         );
     } else {
         println!(
             "[{now}] {pad}{PROG} :: {message}",
-            now = Timestamp::now().strftime("%Y-%m-%d %k:%M:%S")
+            now = Zoned::now().strftime("%Y-%m-%d %k:%M:%S")
         );
     }
 }

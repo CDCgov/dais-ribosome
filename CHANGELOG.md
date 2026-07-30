@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file. The format
 is roughly based on [Keep a Changelog], and this project adheres to
 [Semantic Versioning].
 
+## [2.0.3] - 2026-07-30
+
+### Fixed
+
+- Fixed bug where timestamp was printing in `UTC+0` time zone rather than in the
+  system's current time zone
+
 ## [2.0.2] - 2026-07-17
 
 ### Added
@@ -223,6 +230,7 @@ is roughly based on [Keep a Changelog], and this project adheres to
 
 <!-- Versions -->
 
+[2.0.3]: https://github.com/CDCgov/dais-ribosome/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/CDCgov/dais-ribosome/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/CDCgov/dais-ribosome/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/CDCgov/dais-ribosome/compare/v1.7.1...v2.0.0
