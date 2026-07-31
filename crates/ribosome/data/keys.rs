@@ -39,7 +39,9 @@ impl RefKey {
     /// can be present in the `reference_id` or `compound_type`. Context
     /// including the `name` is included.
     pub fn parse(name: &str) -> std::io::Result<Self> {
-        let mut parts = name.split('|');
+        // Trim the parts in case there is whitespace around the pipe, and
+        // reject empty IDs and compound types
+        let mut parts = name.split('|').map(str::trim_ascii).take_while(|s| !s.is_empty());
 
         let (Some(reference_id), Some(compound_type)) = (parts.next(), parts.next()) else {
             return Err(std::io::Error::other(format!(
