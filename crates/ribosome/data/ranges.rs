@@ -9,7 +9,7 @@ use std::{
     ops::Range,
 };
 use zoe::{
-    alignment::Alignment,
+    alignment::{Alignment, AlignmentStates},
     data::{cigar::Ciglet, err::ResultWithErrorContext},
 };
 
@@ -198,6 +198,52 @@ impl MatchRange {
         // Validity: The ranges are the same length
         self.query_range.is_empty()
     }
+
+    /// Extends the start of both ranges by `amount`.
+    ///
+    /// This _decreases_ the start of the ranges.
+    pub(crate) fn extend_start(&mut self, amount: usize) {
+        // Validity: The ranges are extended by the same amount, so they remain
+        // the same length
+        self.ref_range.start -= amount;
+        self.query_range.start -= amount;
+    }
+
+    /// Extends the end of both ranges by `amount`.
+    ///
+    /// This _increases_ the end of the ranges.
+    pub(crate) fn extend_end(&mut self, amount: usize) {
+        // Validity: The ranges are extended by the same amount, so they remain
+        // the same length
+        self.ref_range.end += amount;
+        self.query_range.end += amount;
+    }
+
+    /// Cuts indices from the start of both ranges by `amount`.
+    ///
+    /// This _increases_ the start of the ranges.
+    pub(crate) fn cut_start(&mut self, amount: usize) {
+        // Validity: The ranges are cut by the same amount, so they remain the
+        // same length
+        self.ref_range.start += amount;
+        self.query_range.start += amount;
+
+        debug_assert!(self.ref_range.start <= self.ref_range.end);
+        debug_assert!(self.query_range.start <= self.query_range.end);
+    }
+
+    /// Cuts indices from the end of both ranges by `amount`.
+    ///
+    /// This _decreases_ the end of the ranges.
+    pub(crate) fn cut_end(&mut self, amount: usize) {
+        // Validity: The ranges are cut by the same amount, so they remain the
+        // same length
+        self.ref_range.end -= amount;
+        self.query_range.end -= amount;
+
+        debug_assert!(self.ref_range.start <= self.ref_range.end);
+        debug_assert!(self.query_range.start <= self.query_range.end);
+    }
 }
 
 /// The range within the reference where a deletion occurs.
@@ -221,6 +267,20 @@ impl DeletionRange {
     pub fn is_empty(&self) -> bool {
         // Validity: The ranges are the same length
         self.ref_range.is_empty()
+    }
+
+    /// Shifts the deletion in the coding sequence to the left by `amount`.
+    ///
+    /// This subtracts `amount` from the start and end of the range.
+    pub fn shift_left(&mut self, amount: usize) {
+        self.ref_range = self.ref_range.sub(amount);
+    }
+
+    /// Shifts the deletion in the coding sequence to the right by `amount`.
+    ///
+    /// This adds `amount` to the start and end of the range.
+    pub fn shift_right(&mut self, amount: usize) {
+        self.ref_range = self.ref_range.add(amount);
     }
 }
 
@@ -409,16 +469,46 @@ impl CdsInsertionRange {
 }
 
 impl StateRange {
+    /// Returns whether the [`StateRange`] corresponds to a match.
     pub fn is_match(&self) -> bool {
         matches!(self, StateRange::M(_))
     }
 
+    /// Returns whether the [`StateRange`] corresponds to an insertion.
     pub fn is_insert(&self) -> bool {
         matches!(self, StateRange::I(_))
     }
 
+    /// Returns whether the [`StateRange`] corresponds to a deletion.
     pub fn is_delete(&self) -> bool {
         matches!(self, StateRange::D(_))
+    }
+
+    /// Extracts the contained [`MatchRange`], returning `None` if a different
+    /// state is present.
+    pub fn match_range(&self) -> Option<&MatchRange> {
+        match self {
+            StateRange::M(match_range) => Some(match_range),
+            _ => None,
+        }
+    }
+
+    /// Extracts the contained [`InsertionRange`], returning `None` if a
+    /// different state is present.
+    pub fn insert_range(&self) -> Option<&InsertionRange> {
+        match self {
+            StateRange::I(insert_range) => Some(insert_range),
+            _ => None,
+        }
+    }
+
+    /// Extracts the contained [`DeletionRange`], returning `None` if a
+    /// different state is present.
+    pub fn delete_range(&self) -> Option<&DeletionRange> {
+        match self {
+            StateRange::D(delete_range) => Some(delete_range),
+            _ => None,
+        }
     }
 
     /// Returns the inclusive start index of the state in reference coordinates.
@@ -502,6 +592,57 @@ impl StateRange {
                 }
                 _ => {}
             }
+        }
+
+        states
+    }
+
+    /// Converts a slice of [`StateRange`] to an [`Alignment`].
+    ///
+    /// Soft clipping is included. `query_len` is used to compute the soft
+    /// clipping at the end.
+    ///
+    /// ## Validity
+    ///
+    /// `ranges` must correspond to a valid alignment. For example, the ranges
+    /// must form an ordered partition of `query_range` and `ref_range` without
+    /// overlap or gap.
+    pub(crate) fn state_ranges_to_alignment_states(ranges: &[StateRange], query_len: usize) -> AlignmentStates {
+        // Add 2 for possible clipping
+        let mut states = AlignmentStates::with_capacity(ranges.len() + 2);
+
+        let query_start = ranges
+            .iter()
+            .filter_map(|state| match state {
+                StateRange::M(match_range) => Some(match_range.query_range.start),
+                StateRange::D(_) => None,
+                StateRange::I(insertion_range) => Some(insertion_range.query_range.start),
+            })
+            .next();
+
+        let query_end = ranges
+            .iter()
+            .filter_map(|state| match state {
+                StateRange::M(match_range) => Some(match_range.query_range.end),
+                StateRange::D(_) => None,
+                StateRange::I(insertion_range) => Some(insertion_range.query_range.end),
+            })
+            .next_back();
+
+        if let Some(query_start) = query_start {
+            states.soft_clip(query_start);
+        }
+
+        for range in ranges {
+            match range {
+                StateRange::M(match_range) => states.add_inc_op(match_range.len(), b'M'),
+                StateRange::D(deletion_range) => states.add_inc_op(deletion_range.len(), b'D'),
+                StateRange::I(insertion_range) => states.add_inc_op(insertion_range.len(), b'I'),
+            }
+        }
+
+        if let Some(query_end) = query_end {
+            states.soft_clip(query_len - query_end);
         }
 
         states

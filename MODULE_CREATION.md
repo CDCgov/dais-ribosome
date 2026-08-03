@@ -184,6 +184,10 @@ ctype by adding additional lines under `[module.alignment]`:
 ctype = { match = 10, mismatch = 1, gap_open = 50, gap_extend = 1 }
 ```
 
+The `[module.experimental]` section can be included to utilize experimental
+features. These features are in active development or are under evaluation, and
+therefore may be changed or removed at any time.
+
 The following is a list of the field paths that can be specified:
 
 |                                                   Field Path | Type                       | Required | Default      | Description                                                                                                                             |
@@ -205,6 +209,7 @@ The following is a list of the field paths that can be specified:
 |     alignment.default.mismatch<br />alignment.CTYPE.mismatch | Integer                    | Yes      | -            | The score/penalty for a mismatch, automatically converted to be non-positive, with optional CTYPE-specific overrides                    |
 |     alignment.default.gap_open<br />alignment.CTYPE.gap_open | Integer                    | Yes      | -            | The score/penalty for opening a gap, automatically converted to be non-positive, with optional CTYPE-specific overrides                 |
 | alignment.default.gap_extend<br />alignment.CTYPE.gap_extend | Integer                    | Yes      | -            | The score/penalty for extending a gap, automatically converted to be non-positive, with optional CTYPE-specific overrides               |
+|                                   experimental.rewrite_rules | File Name                  | No       | None         | The name of the rewrite rules file, which should be located in the module's folder (*warning: this is experimental and may be changed*) |
 
 See
 [*Zoe*](https://docs.rs/zoe/0.0.29/zoe/alignment/sw/index.html#affine-gap-penalties)
@@ -224,3 +229,53 @@ SSWSort modules may fail to be located, and an error may be issued for
 unclassified input sequences at runtime. Note that the `install.sh` script
 automatically handles loading the `sswsort_res` folder from the GitHub
 repository.
+
+## Experimental: Rewriting Rules
+
+To achieve desired alignments, it is important to pick good references that are
+close to the sequences being annotated, and to properly adjust the
+codon-position weights.
+
+However, there are still scenarios where these steps may fail to achieve the
+desired results. For example, if a deletion occurs in an area with repeats in
+the reference, then the genome alignment might arbitrarily pick which repeat to
+count as the deletion. This choice is deterministic, so it is typically not an
+issue, but if one placement is desired over another, then this can be
+problematic.
+
+One *experimental* solution to this is deletion rewriting. The semantics of the
+file format and rule may change even without a minor version release, so use
+with caution. Start by creating an additional TOML file within the module,
+typically named `<module>-rewrite-rules.toml`. Then add rewrite rules according
+to the following format:
+
+|                         Field Path | Type                      | Required | Description                                                                             |
+| ---------------------------------: | ------------------------- | -------- | --------------------------------------------------------------------------------------- |
+|        genome.deletions.rule.ctype | String                    | Yes      | The compound type for which the rule is applied                                         |
+| genome.deletions.rule.reference_id | String                    | Yes      | The reference ID for which the rule is applied                                          |
+|         genome.deletions.rule.from | String (`<start>..<end>`) | Yes      | The 1-based end-inclusive genome range where if a deletion occurs, it will be rewritten |
+|           genome.deletions.rule.to | String (`<start>..<end>`) | Yes      | The 1-based end-inclusive genome range to move the deletion to                          |
+
+After performing genome alignment, DAIS-ribosome will check whether a deletion
+occurs at any of the `from` ranges. If it does, then it will attempt to move the
+deletion to the `to` range. These ranges must be the same length and not be
+equal. An example is:
+
+```toml
+[[genome.deletions]]
+rule = { ctype = "B_HA", reference_id = "BRISBANE60", from = "535..543", to = "529..537" }
+```
+
+The following is a thorough list of conditions that must hold for rewriting to
+succeed:
+
+- The `from` range is a deletion with exactly the specified length (it cannot be
+  longer than the `from` range)
+- The `to` range must be included in the alignment
+- Positions in the `to` range that are not also in `from` must be matches
+- Any positions between the two ranges must also be matches
+- At least one additional match state must be present adjacent to the `to` range
+  to prevent pathological cases
+
+The rules are then applied in the order present in the file. Any of these
+behaviors are subject to change.

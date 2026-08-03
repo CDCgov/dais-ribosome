@@ -17,7 +17,11 @@ use crate::{
     ranges::CdsInsertionRange,
 };
 use std::ops::Range;
-use zoe::{alignment::Alignment, data::types::nucleotides::CodonExtension, prelude::*};
+use zoe::{
+    alignment::{Alignment, AlignmentStates},
+    data::types::nucleotides::CodonExtension,
+    prelude::*,
+};
 
 impl<'a> AnnotationModule<'a> {
     /// Processes a single query, returning [`RibosomeOutput`] containing all
@@ -55,7 +59,16 @@ impl<'a> AnnotationModule<'a> {
             let stop_extension = self.rule_stop_extension(&query, &genome_aln);
 
             // Validity: requirements met based on best_alignment guarantees
-            let genome_aln_states = StateRange::state_ranges_from_aligment(&genome_aln);
+            let mut genome_aln_states = StateRange::state_ranges_from_aligment(&genome_aln);
+
+            // Mutate the genome alignment based on any rules for rewriting of
+            // deletions
+            self.rule_rewrite_dels(
+                &mut genome_aln_states,
+                &mut genome_aln.states,
+                ref_id_data,
+                query.nucleotides().len(),
+            );
 
             let mut products = Vec::with_capacity(ref_id_data.product_specs.len());
 
@@ -144,6 +157,43 @@ impl<'a> AnnotationModule<'a> {
             })
         } else {
             None
+        }
+    }
+
+    /// Rewrite deletions in the alignment per the experimental rewrite rules.
+    ///
+    /// Rewriting will forcibly place a deletion to be in a new location,
+    /// regardless of score. Rewriting only occurs if:
+    ///
+    /// - The `from` range is a deletion with exactly the specified length (it
+    ///   cannot be longer than the `from` range)
+    /// - The `to` range must be included in the alignment
+    /// - Positions in the `to` range that are not also in `from` must be
+    ///   matches
+    /// - Any positions between the two ranges must also be matches
+    /// - At least one additional match state must be present adjacent to the
+    ///   `to` range to prevent pathological cases
+    ///
+    /// Multiple rules are applied in the order present in the file.
+    // TODO: Fix this to be more efficient when no deletions are present. This
+    // could potentially be to change the order in which rules are applied so
+    // that only a single pass is needed
+    fn rule_rewrite_dels(
+        &self, genome_aln_states: &mut Vec<StateRange>, alignment: &mut AlignmentStates, reference: &ReferenceGroup,
+        query_len: usize,
+    ) {
+        // Track whether any rewriting rule were applied, in which case we
+        // recompute the Zoe alignment states
+        let mut any_rewritten = false;
+
+        // Apply each rule in the order
+        for rewrite_del in &reference.rewrite_dels {
+            let rewritten = rewrite_del.rewrite_deletion(genome_aln_states);
+            any_rewritten |= rewritten;
+        }
+
+        if any_rewritten {
+            *alignment = StateRange::state_ranges_to_alignment_states(genome_aln_states, query_len);
         }
     }
 

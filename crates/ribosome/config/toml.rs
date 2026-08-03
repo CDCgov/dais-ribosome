@@ -154,6 +154,9 @@ pub struct ConfiguredModule {
     /// The file name for the TSV file containing the coding sequence (CDS)
     /// specifications. This should be a relative path within the module folder.
     pub cds_spec:          PathBuf,
+    /// Experimental, unstable options.
+    #[serde(default)]
+    pub experimental:      Experimental,
     /// The alignment method to use.
     #[serde(default)]
     pub alignment_method:  AlignmentMethod,
@@ -166,6 +169,16 @@ pub struct ConfiguredModule {
     /// Collection of alignment weights for the module (and specific compound
     /// types within it).
     pub alignment:         AlignmentWeights,
+}
+
+/// Experimental, unstable options for a module.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Experimental {
+    /// The file name for the TOML file containing the rewrite rules (e.g., the
+    /// specs for repositioning deletions). This should be a relative path
+    /// within the module folder.
+    pub rewrite_rules: Option<PathBuf>,
 }
 
 impl ConfiguredModule {

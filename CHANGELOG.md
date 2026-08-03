@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file. The format
 is roughly based on [Keep a Changelog], and this project adheres to
 [Semantic Versioning].
 
+## [2.1.0] - 2026-08-04
+
+### Added
+
+- Added a new experimental section to the TOML file, including the ability to
+  rewrite genome deletions
+
+### Fixed
+
+- Whitespace is now removed in the keys in the reference file, and empty
+  reference IDs and ctypes are explicitly rejected
+
 ## [2.0.3] - 2026-07-30
 
 ### Fixed
@@ -26,7 +38,7 @@ is roughly based on [Keep a Changelog], and this project adheres to
 ### Fixes
 
 - Fixed incorrect TOML field for `try_stop_extension` in the flu module, causing stop extension to not apply
-- Tabs in FASTA-file query IDs are now replaced with a space in the output files 
+- Tabs in FASTA-file query IDs are now replaced with a space in the output files
 - Sections in the specs file or codon-position weights file that do not match each other or the reference file now throw an error
 - Fixed stack overflow when the CDS specs have a large number of comments or blank lines
 - Tabs in reference IDs are now rejected with an error
@@ -230,6 +242,7 @@ is roughly based on [Keep a Changelog], and this project adheres to
 
 <!-- Versions -->
 
+[2.1.0]: https://github.com/CDCgov/dais-ribosome/compare/v2.0.3...v2.1.0
 [2.0.3]: https://github.com/CDCgov/dais-ribosome/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/CDCgov/dais-ribosome/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/CDCgov/dais-ribosome/compare/v2.0.0...v2.0.1

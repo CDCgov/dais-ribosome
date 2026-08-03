@@ -7,6 +7,9 @@ weights = "flu-codon-position-weights.tsv"
 cds_spec = "flu-cds-spec.tsv"
 alignment_method = "one-pass"
 
+[module.experimental]
+rewrite_rules = "flu-rewrite-rules.toml"
+
 [module.rules]
 try_stop_extension = true
 chew_to_start = true

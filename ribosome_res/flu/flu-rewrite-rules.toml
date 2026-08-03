@@ -1,0 +1,2 @@
+[[genome.deletions]]
+rule = { ctype = "B_HA", reference_id = "BRISBANE60", from = "535..543", to = "529..537" }

@@ -6,6 +6,7 @@ use crate::{
         ProductSpec,
         cds_spec::{CdsSpecMap, load_cds_spec},
         references::load_references,
+        rewrite::{RewriteRanges, RewriteRules},
     },
     data::{
         keys::{RefKey, SpecKey},
@@ -100,6 +101,15 @@ impl<'a> AnnotationModule<'a> {
             CodonWeightMatrix::new()
         };
 
+        // Load the rewrite rules if specified in TOML
+        let mut rewrite_rules = if let Some(rewrite_rules) = &module.experimental.rewrite_rules {
+            let rewrite_rules_path = module_root.join(rewrite_rules);
+            RewriteRules::from_file(&rewrite_rules_path)
+                .with_path_context("Failed to load the rewrite rules from file", rewrite_rules_path)?
+        } else {
+            RewriteRules::default()
+        };
+
         let have_weights = !codon_weights.is_empty();
 
         // Load the CDS specs
@@ -130,6 +140,7 @@ impl<'a> AnnotationModule<'a> {
                     params,
                     &mut cds_spec,
                     &mut codon_weights,
+                    &mut rewrite_rules,
                 )?);
             }
         }
@@ -142,6 +153,16 @@ impl<'a> AnnotationModule<'a> {
         {
             return Err(std::io::Error::other(format!(
                 "Reference ID {reference_id} and compound type {compound_type} were found in the CDS specs file but not in the reference file!"
+            )));
+        }
+
+        if let Some(RefKey {
+            reference_id,
+            compound_type,
+        }) = rewrite_rules.deletions.keys().next()
+        {
+            return Err(std::io::Error::other(format!(
+                "Reference ID {reference_id} and compound type {compound_type} were found in the rewrite rules TOML file but not in the reference file!"
             )));
         }
 
@@ -278,6 +299,9 @@ pub(crate) struct ReferenceGroup<'a> {
     /// The specifications for all the protein products that can be formed from
     /// the references.
     pub(crate) product_specs: Vec<ProductSpec>,
+    /// Overrides and specifications for how to rewrite deletions in the genome
+    /// alignment.
+    pub(crate) rewrite_dels:  Vec<RewriteRanges>,
 }
 
 impl<'a> ReferenceGroup<'a> {
@@ -297,7 +321,7 @@ impl<'a> ReferenceGroup<'a> {
     /// the profiles must build successfully.
     fn new(
         ref_key: &RefKey, seqs: Vec<Nucleotides>, params: &'a AlignmentParams, cds_spec: &mut CdsSpecMap,
-        codon_weights: &mut CodonWeightMatrix,
+        codon_weights: &mut CodonWeightMatrix, rewrite_rules: &mut RewriteRules,
     ) -> std::io::Result<Self> {
         let length = seqs[0].len();
         for seq in &seqs {
@@ -334,11 +358,14 @@ impl<'a> ReferenceGroup<'a> {
             })
             .collect();
 
+        let rewrite_dels = rewrite_rules.deletions.remove(ref_key).unwrap_or_default();
+
         Ok(Self {
             reference_id: ref_key.reference_id.to_string(),
             length,
             profiles,
             product_specs,
+            rewrite_dels,
         })
     }
 

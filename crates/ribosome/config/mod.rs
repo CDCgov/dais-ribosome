@@ -5,6 +5,7 @@ use crate::data::{exons::Exons, weights::CodonPositionWeights};
 pub mod annotation_module;
 pub(crate) mod cds_spec;
 mod references;
+pub mod rewrite;
 pub mod toml;
 
 /// The specifications for a single protein product (e.g., `HA`, `HA-signal`).

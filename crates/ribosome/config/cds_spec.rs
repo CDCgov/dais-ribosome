@@ -103,7 +103,7 @@ impl FromStr for TsvRow {
     ///
     /// If any of the first four columns are missing or empty, then an error is
     /// returned. The exon coordinates must successfully parse using
-    /// [`parse_exon_coords`]. If provided, the required first codon must
+    /// [`parse_coords_inclusive`]. If provided, the required first codon must
     /// contain exactly 3 nucleotides in `ACGTUacgtu`.
     fn from_str(line: &str) -> std::io::Result<Self> {
         // End the iterator on empty fields, so that missing field errors appear
