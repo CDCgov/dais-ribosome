@@ -65,15 +65,13 @@
 
 use crate::{
     QueryRecord,
+    annotation::rewrites::frame_states::{FrameStates, get_frame_states},
     config::ProductSpec,
     data::weights::DEFAULT_CODON_STATS,
     outputs::Product,
     ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, CdsStateRange, RangeExt},
 };
 use std::cmp::Ordering;
-
-#[cfg(test)]
-mod test;
 
 impl<'a> Product<'a> {
     /// The procedure for fixing the frames of all the eligible indels.
@@ -112,56 +110,6 @@ impl<'a> Product<'a> {
             }
         }
     }
-}
-
-/// The state at a given index, along with flanking states if they are in
-/// bounds.
-///
-/// This is returned by [`get_frame_states`], and used by [`fix_frame`].
-struct FrameStates<'a> {
-    /// The state two to the left of the current one (`idx-2`)
-    left2:   Option<&'a mut CdsStateRange>,
-    /// The state left of the current one (`idx-1`)
-    left1:   Option<&'a mut CdsStateRange>,
-    /// The current states (`idx`)
-    current: &'a mut CdsStateRange,
-    /// The state right of the current one (`idx+1`)
-    right1:  Option<&'a mut CdsStateRange>,
-    /// The state two to the right of the current one (`idx+2`)
-    right2:  Option<&'a mut CdsStateRange>,
-}
-
-/// Gets the state at `idx` within `product_ranges`, as well as the two flanking
-/// states if available.
-///
-/// This is a helper function for [`fix_frames`]. If `None` is returned, then
-/// the index is out of bounds.
-///
-/// [`fix_frames`]: Product::fix_frames
-#[must_use]
-fn get_frame_states(idx: usize, product_ranges: &mut [CdsStateRange]) -> Option<FrameStates<'_>> {
-    let (left, current_and_right) = product_ranges.split_at_mut_checked(idx)?;
-    let (current, right) = current_and_right.split_first_mut()?;
-
-    let (left2, left1) = match left {
-        [.., left2, left1] => (Some(left2), Some(left1)),
-        [left1] => (None, Some(left1)),
-        [] => (None, None),
-    };
-
-    let (right1, right2) = match right {
-        [right1, right2, ..] => (Some(right1), Some(right2)),
-        [right1] => (Some(right1), None),
-        [] => (None, None),
-    };
-
-    Some(FrameStates {
-        left2,
-        left1,
-        current,
-        right1,
-        right2,
-    })
 }
 
 /// Flags indicating which of the states in [`FrameStates`] should be removed,
@@ -528,7 +476,7 @@ fn is_valid_del_merge(del1: &CdsDeletionRange, del2: &CdsDeletionRange, product_
 
 /// The chosen direction to shift an out-of-frame indel.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-enum ShiftDir {
+pub(crate) enum ShiftDir {
     /// The indel should be shifted left (causing 1-2 match states to move
     /// right).
     Left,
@@ -835,7 +783,7 @@ fn pick_deletion_shift(
 /// will form a codon after the deletion. If the deletion shifts right, the same
 /// codon is formed but before the deletion. So, this method compares whether
 /// the codon is more likely before or after the deletion.
-fn pick_del_shift_with_stats(
+pub(crate) fn pick_del_shift_with_stats(
     left_match: &CdsMatchRange, del: &CdsDeletionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,
 ) -> Option<ShiftDir> {
@@ -902,7 +850,7 @@ fn pick_del_shift_with_stats(
 /// that codon will differ depending on which way the insertion shifts (which
 /// bases are treated as inserted, and which as matches). So, this method
 /// compares which codon is more likely at the given position.
-fn pick_ins_shift_with_stats(
+pub(crate) fn pick_ins_shift_with_stats(
     left_match: &CdsMatchRange, ins: &CdsInsertionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,
 ) -> Option<ShiftDir> {

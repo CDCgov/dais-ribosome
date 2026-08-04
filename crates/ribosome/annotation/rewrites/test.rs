@@ -1,6 +1,6 @@
 use crate::{
     QueryRecord,
-    annotation::fix_frames::{ShiftDir, pick_del_shift_with_stats, pick_ins_shift_with_stats},
+    annotation::rewrites::fix_frames::{ShiftDir, pick_del_shift_with_stats, pick_ins_shift_with_stats},
     config::ProductSpec,
     data::{exons::Exons, weights::CodonPositionWeights},
     ranges::{CdsDeletionRange, CdsInsertionRange, CdsMatchRange, InsertionIdx},
