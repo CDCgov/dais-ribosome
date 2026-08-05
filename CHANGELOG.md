@@ -6,6 +6,11 @@ is roughly based on [Keep a Changelog], and this project adheres to
 
 ## [2.1.1] - TBD
 
+### Added
+
+- Exposed `InclusiveFormatter` and `InclusiveDisplay` in the library for
+  converting 0-based ranges and types to 1-based strings
+
 ## [2.1.0] - 2026-08-04
 
 ### Added

@@ -864,7 +864,7 @@ pub(crate) struct RangeShrinkage {
 /// A wrapper around a coordinate-related type such that it implements 1-based,
 /// end-inclusive [`Display`]. Semicolons are used as delimiters, and the same
 /// `..` syntax is used for ranges rather than `..=`.
-pub(crate) struct InclusiveFormatter<T>(T);
+pub struct InclusiveFormatter<T>(T);
 
 impl Display for InclusiveFormatter<&Range<usize>> {
     #[inline]
@@ -920,7 +920,7 @@ where
 }
 
 /// A trait for easily constructing [`InclusiveFormatter`].
-pub(crate) trait InclusiveDisplay: Sized {
+pub trait InclusiveDisplay: Sized {
     /// Gets a 1-based end-inclusive display for a coordinate-related type.
     /// Semicolons are used as delimiters, and the same `..` syntax is used for
     /// ranges rather than `..=`.
