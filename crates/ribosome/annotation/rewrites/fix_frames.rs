@@ -65,7 +65,7 @@
 
 use crate::{
     QueryRecord,
-    annotation::rewrites::frame_states::{FrameStates, get_frame_states},
+    annotation::rewrites::get_states::{StateWithFlanking, get_state_with_flanking},
     config::ProductSpec,
     data::weights::DEFAULT_CODON_STATS,
     outputs::Product,
@@ -87,7 +87,7 @@ impl<'a> Product<'a> {
         // The index of the current CdsStateRange to correct/handle
         let mut idx = 0;
 
-        while let Some(states) = get_frame_states(idx, &mut self.product_ranges) {
+        while let Some(states) = get_state_with_flanking(idx, &mut self.product_ranges) {
             // Perform any frame fixing on range, which then returns whether to
             // advance the index or not, as well as any states to remove.
             let IdxAdjustment { advance, removal } = fix_frame(states, query, product_spec);
@@ -160,7 +160,7 @@ impl IdxAdjustment {
 ///
 /// [`fix_frames`]: Product::fix_frames
 #[must_use]
-fn fix_frame(states: FrameStates<CdsStateRange>, query: &QueryRecord, product_spec: &ProductSpec) -> IdxAdjustment {
+fn fix_frame(states: StateWithFlanking<CdsStateRange>, query: &QueryRecord, product_spec: &ProductSpec) -> IdxAdjustment {
     match states.current {
         // A match state never needs to be shifted
         CdsStateRange::M(_) => IdxAdjustment::next(),

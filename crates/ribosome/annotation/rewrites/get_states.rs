@@ -1,13 +1,13 @@
 /// The state at a given index, along with flanking states if they are in
 /// bounds.
 ///
-/// This is returned by [`get_frame_states`], and used by [`fix_frame`].
+/// This is returned by [`get_state_with_flanking`], and used by [`fix_frame`].
 ///
 /// ## Parameters
 ///
 /// - `'a`: The lifetime of the mutable reference
 /// - `T`: The type of the range, such as [`CdsStateRange`] or [`StateRange`]
-pub struct FrameStates<'a, T> {
+pub struct StateWithFlanking<'a, T> {
     /// The state two to the left of the current one (`idx-2`)
     pub left2:   Option<&'a mut T>,
     /// The state left of the current one (`idx-1`)
@@ -28,7 +28,7 @@ pub struct FrameStates<'a, T> {
 ///
 /// [`fix_frames`]: Product::fix_frames
 #[must_use]
-pub fn get_frame_states<T>(idx: usize, product_ranges: &mut [T]) -> Option<FrameStates<'_, T>> {
+pub fn get_state_with_flanking<T>(idx: usize, product_ranges: &mut [T]) -> Option<StateWithFlanking<'_, T>> {
     let (left, current_and_right) = product_ranges.split_at_mut_checked(idx)?;
     let (current, right) = current_and_right.split_first_mut()?;
 
@@ -44,7 +44,7 @@ pub fn get_frame_states<T>(idx: usize, product_ranges: &mut [T]) -> Option<Frame
         [] => (None, None),
     };
 
-    Some(FrameStates {
+    Some(StateWithFlanking {
         left2,
         left1,
         current,

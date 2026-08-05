@@ -1,5 +1,6 @@
 use crate::{
     AnnotationModule,
+    annotation::rewrites::get_states::{StateWithFlanking, get_state_with_flanking},
     config::{annotation_module::ReferenceGroup, rewrite::RewriteRanges},
     ranges::{MatchRange, StateRange},
 };
@@ -85,11 +86,13 @@ impl RewriteRanges {
         };
 
         // Get the flanking states
-        let Some(SurroundingStates {
-            left,
+        let Some(StateWithFlanking {
+            left2: _,
+            left1,
             current: StateRange::D(del),
-            right,
-        }) = get_surrounding_states(del_idx, genome_aln_states)
+            right1,
+            right2: _,
+        }) = get_state_with_flanking(del_idx, genome_aln_states)
         else {
             // This should be unreachable, since del_idx is known to be in
             // bounds and correspond to a deletion
@@ -99,7 +102,7 @@ impl RewriteRanges {
         match self.direction() {
             RepositionDir::Left => {
                 // Left of the deletion must be a match state
-                let Some(StateRange::M(left)) = left else { return false };
+                let Some(StateRange::M(left1)) = left1 else { return false };
 
                 // The match state must have sufficient length to cover the new
                 // `to` range
@@ -108,22 +111,22 @@ impl RewriteRanges {
                 // pathological cases such as shifting to edge of alignment,
                 // shifting adjacent to another deletion, etc. TODO: Convert to
                 // strict inequality.
-                if left.len() <= distance {
+                if left1.len() <= distance {
                     return false;
                 }
 
                 // Shrink the match state and shift the deletion
-                left.cut_end(distance);
+                left1.cut_end(distance);
                 del.shift_left(distance);
 
-                if let Some(StateRange::M(right)) = right {
+                if let Some(StateRange::M(right1)) = right1 {
                     // Extend the right match state
-                    right.extend_start(distance);
+                    right1.extend_start(distance);
                 } else {
                     // Validity: this will be in bounds for the query and
                     // reference based on the cut_end and shift_left calls above
                     // (this is effectively undoing that on one side)
-                    let query_range = left.query_range.end..left.query_range.end + distance;
+                    let query_range = left1.query_range.end..left1.query_range.end + distance;
                     let ref_range = del.ref_range.end..del.ref_range.end + distance;
 
                     // Insert after the deletion
@@ -132,7 +135,7 @@ impl RewriteRanges {
             }
             RepositionDir::Right => {
                 // Right of the deletion must be a match state
-                let Some(StateRange::M(right)) = right else { return false };
+                let Some(StateRange::M(right1)) = right1 else { return false };
 
                 // The match state must have sufficient length to cover the new
                 // `to` range
@@ -141,22 +144,22 @@ impl RewriteRanges {
                 // pathological cases such as shifting to edge of alignment,
                 // shifting adjacent to another deletion, etc. TODO: Convert to
                 // strict inequality.
-                if right.len() <= distance {
+                if right1.len() <= distance {
                     return false;
                 }
 
                 // Shrink the match state and shift the deletion
-                right.cut_start(distance);
+                right1.cut_start(distance);
                 del.shift_right(distance);
 
-                if let Some(StateRange::M(left)) = left {
+                if let Some(StateRange::M(left1)) = left1 {
                     // Extend the left match state
-                    left.extend_end(distance);
+                    left1.extend_end(distance);
                 } else {
                     // Validity: this will be in bounds for the query and
                     // reference based on the cut_start and shift_right calls
                     // above (this is effectively undoing that on one side)
-                    let query_range = right.query_range.start - distance..right.query_range.start;
+                    let query_range = right1.query_range.start - distance..right1.query_range.start;
                     let ref_range = del.ref_range.start - distance..del.ref_range.start;
 
                     // Insert at the index of the deletion, so that it appears
@@ -168,31 +171,4 @@ impl RewriteRanges {
 
         true
     }
-}
-
-/// A helper struct used in [`rewrite_deletion`], holding simultaneous mutable
-/// references to a state and its flanking states if present.
-///
-/// [`rewrite_deletion`]: RewriteRanges::rewrite_deletion
-struct SurroundingStates<'a> {
-    /// The state left of the specified index, if one exists.
-    left:    Option<&'a mut StateRange>,
-    /// The state at the specified index.
-    current: &'a mut StateRange,
-    /// The state right of the specified index, if one exists.
-    right:   Option<&'a mut StateRange>,
-}
-
-/// A helper function to extract simultaneous mutable references to a state at
-/// `idx` as well as its flanking states.
-///
-/// `None` is returned if `idx` is out of bounds.
-fn get_surrounding_states(idx: usize, ranges: &mut [StateRange]) -> Option<SurroundingStates<'_>> {
-    let (left, current_and_right) = ranges.split_at_mut_checked(idx)?;
-    let (current, right) = current_and_right.split_first_mut()?;
-
-    let left = left.last_mut();
-    let right = right.first_mut();
-
-    Some(SurroundingStates { left, current, right })
 }
