@@ -65,7 +65,7 @@
 
 use crate::{
     QueryRecord,
-    annotation::rewrites::get_states::{StateWithFlanking, get_state_with_flanking},
+    annotation::rewrites::get_states::{IdxAdjustment, StateRemoval, StateWithFlanking, rewrite},
     config::ProductSpec,
     data::weights::DEFAULT_CODON_STATS,
     outputs::Product,
@@ -84,70 +84,7 @@ impl<'a> Product<'a> {
     /// This must be called before [`Product::condense_deletions`], otherwise
     /// deletions may not be shifted properly.
     pub(crate) fn fix_frames(&mut self, query: &QueryRecord, product_spec: &ProductSpec) {
-        // The index of the current CdsStateRange to correct/handle
-        let mut idx = 0;
-
-        while let Some(states) = get_state_with_flanking(idx, &mut self.product_ranges) {
-            // Perform any frame fixing on range, which then returns whether to
-            // advance the index or not, as well as any states to remove.
-            let IdxAdjustment { advance, removal } = fix_frame(states, query, product_spec);
-
-            if let Some(removal) = removal {
-                // Remove the specified states, returning the resulting shift
-                // that will need to be applied to idx
-                let idx_shift = remove_states(self, &removal, idx);
-
-                // Advance idx first, to avoid underflow
-                if advance {
-                    idx += 1;
-                }
-
-                // Apply the shift due to removed states
-                idx -= idx_shift;
-            } else if advance {
-                // Advance idx
-                idx += 1;
-            }
-        }
-    }
-}
-
-/// Flags indicating which of the states in [`FrameStates`] should be removed,
-/// after the modifications made by [`fix_frame`].
-struct StateRemoval {
-    /// The state left of the current one (`idx-1`) should be removed.
-    remove_left1:   bool,
-    /// The current state (`idx`) should be removed.
-    remove_current: bool,
-    /// The state right of the current one (`idx+1`) should be removed.
-    remove_right1:  bool,
-    /// The state two to the right of the current one (`idx+2`) should be
-    /// removed.
-    remove_right2:  bool,
-}
-
-/// The return value for [`fix_frame`], indicating which states need to be
-/// removed, and whether or not the index should be advanced in [`fix_frames`].
-///
-/// [`fix_frames`]: Product::fix_frames
-struct IdxAdjustment {
-    /// Whether to advance the index, or whether to rehandle the same state
-    advance: bool,
-    /// Any states to remove (e.g., due to becoming empty, shifting to exon
-    /// boundaries, or being merged)
-    removal: Option<StateRemoval>,
-}
-
-impl IdxAdjustment {
-    /// Returns an [`IdxAdjustment`] that advances to the next index without
-    /// removing any states.
-    #[inline]
-    #[must_use]
-    const fn next() -> Self {
-        Self {
-            advance: true,
-            removal: None,
-        }
+        rewrite(&mut self.product_ranges, |states| fix_frame(states, query, product_spec));
     }
 }
 
@@ -252,35 +189,6 @@ fn fix_frame(states: StateWithFlanking<CdsStateRange>, query: &QueryRecord, prod
             (Some(CdsStateRange::D(_)), _) | (_, Some(CdsStateRange::D(_))) => IdxAdjustment::next(),
         },
     }
-}
-
-/// A helper function for removing the states in a [`StateRemoval`] struct from
-/// the product. The return value is the amount that must be subtracted from
-/// `idx` to correct for the removed states.
-#[must_use]
-fn remove_states(product: &mut Product, removal: &StateRemoval, idx: usize) -> usize {
-    let StateRemoval {
-        remove_left1,
-        remove_current,
-        remove_right1,
-        remove_right2,
-    } = *removal;
-
-    // Remove states from right to left
-    if remove_right2 {
-        product.product_ranges.remove(idx + 2);
-    }
-    if remove_right1 {
-        product.product_ranges.remove(idx + 1);
-    }
-    if remove_current {
-        product.product_ranges.remove(idx);
-    }
-    if remove_left1 {
-        product.product_ranges.remove(idx - 1);
-    }
-
-    (remove_current as usize) + (remove_left1 as usize)
 }
 
 /// Perform the shifting logic for a shift-eligible deletion flanked by match
