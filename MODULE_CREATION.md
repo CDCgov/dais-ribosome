@@ -277,5 +277,5 @@ succeed:
 - At least one additional match state must be present adjacent to the `to` range
   to prevent pathological cases
 
-The rules are then applied in the order present in the file. Any of these
-behaviors are subject to change.
+The rules are then applied from left to right based on the `from` range. Any of
+these behaviors are subject to change.

@@ -11,6 +11,11 @@ is roughly based on [Keep a Changelog], and this project adheres to
 - Exposed `InclusiveFormatter` and `InclusiveDisplay` in the library for
   converting 0-based ranges and types to 1-based strings
 
+### Changed
+
+- The rewrite genome deletions rules are now applied in left to right order in
+  terms of the `from` ranges, rather than the order specified in the file
+
 ## [2.1.0] - 2026-08-04
 
 ### Added

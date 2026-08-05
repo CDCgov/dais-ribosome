@@ -300,7 +300,7 @@ pub(crate) struct ReferenceGroup<'a> {
     /// the references.
     pub(crate) product_specs: Vec<ProductSpec>,
     /// Overrides and specifications for how to rewrite deletions in the genome
-    /// alignment.
+    /// alignment, sorted by `from` ranges.
     pub(crate) rewrite_dels:  Vec<RewriteRanges>,
 }
 
@@ -358,7 +358,8 @@ impl<'a> ReferenceGroup<'a> {
             })
             .collect();
 
-        let rewrite_dels = rewrite_rules.deletions.remove(ref_key).unwrap_or_default();
+        let mut rewrite_dels = rewrite_rules.deletions.remove(ref_key).unwrap_or_default();
+        rewrite_dels.sort();
 
         Ok(Self {
             reference_id: ref_key.reference_id.to_string(),

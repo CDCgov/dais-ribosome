@@ -21,7 +21,7 @@ impl<'a> AnnotationModule<'a> {
     /// - At least one additional match state must be present adjacent to the
     ///   `to` range to prevent pathological cases
     ///
-    /// Multiple rules are applied in the order present in the file.
+    /// Multiple rules are applied from left to right based on the `from` range.
     // TODO: Fix this to be more efficient when no deletions are present. This
     // could potentially be to change the order in which rules are applied so
     // that only a single pass is needed

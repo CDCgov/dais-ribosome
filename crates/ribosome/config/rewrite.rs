@@ -15,13 +15,35 @@ pub struct RewriteRules {
 /// The ranges for a rewrite rule.
 ///
 /// The `from` and `to` range will be the same length and will be not equal.
-#[derive(Debug)]
+#[derive(Eq, PartialEq, Debug)]
 pub(crate) struct RewriteRanges {
     /// The original range where the indel must be present to apply the rule, in
     /// 0-based reference nucleotide coordinates.
     pub from: Range<usize>,
     /// The destination range where the deletion will be positioned.
     pub to:   Range<usize>,
+}
+
+impl Ord for RewriteRanges {
+    /// This method returns an [`Ordering`] between `self` and `other`.
+    ///
+    /// The sort order is based first on the starting index of `from`, then the
+    /// ending index of `from`, the starting index of `to`, and the ending index
+    /// of `to`.
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.from
+            .start
+            .cmp(&other.from.start)
+            .then_with(|| self.from.end.cmp(&other.from.end))
+            .then_with(|| self.to.start.cmp(&other.to.start))
+            .then_with(|| self.to.end.cmp(&other.to.end))
+    }
+}
+
+impl PartialOrd for RewriteRanges {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 // TODO: support a `[cds]` section alongside `[genome]`.
