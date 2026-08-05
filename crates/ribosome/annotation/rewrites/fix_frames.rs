@@ -160,7 +160,7 @@ impl IdxAdjustment {
 ///
 /// [`fix_frames`]: Product::fix_frames
 #[must_use]
-fn fix_frame(states: FrameStates, query: &QueryRecord, product_spec: &ProductSpec) -> IdxAdjustment {
+fn fix_frame(states: FrameStates<CdsStateRange>, query: &QueryRecord, product_spec: &ProductSpec) -> IdxAdjustment {
     match states.current {
         // A match state never needs to be shifted
         CdsStateRange::M(_) => IdxAdjustment::next(),

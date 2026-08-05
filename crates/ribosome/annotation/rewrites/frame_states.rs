@@ -1,31 +1,34 @@
-use crate::ranges::CdsStateRange;
-
 /// The state at a given index, along with flanking states if they are in
 /// bounds.
 ///
 /// This is returned by [`get_frame_states`], and used by [`fix_frame`].
-pub struct FrameStates<'a> {
+///
+/// ## Parameters
+///
+/// - `'a`: The lifetime of the mutable reference
+/// - `T`: The type of the range, such as [`CdsStateRange`] or [`StateRange`]
+pub struct FrameStates<'a, T> {
     /// The state two to the left of the current one (`idx-2`)
-    pub left2:   Option<&'a mut CdsStateRange>,
+    pub left2:   Option<&'a mut T>,
     /// The state left of the current one (`idx-1`)
-    pub left1:   Option<&'a mut CdsStateRange>,
+    pub left1:   Option<&'a mut T>,
     /// The current states (`idx`)
-    pub current: &'a mut CdsStateRange,
+    pub current: &'a mut T,
     /// The state right of the current one (`idx+1`)
-    pub right1:  Option<&'a mut CdsStateRange>,
+    pub right1:  Option<&'a mut T>,
     /// The state two to the right of the current one (`idx+2`)
-    pub right2:  Option<&'a mut CdsStateRange>,
+    pub right2:  Option<&'a mut T>,
 }
 
-/// Gets the state at `idx` within `product_ranges`, as well as the two flanking
-/// states if available.
+/// Gets the state at `idx` within `ranges`, as well as the two flanking states
+/// if available.
 ///
 /// This is a helper function for [`fix_frames`]. If `None` is returned, then
 /// the index is out of bounds.
 ///
 /// [`fix_frames`]: Product::fix_frames
 #[must_use]
-pub fn get_frame_states(idx: usize, product_ranges: &mut [CdsStateRange]) -> Option<FrameStates<'_>> {
+pub fn get_frame_states<T>(idx: usize, product_ranges: &mut [T]) -> Option<FrameStates<'_, T>> {
     let (left, current_and_right) = product_ranges.split_at_mut_checked(idx)?;
     let (current, right) = current_and_right.split_first_mut()?;
 
