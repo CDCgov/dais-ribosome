@@ -65,7 +65,7 @@
 
 use crate::{
     QueryRecord,
-    annotation::rewrites::get_states::{IdxAdjustment, StateRemoval, StateWithFlanking, rewrite},
+    annotation::rewrites::get_states::{IdxAdjustment, StateVecEdits, StateWithFlanking, rewrite},
     config::ProductSpec,
     data::weights::DEFAULT_CODON_STATS,
     outputs::Product,
@@ -97,7 +97,9 @@ impl<'a> Product<'a> {
 ///
 /// [`fix_frames`]: Product::fix_frames
 #[must_use]
-fn fix_frame(states: StateWithFlanking<CdsStateRange>, query: &QueryRecord, product_spec: &ProductSpec) -> IdxAdjustment {
+fn fix_frame(
+    states: StateWithFlanking<CdsStateRange>, query: &QueryRecord, product_spec: &ProductSpec,
+) -> IdxAdjustment<CdsStateRange> {
     match states.current {
         // A match state never needs to be shifted
         CdsStateRange::M(_) => IdxAdjustment::next(),
@@ -110,8 +112,8 @@ fn fix_frame(states: StateWithFlanking<CdsStateRange>, query: &QueryRecord, prod
             // deletion-merging branch will handle that.
             (Some(CdsStateRange::M(left_match)), Some(CdsStateRange::M(right_match))) => {
                 if del.eligible_for_shift() {
-                    let removal = fix_flanked_deletion(states.left2, left_match, del, right_match, query, product_spec);
-                    IdxAdjustment { advance: true, removal }
+                    let edits = fix_flanked_deletion(states.left2, left_match, del, right_match, query, product_spec);
+                    IdxAdjustment { advance: true, edits }
                 } else {
                     IdxAdjustment::next()
                 }
@@ -122,11 +124,11 @@ fn fix_frame(states: StateWithFlanking<CdsStateRange>, query: &QueryRecord, prod
             // same index to allow additional merging, or to allow the deletion
             // to shift.
             (_, Some(CdsStateRange::D(right_del))) => {
-                let removal = fix_adjacent_deletions(del, right_del, product_spec);
+                let edits = fix_adjacent_deletions(del, right_del, product_spec);
                 IdxAdjustment {
                     // If no removal (i.e., no merging), then continue
-                    advance: removal.is_none(),
-                    removal,
+                    advance: edits.is_none(),
+                    edits,
                 }
             }
 
@@ -156,7 +158,7 @@ fn fix_frame(states: StateWithFlanking<CdsStateRange>, query: &QueryRecord, prod
             // is dropped.
             (Some(CdsStateRange::M(left_match)), Some(CdsStateRange::M(right_match))) => {
                 if ins.eligible_for_shift() {
-                    let removal = fix_flanked_insertion(
+                    let edits = fix_flanked_insertion(
                         states.left2,
                         left_match,
                         ins,
@@ -165,7 +167,7 @@ fn fix_frame(states: StateWithFlanking<CdsStateRange>, query: &QueryRecord, prod
                         query,
                         product_spec,
                     );
-                    IdxAdjustment { advance: true, removal }
+                    IdxAdjustment { advance: true, edits }
                 } else {
                     IdxAdjustment::next()
                 }
@@ -203,7 +205,7 @@ fn fix_frame(states: StateWithFlanking<CdsStateRange>, query: &QueryRecord, prod
 fn fix_flanked_deletion(
     left2: Option<&mut CdsStateRange>, left_match: &mut CdsMatchRange, del: &mut CdsDeletionRange,
     right_match: &mut CdsMatchRange, query: &QueryRecord, product_spec: &ProductSpec,
-) -> Option<StateRemoval> {
+) -> Option<StateVecEdits<CdsStateRange>> {
     let shift_dir = pick_deletion_shift(left_match, del, right_match, query, product_spec)?;
 
     apply_deletion_shift(shift_dir, left_match, del, right_match);
@@ -230,11 +232,11 @@ fn fix_flanked_deletion(
         false
     };
 
-    Some(StateRemoval {
-        remove_left1:   remove_left_match,
+    Some(StateVecEdits {
+        remove_left1: remove_left_match,
         remove_current: remove_del,
-        remove_right1:  remove_right_match,
-        remove_right2:  false,
+        remove_right1: remove_right_match,
+        ..Default::default()
     })
 }
 
@@ -250,7 +252,7 @@ fn fix_flanked_deletion(
 fn fix_flanked_insertion(
     left2: Option<&mut CdsStateRange>, left_match: &mut CdsMatchRange, ins: &mut CdsInsertionRange,
     right_match: &mut CdsMatchRange, right2: Option<&mut CdsStateRange>, query: &QueryRecord, product_spec: &ProductSpec,
-) -> Option<StateRemoval> {
+) -> Option<StateVecEdits<CdsStateRange>> {
     let shift_dir = pick_insertion_shift(left_match, ins, right_match, query, product_spec)?;
 
     apply_insertion_shift(shift_dir, left_match, ins, right_match);
@@ -323,11 +325,12 @@ fn fix_flanked_insertion(
         }
     }
 
-    Some(StateRemoval {
+    Some(StateVecEdits {
         remove_left1: remove_left_match,
         remove_current: remove_ins,
         remove_right1: remove_right_match,
         remove_right2,
+        ..Default::default()
     })
 }
 
@@ -338,7 +341,7 @@ fn fix_flanked_insertion(
 /// [`fix_frames`]: Product::fix_frames
 fn fix_adjacent_deletions(
     del: &mut CdsDeletionRange, right_del: &mut CdsDeletionRange, product_spec: &ProductSpec,
-) -> Option<StateRemoval> {
+) -> Option<StateVecEdits<CdsStateRange>> {
     // Validity: product_ranges partitions the aligned-against
     // coding sequence, so adjacent deletions in product_ranges are
     // also adjacent in the coding sequence
@@ -348,11 +351,9 @@ fn fix_adjacent_deletions(
         // Extend range to encompass right_range
         del.cds_range.end = right_del.cds_range.end;
 
-        Some(StateRemoval {
-            remove_left1:   false,
-            remove_current: false,
-            remove_right1:  true,
-            remove_right2:  false,
+        Some(StateVecEdits {
+            remove_right1: true,
+            ..Default::default()
         })
     } else {
         // The two adjacent deletions cannot be merged
