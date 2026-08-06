@@ -170,6 +170,25 @@ impl StateRange {
     }
 }
 
+impl From<&StateRange> for Ciglet {
+    fn from(value: &StateRange) -> Self {
+        match value {
+            StateRange::M(state) => Ciglet {
+                inc: state.len(),
+                op:  b'M',
+            },
+            StateRange::D(state) => Ciglet {
+                inc: state.len(),
+                op:  b'D',
+            },
+            StateRange::I(state) => Ciglet {
+                inc: state.len(),
+                op:  b'I',
+            },
+        }
+    }
+}
+
 /// The range within the query and reference where a continguous block of
 /// matches occurs.
 ///
@@ -600,7 +619,9 @@ impl StateRange {
     /// Converts a slice of [`StateRange`] to an [`Alignment`].
     ///
     /// Soft clipping is included. `query_len` is used to compute the soft
-    /// clipping at the end.
+    /// clipping at the end. If the entire alignment is soft clipping and/or
+    /// deletions, then the resulting [`AlignmentStates`] will contain all soft
+    /// clipping at the start of the alignment.
     ///
     /// ## Validity
     ///
@@ -611,38 +632,36 @@ impl StateRange {
         // Add 2 for possible clipping
         let mut states = AlignmentStates::with_capacity(ranges.len() + 2);
 
-        let query_start = ranges
-            .iter()
-            .filter_map(|state| match state {
-                StateRange::M(match_range) => Some(match_range.query_range.start),
-                StateRange::D(_) => None,
-                StateRange::I(insertion_range) => Some(insertion_range.query_range.start),
-            })
-            .next();
+        // Get an iterator of the non-clipping ciglets to add
+        let ciglets = ranges.iter().map(Into::into);
 
-        let query_end = ranges
-            .iter()
-            .filter_map(|state| match state {
-                StateRange::M(match_range) => Some(match_range.query_range.end),
-                StateRange::D(_) => None,
-                StateRange::I(insertion_range) => Some(insertion_range.query_range.end),
-            })
-            .next_back();
+        // Extract an iterator of the query ranges from the states
+        let mut query_ranges = ranges.iter().filter_map(|state| match state {
+            StateRange::M(range) => Some(&range.query_range),
+            StateRange::D(_) => None,
+            StateRange::I(range) => Some(&range.query_range),
+        });
 
-        if let Some(query_start) = query_start {
-            states.soft_clip(query_start);
-        }
+        // Get the start and end index of the query, if a non-deletion range is
+        // present
+        let query_bounds = query_ranges
+            .next()
+            .map(|first| (first.start, query_ranges.next_back().unwrap_or(first).end));
 
-        for range in ranges {
-            match range {
-                StateRange::M(match_range) => states.add_inc_op(match_range.len(), b'M'),
-                StateRange::D(deletion_range) => states.add_inc_op(deletion_range.len(), b'D'),
-                StateRange::I(insertion_range) => states.add_inc_op(insertion_range.len(), b'I'),
+        match query_bounds {
+            Some((query_start, query_end)) => {
+                states.soft_clip(query_start);
+                for ciglet in ciglets {
+                    states.add_ciglet(ciglet);
+                }
+                states.soft_clip(query_len - query_end);
             }
-        }
-
-        if let Some(query_end) = query_end {
-            states.soft_clip(query_len - query_end);
+            None => {
+                states.soft_clip(query_len);
+                for ciglet in ciglets {
+                    states.add_ciglet(ciglet);
+                }
+            }
         }
 
         states
