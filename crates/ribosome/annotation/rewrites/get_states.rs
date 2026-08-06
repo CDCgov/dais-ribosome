@@ -53,9 +53,9 @@ pub fn get_state_with_flanking<T>(idx: usize, product_ranges: &mut [T]) -> Optio
     })
 }
 
-pub fn rewrite<T, F>(ranges: &mut Vec<T>, f: F)
+pub fn rewrite<T, F>(ranges: &mut Vec<T>, mut f: F)
 where
-    F: Fn(StateWithFlanking<T>) -> IdxAdjustment<T>, {
+    F: FnMut(StateWithFlanking<T>) -> IdxAdjustment<T>, {
     // The index of the current CdsStateRange to correct/handle
     let mut idx = 0;
 
