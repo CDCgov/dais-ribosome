@@ -13,44 +13,44 @@ impl Finish for WriterThreaded {
 
 impl SeqWriter for WriterThreaded {
     fn write_seq_data(&mut self, data: &SeqDataView) -> std::io::Result<()> {
-        write!(self, "{data}")
+        writeln!(self, "{data}")
     }
 
     fn write_empty_seq_row(&mut self, row: &EmptySeqRowView<'_>) -> std::io::Result<()> {
-        write!(self, "{row}")
+        writeln!(self, "{row}")
     }
 
     fn write_deleted_seq_row(&mut self, row: &DeletedSeqRowView<'_>) -> std::io::Result<()> {
-        write!(self, "{row}")
+        writeln!(self, "{row}")
     }
 }
 
 impl InsWriter for WriterThreaded {
     fn write_ins_row(&mut self, row: &InsRowView) -> std::io::Result<()> {
-        write!(self, "{row}")
+        writeln!(self, "{row}")
     }
 }
 
 impl DelWriter for WriterThreaded {
     fn write_del_row(&mut self, row: &DelRowView) -> std::io::Result<()> {
-        write!(self, "{row}")
+        writeln!(self, "{row}")
     }
 }
 
 impl GenSeqWriter for WriterThreaded {
     fn write_gen_seq_row(&mut self, row: &GenSeqRowView) -> std::io::Result<()> {
-        write!(self, "{row}")
+        writeln!(self, "{row}")
     }
 }
 
 impl GenInsWriter for WriterThreaded {
     fn write_gen_ins_row(&mut self, row: &GenInsRowView) -> std::io::Result<()> {
-        write!(self, "{row}")
+        writeln!(self, "{row}")
     }
 }
 
 impl GenDelWriter for WriterThreaded {
     fn write_gen_del_row(&mut self, row: &GenDelRowView) -> std::io::Result<()> {
-        write!(self, "{row}")
+        writeln!(self, "{row}")
     }
 }
