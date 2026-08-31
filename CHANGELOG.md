@@ -18,6 +18,8 @@ is roughly based on [Keep a Changelog], and this project adheres to
 - Rather than relying on the `Write` trait, more flexible traits for writing
   output records have been introduced and used in `write_genome_output` and
   `write_product_output`
+- An explicit error is now given when a reference ID and product pair has
+  multiple corresponding ctypes
 
 ## [2.1.0] - 2026-08-04
 

@@ -1,5 +1,8 @@
 use crate::{
-    data::{exons::Exons, keys::RefKey},
+    data::{
+        exons::Exons,
+        keys::{RefKey, SpecKey},
+    },
     ranges::parse_coords_inclusive,
 };
 use std::{
@@ -45,6 +48,8 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
 
     let mut cds_specs: CdsSpecMap = HashMap::new();
 
+    let mut by_spec_key: HashMap<SpecKey, Vec<_>> = HashMap::new();
+
     for row in reader {
         let TsvRow {
             reference_id,
@@ -58,12 +63,29 @@ pub(crate) fn load_cds_spec(path: &Path) -> std::io::Result<CdsSpecMap> {
             .with_context(format!("Failed to parse {ctype} product for reference ID {reference_id}"))?;
 
         // Validity: the fields do not contain tabs since they are from TSV file
-        let key = RefKey::new(reference_id, ctype);
-        cds_specs.entry(key).or_default().push((product_name, exons));
+        let ref_key = RefKey::new(&reference_id, &ctype);
+        let spec_key = SpecKey::new(reference_id, &product_name);
+
+        cds_specs.entry(ref_key).or_default().push((product_name, exons));
+        by_spec_key.entry(spec_key).or_default().push(ctype);
     }
 
     if cds_specs.is_empty() {
         return Err(std::io::Error::other("No specifications were found in the file"));
+    }
+
+    for (spec_key, ctypes) in by_spec_key {
+        if ctypes.len() > 1 {
+            let ctype_str = ctypes.join(", ");
+
+            return Err(
+                ErrorWithContext::new("Found more than one ctype for a given reference-product pair")
+                    .with_subitem(format!("Reference ID: {}", spec_key.reference_id))
+                    .with_subitem(format!("Protein product: {}", spec_key.product_name))
+                    .with_subitem(format!("Associated ctypes: {ctype_str}"))
+                    .into(),
+            );
+        }
     }
 
     Ok(cds_specs)
