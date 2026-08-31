@@ -7,19 +7,70 @@ to add a new module to DAIS-ribosome:
 1. Choose a name for the module. This is advised to be a short, lowercase
    description, such as `flu`, `cov`, or `rsv`.
 2. Create a folder with that name under `ribosome_res/`.
-3. Within the new folder, add three files:
+3. Determine the coordinate spaces, types, and proteins the module will model
+   (see [Planning Your Module](#planning-your-module)).
+4. Within the new folder, add three files:
     - A FASTA file with the reference sequences, as described in
       [Reference Sequence File](#reference-sequence-file).
     - A TSV file with the coding sequence specifications, as described in
       [Coding Sequence Specifications](#coding-sequence-specifications).
     - A TSV file with the codon-position weights, as described in
       [Codon-Position Weights](#codon-position-weights).
-4. Add the module to `ribosome_res/modules.toml` according to
+5. Add the module to `ribosome_res/modules.toml` according to
    [Module TOML Format](#module-toml-format).
 
 Unlike `v1` which required a separate "build" step and the use of some perl
 scripts, `v2` reads the files directly and does not require any other steps
 besides those listed above.
+
+## Planning Your Module
+
+Before creating the files in the following steps, it is useful to plan out the
+structure of the module.
+
+A DAIS-ribosome module can model multiple related classifications, as well as
+the different segments of a segmented genome. This information is combined into
+a _compound type_ or _ctype_, which is any classification level so long as it is
+internally consistent. If the genome is segmented, this must represent the
+segment as well. For `flu`, the ctype combines the type, subtype, and segment,
+such as `A_HA_H7`. For `cov`, which does not have a segmented genome, this is
+currently either `SARS-CoV-2` or `MERS-CoV`.
+
+To each ctype, there should be associated one or more references, grouped under
+one or more _reference IDs_. In `cov` and `rsv`, only a single reference
+sequence is used for each `ctype`, and this is typically a good starting place.
+For a segmented genome, the reference sequences for each segment should be
+grouped under the same reference ID.
+
+If a single reference sequence is insufficient to model all the variation in a
+given `ctype`, additional reference sequences can be added under each reference
+ID. When aligning a sequence with a given ctype against a reference ID, all
+pairwise alignments are performed and the highest scoring is used. Note that the
+references grouped together under an ID should represent the same type, and for
+a given segment, all the references within the ID must model the same coordinate
+space and have the same length.
+
+Additionally, adding additional reference IDs can allow for more outputs to be
+formed for a single `ctype`. For example, in `flu`, B/Victoria and B/Yamagata
+have relatively high homology and are not represented as different ctypes.
+Instead, two reference IDs are included (`BRISBANE60` for Victoria and
+`PHUKET3073` for Yamagata), and every `B_HA` and `B_NS` input produces outputs
+as aligned against `BRISBANE60` _and_ as aligned against `PHUKET3073`.
+Downstream programs may then perform classification or decide which records to
+use.
+
+Each `ctype` may produce multiple _protein products_, which can represent genes,
+peptides, subunits of a protein, or any other coding region of interest. For
+example, the `A_HA_H1` _ctype_ in `flu` produces `HA-signal`, `HA`, and `HA1`
+products but the stalk protein `HA2` was purposefully omitted. Moreover, in the
+`cov` module the `orf1ab` product is specified instead of the 16 non-structural
+proteins that `orf1ab` encodes after processing.
+
+Finally, since a product belongs to a single segment, and a reference ID
+corresponds to a single taxonomic set of types, every pair of product and
+reference ID should correspond to a single `ctype`. For example, reference
+`CALI07` is from an influenza A(H1N1)pdm09 virus and product `HA1` is a subunit
+of segment 4 (HA), so together `CALI07` and `HA1` map directly to `A_HA_H1`.
 
 ## Reference Sequence File
 
