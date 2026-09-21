@@ -7,7 +7,6 @@ use std::{
         mpsc::{RecvError, SendError},
     },
 };
-use zoe::data::err::GetCode;
 
 /// A clonable writer supporting writing from multiple threads via an [`mpsc`]
 /// channel.
@@ -194,12 +193,6 @@ impl Display for SharedIoError {
 impl Error for SharedIoError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.0.source()
-    }
-}
-
-impl GetCode for SharedIoError {
-    fn get_code(&self) -> i32 {
-        self.0.get_code()
     }
 }
 

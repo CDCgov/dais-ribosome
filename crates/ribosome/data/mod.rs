@@ -8,7 +8,7 @@ pub(crate) mod weights;
 use crate::StringMut;
 use std::{error::Error, fmt::Display};
 use zoe::{
-    data::{ByteMap, RetainSequence, err::GetCode},
+    data::{ByteMap, RetainSequence},
     prelude::{Len, Nucleotides},
 };
 
@@ -98,7 +98,6 @@ impl Display for NoNucleotides {
 }
 
 impl Error for NoNucleotides {}
-impl GetCode for NoNucleotides {}
 
 /// Sanitizes an incoming sequence so that it meets the validity requirements of
 /// [`QueryRecord`].

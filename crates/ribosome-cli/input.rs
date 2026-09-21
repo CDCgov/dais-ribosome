@@ -13,10 +13,7 @@ use std::{
     path::Path,
 };
 use zoe::{
-    data::{
-        err::{GetCode, ResultWithErrorContext},
-        fasta::FastaSeq,
-    },
+    data::{err::ResultWithErrorContext, fasta::FastaSeq},
     define_whichever,
     prelude::*,
     unwrap_or_return_some_err,
@@ -191,7 +188,6 @@ impl Display for NoCtypeInner {
 }
 
 impl Error for NoCtypeInner {}
-impl GetCode for NoCtypeInner {}
 
 impl Display for NoCtypeNoModule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -209,12 +205,6 @@ impl Error for NoCtypeNoModule {
     }
 }
 
-impl GetCode for NoCtypeNoModule {
-    fn get_code(&self) -> i32 {
-        self.inner.get_code()
-    }
-}
-
 impl Display for NoCtypeNoSswsort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "All ctypes must be specified since the SSWSort resouces are not present")
@@ -224,12 +214,6 @@ impl Display for NoCtypeNoSswsort {
 impl Error for NoCtypeNoSswsort {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.inner)
-    }
-}
-
-impl GetCode for NoCtypeNoSswsort {
-    fn get_code(&self) -> i32 {
-        self.inner.get_code()
     }
 }
 
@@ -270,15 +254,6 @@ impl Error for NoCtype {
         match self {
             NoCtype::NoModule(err) => err.source(),
             NoCtype::NoSswsort(err) => err.source(),
-        }
-    }
-}
-
-impl GetCode for NoCtype {
-    fn get_code(&self) -> i32 {
-        match self {
-            NoCtype::NoModule(err) => err.get_code(),
-            NoCtype::NoSswsort(err) => err.get_code(),
         }
     }
 }

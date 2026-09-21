@@ -1,6 +1,6 @@
 //! Error types for DAIS-ribosome.
 
-use zoe::data::err::{ErrorWithContext, GetCode};
+use zoe::data::err::ErrorWithContext;
 
 /// An error holding a compound type that was not implemented for the given
 /// module.
@@ -8,7 +8,6 @@ use zoe::data::err::{ErrorWithContext, GetCode};
 pub struct UnimplementedCtype(pub String);
 
 impl std::error::Error for UnimplementedCtype {}
-impl GetCode for UnimplementedCtype {}
 
 impl std::fmt::Display for UnimplementedCtype {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -36,16 +35,6 @@ impl std::error::Error for RibosomeError {
         match self {
             RibosomeError::Io(e) => e.source(),
             _ => None,
-        }
-    }
-}
-
-impl GetCode for RibosomeError {
-    #[inline]
-    fn get_code(&self) -> i32 {
-        match self {
-            RibosomeError::UnimplementedCtype(e) => e.get_code(),
-            RibosomeError::Io(e) => e.get_code(),
         }
     }
 }

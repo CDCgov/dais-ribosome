@@ -22,7 +22,7 @@ use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use sswsort::SSWSortModule;
 use std::{collections::HashSet, error::Error, fmt::Display, io::Write, path::Path};
 use zoe::{
-    data::err::{Fail, GetCode, OrFail, ResultWithErrorContext},
+    data::err::{Fail, OrFail, ResultWithErrorContext},
     iter_utils::ProcessResultsExt,
     unwrap_or_return_some_err,
 };
@@ -272,15 +272,6 @@ impl Error for ProcessingError {
         match self {
             ProcessingError::NoCtype(e) => e.source(),
             ProcessingError::Io(e) => e.source(),
-        }
-    }
-}
-
-impl GetCode for ProcessingError {
-    fn get_code(&self) -> i32 {
-        match self {
-            ProcessingError::NoCtype(e) => e.get_code(),
-            ProcessingError::Io(e) => e.get_code(),
         }
     }
 }
