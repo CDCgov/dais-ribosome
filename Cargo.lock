@@ -165,7 +165,7 @@ dependencies = [
  "serde",
  "sha1_smol",
  "toml",
- "zoe 0.0.34",
+ "zoe",
 ]
 
 [[package]]
@@ -179,7 +179,7 @@ dependencies = [
  "num_cpus",
  "rayon",
  "sswsort",
- "zoe 0.0.34",
+ "zoe",
 ]
 
 [[package]]
@@ -361,33 +361,11 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "multiversion"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7edb7f0ff51249dfda9ab96b5823695e15a052dc15074c9dbf3d118afaf2c201"
-dependencies = [
- "multiversion-macros 0.8.0",
- "target-features",
-]
-
-[[package]]
-name = "multiversion"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4ca4bea16ffc3f443cf7d866912118196bfef4c6a1556ca00f9f9b00bb43f7c"
 dependencies = [
- "multiversion-macros 0.9.0",
-]
-
-[[package]]
-name = "multiversion-macros"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b093064383341eb3271f42e381cb8f10a01459478446953953c75d24bd339fc0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
- "target-features",
+ "multiversion-macros",
 ]
 
 [[package]]
@@ -561,13 +539,13 @@ checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
 
 [[package]]
 name = "sswsort"
-version = "2.2.5"
-source = "git+https://github.com/CDCgov/sswsort.git?tag=v2.2.5#63c7d7643dce1d8540f892dcb1f246f7d68c6720"
+version = "2.2.6"
+source = "git+https://github.com/CDCgov/sswsort.git?tag=v2.2.6#6594c8f302f815cd2e4ce24f13f32b3e46bc13fb"
 dependencies = [
  "foldhash",
  "serde",
  "toml",
- "zoe 0.0.31",
+ "zoe",
 ]
 
 [[package]]
@@ -597,12 +575,6 @@ dependencies = [
  "quote",
  "unicode-ident",
 ]
-
-[[package]]
-name = "target-features"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1bbb9f3c5c463a01705937a24fdabc5047929ac764b2d5b9cf681c1f5041ed5"
 
 [[package]]
 name = "thiserror"
@@ -698,20 +670,11 @@ checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
 
 [[package]]
 name = "zoe"
-version = "0.0.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47f6c50a0c4865ccbdb6a15c0b20c8d9ab057397b6102cca2c1f46ccb7b5de3c"
-dependencies = [
- "multiversion 0.8.0",
-]
-
-[[package]]
-name = "zoe"
 version = "0.0.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9593e24824ee9448a3a1b07351ae4a9b3247c39bddbc514d9de5b4a953c1f2e"
 dependencies = [
- "multiversion 0.9.0",
+ "multiversion",
  "rand",
  "rand_xoshiro",
 ]

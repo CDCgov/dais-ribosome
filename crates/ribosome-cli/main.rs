@@ -2,7 +2,7 @@
 #![allow(stable_features)]
 #![warn(clippy::all, clippy::pedantic)]
 
-use crate::validate_paths::ValidatePaths;
+use crate::{par_utils::grid::JobErrorOrFail, validate_paths::ValidatePaths};
 use args::Args;
 use dais_ribosome::{
     AnnotationModule,
@@ -14,7 +14,7 @@ use input::{NoCtype, QueryInfo, QueryReader};
 use log::time_stamp;
 use num_cpus::init_thread_pool;
 use par_utils::{
-    grid::{GridCompatibleArgs, GridInfo, JobErrorOrFail},
+    grid::{GridCompatibleArgs, GridInfo},
     writers::WriterThreaded,
 };
 use paths::find_modules_toml;
@@ -22,7 +22,7 @@ use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use sswsort::SSWSortModule;
 use std::{collections::HashSet, error::Error, fmt::Display, io::Write, path::Path};
 use zoe::{
-    data::err::{Fail, OrFail, ResultWithErrorContext},
+    data::err::{ErrorWithContext, Fail, ResultWithErrorContext},
     iter_utils::ProcessResultsExt,
     unwrap_or_return_some_err,
 };
@@ -40,22 +40,22 @@ mod validate_paths;
 // <https://docs.rs/git-version/latest/git_version/macro.git_describe.html>
 // const PROGRAM_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " v", env!("CARGO_PKG_VERSION"));
 
-fn main() {
+fn main() -> Result<(), ErrorWithContext> {
     // Parse the arguments, get grid info, adjust paths based on task ID, open
     // writers.
-    let (args, grid_info) = Args::parse_maybe_grid().unwrap_or_fail();
+    let (args, grid_info) = Args::parse_maybe_grid()?;
 
-    args.validate_paths().unwrap_or_fail();
+    args.validate_paths()?;
 
     // Find the full file-system path to ribosome_res/modules.toml
-    let toml_path = find_modules_toml().unwrap_or_fail();
+    let toml_path = find_modules_toml()?;
 
     // Parse the TOML file
-    let parsed_toml = TomlConfig::from_file(&toml_path).unwrap_or_fail();
+    let parsed_toml = TomlConfig::from_file(&toml_path)?;
 
     // Build the AnnotationModule
     let annotation_module = AnnotationModule::new(&parsed_toml, &toml_path, &args.module)
-        .unwrap_or_die(&format!("Failed to build module '{}'", args.module));
+        .with_context(format!("Failed to build module '{}'", args.module))?;
 
     if !annotation_module.have_weights() {
         time_stamp(
@@ -66,13 +66,13 @@ fn main() {
 
     // Determine the classification strategy, which may involve loading SSWSort
     // module
-    let classification = ClassificationStrategy::new(&args, annotation_module.name, &toml_path).unwrap_or_fail();
+    let classification = ClassificationStrategy::new(&args, annotation_module.name, &toml_path)?;
 
     // Handle a request to submit a grid job
     let grid_info = match grid_info {
         Some(GridInfo::Requested(grid_info)) => {
             grid_info.submit_job_sync().unwrap_or_fail();
-            return;
+            return Ok(());
         }
         Some(GridInfo::Task(grid_info)) => Some(grid_info),
         None => None,
@@ -87,16 +87,13 @@ fn main() {
     };
 
     // Initialize an iterator over the input queries
-    let queries = QueryReader::from_path(&args.data_file)
-        .with_path_context("Failed to open query file", args.data_file)
-        .map_err(std::io::Error::from)
-        .unwrap_or_fail();
+    let queries = QueryReader::from_path(&args.data_file).with_path_context("Failed to open query file", args.data_file)?;
 
     // Open the writers
     let [seq, ins, del] = args.product_output;
-    let writers = Writers::from_paths(seq, ins, del).unwrap_or_die("Failed to create product output files");
+    let writers = Writers::from_paths(seq, ins, del).with_context("Failed to create product output files")?;
     let gen_writers = if let Some([seq, ins, del]) = args.genome_output {
-        Some(Writers::from_paths(seq, ins, del).unwrap_or_die("Failed to create genome output files"))
+        Some(Writers::from_paths(seq, ins, del).with_context("Failed to create genome output files")?)
     } else {
         None
     };
@@ -154,6 +151,8 @@ fn main() {
     }
 
     log::ts("finished");
+
+    Ok(())
 }
 
 /// Configuration for the binary portion of DAIS-ribosome.
