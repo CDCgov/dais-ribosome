@@ -20,6 +20,7 @@ is roughly based on [Keep a Changelog], and this project adheres to
   `write_product_output`
 - An explicit error is now given when a reference ID and product pair has
   multiple corresponding ctypes
+- `AnnotationModule::process` now returns a more specific error type
 
 ## [2.1.0] - 2026-08-04
 

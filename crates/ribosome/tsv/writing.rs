@@ -22,6 +22,10 @@ use zoe::data::err::ResultWithErrorContext;
 /// writing any footers, etc.
 pub trait Finish {
     /// Finalizes the writer, performing flushing, writing any footers, etc.
+    ///
+    /// ## Errors
+    ///
+    /// Any IO errors are propagated.
     fn finish(self) -> std::io::Result<()>;
 }
 
@@ -110,6 +114,10 @@ where
 {
     /// Writes the product outputs for a single query to the appropriate
     /// writers.
+    ///
+    /// ## Errors
+    ///
+    /// Any IO errors are propagated.
     pub fn write_product_output(&mut self, output: &RibosomeOutput<'_>) -> std::io::Result<()> {
         for state in &output.states {
             for product in &state.products {
@@ -185,6 +193,10 @@ where
     D: GenDelWriter,
 {
     /// Writes the genome outputs for a single query to the appropriate writers.
+    ///
+    /// ## Errors
+    ///
+    /// Any IO errors are propagated.
     pub fn write_genome_output(&mut self, output: &RibosomeOutput<'_>) -> std::io::Result<()> {
         for state in &output.states {
             let genome = state.materialize_genome(&output.query);

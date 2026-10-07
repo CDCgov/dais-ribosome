@@ -188,7 +188,7 @@ pub trait GridCompatibleArgs: Sized {
     fn add_id(path: &Path, id: &str) -> PathBuf {
         let mut path = path.to_path_buf();
 
-        let Some(extension) = path.extension().map(|s| s.to_os_string()) else {
+        let Some(extension) = path.extension().map(OsStr::to_os_string) else {
             let Some(file_name) = path.file_name() else {
                 return path.join(id);
             };
@@ -300,7 +300,7 @@ impl GridTaskInfo {
     where
         T: GridCompatibleArgs, {
         match env::var("SGE_TASK_ID") {
-            Ok(sge_task_id) => Self::from_sge_env(sge_task_id, args),
+            Ok(sge_task_id) => Self::from_sge_env(&sge_task_id, args),
             _ => Err(std::io::Error::other("No supported grid scheduler detected (SGE).")),
         }
     }
@@ -310,7 +310,7 @@ impl GridTaskInfo {
     /// ## Errors
     ///
     /// `SGE_TASK_ID` and `SGE_TASK_LAST` must be set and be valid.
-    fn from_sge_env<T>(sge_task_id: String, args: &mut T) -> std::io::Result<Self>
+    fn from_sge_env<T>(sge_task_id: &String, args: &mut T) -> std::io::Result<Self>
     where
         T: GridCompatibleArgs, {
         let task_id = sge_task_id
@@ -413,6 +413,7 @@ impl GridRequestedInfo {
     /// [`Sge`]: GridScheduler::Sge
     /// [`log_path`]: GridCompatibleArgs::log_path
     /// [`ErrorKind::Other`]: std::io::ErrorKind::Other
+    #[allow(clippy::too_many_lines, reason = "code in progress")]
     pub fn submit_job_sync(&self) -> Result<(), SubmitError> {
         log::ts("started, submitting grid job");
 
@@ -424,7 +425,7 @@ impl GridRequestedInfo {
             if let Some(parent) = output.parent() {
                 std::fs::create_dir_all(parent)
                     .with_path_context("Failed to create output directory", parent)
-                    .map_err(|e| SubmitErrorRepr::Io(e.into()))?
+                    .map_err(|e| SubmitErrorRepr::Io(e.into()))?;
             }
         }
 
@@ -452,7 +453,7 @@ impl GridRequestedInfo {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
 
-                self.print_submission_msg(self.task_count, &self.log_path, add_id);
+                Self::print_submission_msg(self.task_count, &self.log_path, add_id);
 
                 cmd.output()
                     .with_context("An error using qsub occurred")
@@ -460,11 +461,11 @@ impl GridRequestedInfo {
             }
         };
 
-        let command_result = if !output_cmd.status.success() {
+        let command_result = if output_cmd.status.success() {
+            Ok(())
+        } else {
             let stderr = String::from_utf8_lossy(&output_cmd.stderr).trim().to_owned();
             if stderr.is_empty() { Err(None) } else { Err(Some(stderr)) }
-        } else {
-            Ok(())
         };
 
         // The exit code to return if there is an error (ensured to be non-zero)
@@ -566,7 +567,7 @@ impl GridRequestedInfo {
 
     /// Prints the confirmation message that a grid job has been submitted,
     /// listing the number of tasks and the log file.
-    fn print_submission_msg(&self, tasks: usize, log_path: &Path, add_id: fn(&Path, &str) -> PathBuf) {
+    fn print_submission_msg(tasks: usize, log_path: &Path, add_id: fn(&Path, &str) -> PathBuf) {
         let log_path = add_id(log_path, "<ID>");
         log::ts(&format!(
             "submitted synchronous job with {tasks} tasks, log files at: '{log_path}'",
@@ -775,6 +776,7 @@ pub struct TaskErrors {
 }
 
 impl TaskErrors {
+    #[allow(clippy::format_push_string)]
     fn to_string(&self) -> Option<String> {
         const TASK_HEADER: &str = "Task";
         const STATUS_HEADER: &str = "Status";
@@ -918,7 +920,7 @@ impl GridTask {
                 "Failed to rename {tmp_path} to {final_path}",
                 tmp_path = tmp_path.display(),
                 final_path = final_path.display()
-            ))
+            ));
         }
 
         std::process::exit(0)
@@ -1033,7 +1035,9 @@ impl GridInfo {
 
                 if id == T::Cli::SUBMIT_GRID_JOB_ID {
                     continue;
-                } else if id == T::Cli::IS_GRID_TASK_ID {
+                }
+
+                if id == T::Cli::IS_GRID_TASK_ID {
                     push_arg_name(&mut grid_command, arg);
                 }
 
@@ -1130,7 +1134,7 @@ impl<P: GridCompatibleCli> CommandFactory for GridParser<P> {
 
 impl<P: GridCompatibleCli> Parser for GridParser<P> {}
 
-/// A helper function for [GridInfo::new] which appends the specified keyword
+/// A helper function for [`GridInfo::new`] which appends the specified keyword
 /// argument to the command.
 fn push_arg_name(grid_command: &mut Vec<OsString>, arg: &Arg) {
     if let Some(long) = arg.get_long() {

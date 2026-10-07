@@ -117,6 +117,7 @@ impl<T> IdxAdjustment<T> {
 /// `current` is removed. Hence, there is not typically a need for removing
 /// `left2`.
 #[derive(Clone, Eq, PartialEq, Debug)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct StateVecEdits<T> {
     /// The state left of the current one (`idx-1`) should be removed.
     pub remove_left1:   bool,

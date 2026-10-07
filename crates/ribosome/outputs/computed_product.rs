@@ -162,6 +162,7 @@ impl DeletedProduct<'_> {
     /// Padding of this length can be added to the end of `aa_aln` to get an
     /// aligned sequence spanning the full coding protein length. This does not
     /// include trailing deletions, since these are present in `aa_aln` already.
+    #[must_use]
     pub fn aa_aln_rpad(&self) -> usize {
         // Floor divide since any leftover bases are already accounted for with
         // a partial codon
@@ -175,6 +176,7 @@ impl ComputedProduct<'_> {
     /// Padding of this length can be added to the end of `aa_aln` to get an
     /// aligned sequence spanning the full coding protein length. This does not
     /// include trailing deletions, since these are present in `aa_aln` already.
+    #[must_use]
     pub fn aa_aln_rpad(&self) -> usize {
         // Floor divide since any leftover bases are already accounted for with
         // a partial codon

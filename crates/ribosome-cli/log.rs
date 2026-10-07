@@ -28,7 +28,7 @@ pub fn ts(message: &str) {
     time_stamp(message, false);
 }
 
-pub fn print_unimplemented_ctypes(set: HashSet<UnimplementedCtype>, module: &AnnotationModule<'_>) {
+pub fn print_unimplemented_ctypes(set: &HashSet<UnimplementedCtype>, module: &AnnotationModule<'_>) {
     if set.is_empty() {
         return;
     }

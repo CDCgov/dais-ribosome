@@ -8,7 +8,7 @@ use crate::{
 };
 use zoe::alignment::AlignmentStates;
 
-impl<'a> AnnotationModule<'a> {
+impl AnnotationModule<'_> {
     /// Rewrite deletions in the alignment per the experimental rewrite rules.
     ///
     /// Rewriting will forcibly place a deletion to be in a new location,
@@ -28,7 +28,7 @@ impl<'a> AnnotationModule<'a> {
     // could potentially be to change the order in which rules are applied so
     // that only a single pass is needed
     pub(crate) fn rule_rewrite_dels(
-        &self, genome_aln_states: &mut Vec<StateRange>, alignment: &mut AlignmentStates, reference: &ReferenceGroup,
+        genome_aln_states: &mut Vec<StateRange>, alignment: &mut AlignmentStates, reference: &ReferenceGroup,
         query_len: usize,
     ) {
         // Track whether any rewriting rule were applied, in which case we

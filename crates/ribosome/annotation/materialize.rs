@@ -31,6 +31,7 @@ impl<'a> Product<'a> {
     /// ## Validity
     ///
     /// The `query` must be the same record used to form the product.
+    #[must_use]
     pub fn materialize(&self, query: &QueryRecord) -> MaybeComputedProduct<'a> {
         match self.product_ranges.as_slice() {
             // Return an EmptyProduct if there are no ranges
@@ -309,7 +310,7 @@ impl IncrementalAccumulator {
                 }
                 CdsStateRange::I(ins) => self.extend_from_insertion(query, ins),
                 CdsStateRange::D(del) => self.extend_from_deletion(del, is_terminal),
-            };
+            }
         }
 
         // No stop codon reached, so finish the translation

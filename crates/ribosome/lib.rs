@@ -1,4 +1,5 @@
 #![feature(bufreader_peek)]
+#![warn(clippy::all, clippy::pedantic)]
 
 mod annotation;
 pub(crate) mod config;

@@ -61,6 +61,7 @@ impl<'a> GenDelRowView<'a> {
     /// ## Validity
     ///
     /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
+    #[must_use]
     pub fn new(deletion: &'a DeletionRange, query_id: &'a str, ctype: &'a str, reference_id: &'a str) -> GenDelRowView<'a> {
         Self {
             query_id,
@@ -143,6 +144,10 @@ impl<R: Read> Iterator for GenDelFileParser<R> {
 /// other formats can be supported.
 pub trait GenDelWriter: Finish {
     /// Writes the genome deletion row to the writer.
+    ///
+    /// ## Errors
+    ///
+    /// Any IO errors are propagated.
     fn write_gen_del_row(&mut self, row: &GenDelRowView) -> std::io::Result<()>;
 }
 

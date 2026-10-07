@@ -51,7 +51,7 @@ fn handle_classification(
                 let mut warning =
                     format!("The sequence for the following ID was detected as chimeric: {id}. Possible taxa: ");
 
-                for part in taxa.iter().cloned().intersperse(", ") {
+                for part in taxa.iter().copied().intersperse(", ") {
                     warning.push_str(part);
                 }
 
@@ -80,7 +80,7 @@ fn handle_classification(
                     "The sequence for the following ID was detected as unresolvable with a score of {best_score}: {id}. Possible taxa: "
                 );
 
-                for part in taxa.iter().cloned().intersperse(", ") {
+                for part in taxa.iter().copied().intersperse(", ") {
                     warning.push_str(part);
                 }
 
@@ -347,31 +347,28 @@ impl TsvQueryIter {
         };
         let third = columns.next();
 
-        match third {
+        if let Some(sequence) = third {
             // Three columns: ID  ctype  sequence  (annotated)
-            Some(sequence) => {
-                if second.is_empty() {
-                    return Err(std::io::Error::other("Invalid TSV format: the second field was empty"));
-                }
-
-                let sequence = sequence.as_bytes().to_vec();
-
-                Ok(QueryInfo {
-                    id,
-                    sequence,
-                    ctype: Some(second),
-                })
+            if second.is_empty() {
+                return Err(std::io::Error::other("Invalid TSV format: the second field was empty"));
             }
+
+            let sequence = sequence.as_bytes().to_vec();
+
+            Ok(QueryInfo {
+                id,
+                sequence,
+                ctype: Some(second),
+            })
+        } else {
             // Two columns: ID  sequence  (unannotated)
-            None => {
-                let sequence = second.as_bytes().to_vec();
+            let sequence = second.as_bytes().to_vec();
 
-                Ok(QueryInfo {
-                    id,
-                    sequence,
-                    ctype: None,
-                })
-            }
+            Ok(QueryInfo {
+                id,
+                sequence,
+                ctype: None,
+            })
         }
     }
 }

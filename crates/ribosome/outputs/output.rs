@@ -110,13 +110,8 @@ impl<'a> GenomeAndProductStates<'a> {
                 panic!("genome_aln_states cannot be empty");
             };
 
-            if !first.is_match() {
-                panic!("genome_aln_states must start with a match state");
-            }
-
-            if !last.is_match() {
-                panic!("genome_aln_states must end with a match state");
-            }
+            assert!(first.is_match(), "genome_aln_states must start with a match state");
+            assert!(last.is_match(), "genome_aln_states must end with a match state");
         }
 
         // Add stop extension to Zoe alignment if applicable
@@ -126,10 +121,8 @@ impl<'a> GenomeAndProductStates<'a> {
 
         let ref_len = references.length;
 
-        let lpad = genome_aln_states
-            .first()
-            .map_or(0, |first_state| first_state.begin_ref_coord());
-        let rpad = ref_len - genome_aln_states.last().map_or(0, |last_state| last_state.end_ref_coord());
+        let lpad = genome_aln_states.first().map_or(0, StateRange::begin_ref_coord);
+        let rpad = ref_len - genome_aln_states.last().map_or(0, StateRange::end_ref_coord);
 
         Self {
             reference_id: &references.reference_id,
@@ -145,6 +138,7 @@ impl<'a> GenomeAndProductStates<'a> {
 
     /// Computes the output data for this genome, materializing all ranges into
     /// sequences using `query`.
+    #[must_use]
     pub fn materialize_genome(&self, query: &QueryRecord) -> ComputedGenome {
         let query = query.nucleotides();
 

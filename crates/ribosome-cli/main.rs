@@ -1,11 +1,11 @@
 #![feature(string_from_utf8_lossy_owned, bufreader_peek, try_trait_v2, iter_intersperse)]
 #![allow(stable_features)]
+#![warn(clippy::all, clippy::pedantic)]
 
 use crate::validate_paths::ValidatePaths;
 use args::Args;
 use dais_ribosome::{
     AnnotationModule,
-    errors::RibosomeError,
     outputs::RibosomeOutput,
     toml::TomlConfig,
     tsv::{AnyWriter, Finish, Writers},
@@ -294,11 +294,10 @@ where
 
         let output = match config.annotation.process(record) {
             Ok(output) => output,
-            Err(RibosomeError::UnimplementedCtype(ctype)) => {
+            Err(ctype) => {
                 unimplemented_ctypes.insert(ctype);
                 continue;
             }
-            Err(RibosomeError::Io(e)) => return Err(ProcessingError::Io(e)),
         };
 
         if config.verbose {
@@ -317,7 +316,7 @@ where
     }
 
     if config.list_unimplemented_ctypes {
-        log::print_unimplemented_ctypes(unimplemented_ctypes, &config.annotation);
+        log::print_unimplemented_ctypes(&unimplemented_ctypes, &config.annotation);
     }
 
     Ok(())
@@ -356,12 +355,11 @@ where
                     }
                     None
                 }
-                Err(RibosomeError::UnimplementedCtype(e)) => Some(Ok(e)),
-                Err(RibosomeError::Io(e)) => Some(Err(ProcessingError::Io(e))),
+                Err(e) => Some(Ok(e)),
             }
         })
         .flatten()
-        .collect::<Result<HashSet<_>, _>>()?;
+        .collect::<Result<HashSet<_>, ProcessingError>>()?;
 
     writers.finish()?;
     if let Some(gen_writers) = gen_writers {
@@ -369,7 +367,7 @@ where
     }
 
     if config.list_unimplemented_ctypes {
-        log::print_unimplemented_ctypes(unimplemented_ctypes, &config.annotation);
+        log::print_unimplemented_ctypes(&unimplemented_ctypes, &config.annotation);
     }
 
     Ok(())

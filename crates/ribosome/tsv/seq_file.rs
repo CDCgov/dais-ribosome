@@ -145,6 +145,7 @@ impl<'de> Deserialize<'de> for SeqRow {
     /// The combination of null fields must be valid (conforming to one of the
     /// three variants). The coordinates must successfully be parsed, otherwise
     /// an error with context is yielded.
+    #[allow(clippy::too_many_lines)]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>, {
@@ -332,6 +333,7 @@ impl<'a> SeqRowView<'a> {
     /// ## Validity
     ///
     /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
+    #[must_use]
     pub fn new(
         product: &'a MaybeComputedProduct<'a>, query_id: &'a str, ctype: &'a str, reference_id: &'a str,
         formatting: &'a Formatting,
@@ -486,6 +488,7 @@ impl<'a> SeqDataView<'a> {
     /// ## Validity
     ///
     /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
+    #[must_use]
     pub fn new(
         product: &'a ComputedProduct<'a>, query_id: &'a str, ctype: &'a str, reference_id: &'a str,
         formatting: &'a Formatting,
@@ -856,15 +859,31 @@ impl Display for SeqRowDisplay<'_> {
 /// other formats can be supported.
 pub trait SeqWriter: Finish {
     /// Writes a sequence row containing no null fields to the writer.
+    ///
+    /// ## Errors
+    ///
+    /// Any IO errors are propagated.
     fn write_seq_data(&mut self, data: &SeqDataView) -> std::io::Result<()>;
 
     /// Writes a sequence row corresponding to an empty product to the writer.
+    ///
+    /// ## Errors
+    ///
+    /// Any IO errors are propagated.
     fn write_empty_seq_row(&mut self, row: &EmptySeqRowView<'_>) -> std::io::Result<()>;
 
     /// Writes a sequence row corresponding to a deleted product to the writer.
+    ///
+    /// ## Errors
+    ///
+    /// Any IO errors are propagated.
     fn write_deleted_seq_row(&mut self, row: &DeletedSeqRowView<'_>) -> std::io::Result<()>;
 
     /// Writes a sequence row to the writer.
+    ///
+    /// ## Errors
+    ///
+    /// Any IO errors are propagated.
     fn write_seq_row(&mut self, row: &SeqRowView<'_>) -> std::io::Result<()> {
         match row {
             SeqRowView::Data(data) => self.write_seq_data(data),

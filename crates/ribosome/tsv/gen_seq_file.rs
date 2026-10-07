@@ -143,6 +143,7 @@ impl<'a> GenSeqRowView<'a> {
     /// ## Validity
     ///
     /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
+    #[must_use]
     pub fn new(
         genome: &'a ComputedGenome, query_id: &'a str, ctype: &'a str, reference_id: &'a str, formatting: &'a Formatting,
     ) -> Self {
@@ -310,6 +311,10 @@ impl Display for GenSeqRowDisplay<'_> {
 /// other formats can be supported.
 pub trait GenSeqWriter: Finish {
     /// Writes the genome sequence row to the writer.
+    ///
+    /// ## Errors
+    ///
+    /// Any IO errors are propagated.
     fn write_gen_seq_row(&mut self, row: &GenSeqRowView) -> std::io::Result<()>;
 }
 

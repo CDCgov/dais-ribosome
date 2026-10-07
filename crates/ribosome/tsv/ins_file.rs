@@ -146,6 +146,7 @@ impl<'a> InsRowView<'a> {
     /// ## Validity
     ///
     /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
+    #[must_use]
     pub fn new(
         insertion: &'a ComputedInsertion, product: &'a ComputedProduct, query_id: &'a str, ctype: &'a str,
         reference_id: &'a str,
@@ -228,6 +229,10 @@ impl<R: Read> Iterator for InsFileParser<R> {
 /// other formats can be supported.
 pub trait InsWriter: Finish {
     /// Writes the insertion row to the writer.
+    ///
+    /// ## Errors
+    ///
+    /// Any IO errors are propagated.
     fn write_ins_row(&mut self, row: &InsRowView) -> std::io::Result<()>;
 }
 

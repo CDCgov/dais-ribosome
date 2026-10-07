@@ -291,7 +291,7 @@ impl GridCompatibleArgs for Args {
 /// Helper to get a `mktemp`-like suffix for output
 fn temp_name() -> String {
     let alpha = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let now = jiff::Timestamp::now().as_microsecond() as u64;
+    let now = jiff::Timestamp::now().as_microsecond().cast_unsigned();
     let seed = getrandom::u64().unwrap_or(now);
     let seq = rand_sequence(alpha, 32, seed);
     String::from_utf8_lossy_owned(seq)

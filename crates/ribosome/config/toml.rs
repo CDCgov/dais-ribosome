@@ -42,6 +42,7 @@ impl TomlConfig {
 
     /// Looks up a module by name (or alternative name). `None` is returned if
     /// no module had the given name.
+    #[must_use]
     pub fn get(&self, module_name: &str) -> Option<&ConfiguredModule> {
         self.modules.iter().find(|&m| m.matches_name(module_name))
     }
@@ -225,6 +226,7 @@ impl AlignmentWeights {
     ///
     /// Returns the override for the compound type if it exists, otherwise
     /// returns defaults.
+    #[must_use]
     pub fn get(&self, compound_type: &str) -> &AlignmentParams {
         self.overrides.get(compound_type).unwrap_or(&self.default)
     }
@@ -390,7 +392,7 @@ where
     let value: i8 = Deserialize::deserialize(deserializer)?;
     match value {
         -128 => Err(D::Error::invalid_value(
-            Unexpected::Signed(value as i64),
+            Unexpected::Signed(i64::from(value)),
             &"an integer of absolute value at most 127",
         )),
         -127..0 => Ok(value),

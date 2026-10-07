@@ -49,7 +49,7 @@ fn shift_ins_left1() {
 
     let dir = pick_ins_shift_with_stats(&left_match, &ins, &right_match, &query, &product_spec);
 
-    assert_eq!(dir, Some(ShiftDir::Left))
+    assert_eq!(dir, Some(ShiftDir::Left));
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn shift_ins_left1_default() {
 
     let dir = pick_ins_shift_with_stats(&left_match, &ins, &right_match, &query, &product_spec);
 
-    assert_eq!(dir, Some(ShiftDir::Left))
+    assert_eq!(dir, Some(ShiftDir::Left));
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn shift_ins_left2() {
 
     let dir = pick_ins_shift_with_stats(&left_match, &ins, &right_match, &query, &product_spec);
 
-    assert_eq!(dir, Some(ShiftDir::Left))
+    assert_eq!(dir, Some(ShiftDir::Left));
 }
 
 #[test]
@@ -148,7 +148,7 @@ fn shift_ins_right1() {
 
     let dir = pick_ins_shift_with_stats(&left_match, &ins, &right_match, &query, &product_spec);
 
-    assert_eq!(dir, Some(ShiftDir::Right))
+    assert_eq!(dir, Some(ShiftDir::Right));
 }
 
 #[test]
@@ -181,7 +181,7 @@ fn shift_ins_right1_default() {
 
     let dir = pick_ins_shift_with_stats(&left_match, &ins, &right_match, &query, &product_spec);
 
-    assert_eq!(dir, Some(ShiftDir::Right))
+    assert_eq!(dir, Some(ShiftDir::Right));
 }
 
 #[test]
@@ -214,7 +214,7 @@ fn shift_ins_right2() {
 
     let dir = pick_ins_shift_with_stats(&left_match, &ins, &right_match, &query, &product_spec);
 
-    assert_eq!(dir, Some(ShiftDir::Right))
+    assert_eq!(dir, Some(ShiftDir::Right));
 }
 
 #[test]
@@ -244,7 +244,7 @@ fn shift_del_left1() {
 
     let dir = pick_del_shift_with_stats(&left_match, &del, &right_match, &query, &product_spec);
 
-    assert_eq!(dir, Some(ShiftDir::Left))
+    assert_eq!(dir, Some(ShiftDir::Left));
 }
 
 #[test]
@@ -274,7 +274,7 @@ fn shift_del_left1_default() {
 
     let dir = pick_del_shift_with_stats(&left_match, &del, &right_match, &query, &product_spec);
 
-    assert_eq!(dir, Some(ShiftDir::Left))
+    assert_eq!(dir, Some(ShiftDir::Left));
 }
 
 #[test]
@@ -304,7 +304,7 @@ fn shift_del_left2() {
 
     let dir = pick_del_shift_with_stats(&left_match, &del, &right_match, &query, &product_spec);
 
-    assert_eq!(dir, Some(ShiftDir::Left))
+    assert_eq!(dir, Some(ShiftDir::Left));
 }
 
 #[test]
@@ -334,7 +334,7 @@ fn shift_del_right1() {
 
     let dir = pick_del_shift_with_stats(&left_match, &del, &right_match, &query, &product_spec);
 
-    assert_eq!(dir, Some(ShiftDir::Right))
+    assert_eq!(dir, Some(ShiftDir::Right));
 }
 
 #[test]
@@ -364,7 +364,7 @@ fn shift_del_right1_default() {
 
     let dir = pick_del_shift_with_stats(&left_match, &del, &right_match, &query, &product_spec);
 
-    assert_eq!(dir, Some(ShiftDir::Right))
+    assert_eq!(dir, Some(ShiftDir::Right));
 }
 
 #[test]
@@ -394,7 +394,7 @@ fn shift_del_right2() {
 
     let dir = pick_del_shift_with_stats(&left_match, &del, &right_match, &query, &product_spec);
 
-    assert_eq!(dir, Some(ShiftDir::Right))
+    assert_eq!(dir, Some(ShiftDir::Right));
 }
 
 #[test]
@@ -409,6 +409,8 @@ fn state_vec_edit_no_change() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_possible_truncation)]
 fn state_vec_edit() {
     /// Abstracts the logic for this unit test. The states being edited are 0-9.
     /// Inserts on left should be 10, and inserts on right should be 11. Edits

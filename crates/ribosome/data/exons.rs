@@ -168,7 +168,7 @@ impl Exons {
                     right.ref_range.display_inclusive(),
                 )));
             }
-        };
+        }
 
         // Prevent perfectly adjacent exons (there should either be overlap or
         // non-coding region)

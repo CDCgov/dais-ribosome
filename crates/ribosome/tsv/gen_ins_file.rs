@@ -100,6 +100,7 @@ impl<'a> GenInsRowView<'a> {
     /// ## Validity
     ///
     /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
+    #[must_use]
     pub fn new(insertion: &'a ComputedGenomeInsertion, query_id: &'a str, ctype: &'a str, reference_id: &'a str) -> Self {
         Self {
             query_id,
@@ -181,6 +182,10 @@ impl<R: Read> Iterator for GenInsFileParser<R> {
 /// other formats can be supported.
 pub trait GenInsWriter: Finish {
     /// Writes the genome insertion row to the writer.
+    ///
+    /// ## Errors
+    ///
+    /// Any IO errors are propagated.
     fn write_gen_ins_row(&mut self, row: &GenInsRowView) -> std::io::Result<()>;
 }
 

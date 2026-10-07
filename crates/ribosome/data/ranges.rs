@@ -31,18 +31,21 @@ impl InsertionIdx {
     /// Creates a new [`InsertionIdx`] representing an insertion between index
     /// `left` and `right=left+1`.
     #[allow(dead_code)]
+    #[must_use]
     pub fn from_left_idx(left: usize) -> Self {
         Self { right: left + 1 }
     }
 
     /// Creates a new [`InsertionIdx`] representing an insertion between index
     /// `left=right-1` and `right`.
+    #[must_use]
     pub fn from_right_idx(right: usize) -> Self {
         Self { right }
     }
 
     /// Creates a new [`InsertionIdx`] representing an insertion between the
     /// 1-based positions `left` and `right=left+1`.
+    #[must_use]
     pub fn from_left_pos(left: usize) -> Self {
         // 1-based left is equivalent to 0-based right
         Self { right: left }
@@ -54,6 +57,7 @@ impl InsertionIdx {
     /// ## Panics
     ///
     /// This will panic if `right` is 0.
+    #[must_use]
     pub fn from_right_pos(right: usize) -> Self {
         // Convert 1-based to 0-based
         Self { right: right - 1 }
@@ -151,6 +155,7 @@ pub enum StateRange {
 impl StateRange {
     /// Returns the length of the state in either the query or reference
     /// coordinates, whichever is applicable.
+    #[must_use]
     pub fn len(&self) -> usize {
         match self {
             StateRange::M(range) => range.len(),
@@ -161,6 +166,7 @@ impl StateRange {
 
     /// Returns whether the state is empty (zero length) in either the query or
     /// reference coordinates, whichever is applicable.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         match self {
             StateRange::M(range) => range.is_empty(),
@@ -206,6 +212,7 @@ pub struct MatchRange {
 impl MatchRange {
     /// Returns the length of the [`MatchRange`] in query and reference
     /// coordinates.
+    #[must_use]
     pub fn len(&self) -> usize {
         // Validity: The ranges are the same length
         self.query_range.len()
@@ -213,6 +220,7 @@ impl MatchRange {
 
     /// Returns whether the [`MatchRange`] in empty in query and reference
     /// coordinates.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         // Validity: The ranges are the same length
         self.query_range.is_empty()
@@ -276,6 +284,7 @@ impl DeletionRange {
     /// Returns the length of the [`DeletionRange`] in reference coordinates.
     ///
     /// The deletion has no length in query coordinates.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.ref_range.len()
     }
@@ -283,6 +292,7 @@ impl DeletionRange {
     /// Returns whether the [`DeletionRange`] in empty in reference coordinates.
     ///
     /// The deletion has no length in query coordinates.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         // Validity: The ranges are the same length
         self.ref_range.is_empty()
@@ -317,6 +327,7 @@ impl InsertionRange {
     /// Returns the length of the [`InsertionRange`] in query coordinates.
     ///
     /// The insertion has no length in reference coordinates.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.query_range.len()
     }
@@ -324,6 +335,7 @@ impl InsertionRange {
     /// Returns whether the [`InsertionRange`] in empty in query coordinates.
     ///
     /// The insertion has no length in reference coordinates.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.query_range.is_empty()
     }
@@ -339,6 +351,7 @@ pub enum CdsStateRange {
 }
 
 impl CdsStateRange {
+    #[must_use]
     pub fn match_range(&self) -> Option<&CdsMatchRange> {
         match self {
             CdsStateRange::M(range) => Some(range),
@@ -346,6 +359,7 @@ impl CdsStateRange {
         }
     }
 
+    #[must_use]
     pub fn deletion_range(&self) -> Option<&CdsDeletionRange> {
         match self {
             CdsStateRange::D(range) => Some(range),
@@ -353,6 +367,7 @@ impl CdsStateRange {
         }
     }
 
+    #[must_use]
     pub fn insertion_range(&self) -> Option<&CdsInsertionRange> {
         match self {
             CdsStateRange::I(range) => Some(range),
@@ -360,6 +375,7 @@ impl CdsStateRange {
         }
     }
 
+    #[must_use]
     pub fn cds_len(&self) -> usize {
         match self {
             CdsStateRange::M(range) => range.cds_range.len(),
@@ -368,6 +384,7 @@ impl CdsStateRange {
         }
     }
 
+    #[must_use]
     pub fn query_len(&self) -> usize {
         match self {
             CdsStateRange::M(range) => range.query_range.len(),
@@ -489,22 +506,26 @@ impl CdsInsertionRange {
 
 impl StateRange {
     /// Returns whether the [`StateRange`] corresponds to a match.
+    #[must_use]
     pub fn is_match(&self) -> bool {
         matches!(self, StateRange::M(_))
     }
 
     /// Returns whether the [`StateRange`] corresponds to an insertion.
+    #[must_use]
     pub fn is_insert(&self) -> bool {
         matches!(self, StateRange::I(_))
     }
 
     /// Returns whether the [`StateRange`] corresponds to a deletion.
+    #[must_use]
     pub fn is_delete(&self) -> bool {
         matches!(self, StateRange::D(_))
     }
 
     /// Extracts the contained [`MatchRange`], returning `None` if a different
     /// state is present.
+    #[must_use]
     pub fn match_range(&self) -> Option<&MatchRange> {
         match self {
             StateRange::M(match_range) => Some(match_range),
@@ -514,6 +535,7 @@ impl StateRange {
 
     /// Extracts the contained [`InsertionRange`], returning `None` if a
     /// different state is present.
+    #[must_use]
     pub fn insert_range(&self) -> Option<&InsertionRange> {
         match self {
             StateRange::I(insert_range) => Some(insert_range),
@@ -523,6 +545,7 @@ impl StateRange {
 
     /// Extracts the contained [`DeletionRange`], returning `None` if a
     /// different state is present.
+    #[must_use]
     pub fn delete_range(&self) -> Option<&DeletionRange> {
         match self {
             StateRange::D(delete_range) => Some(delete_range),
@@ -601,7 +624,7 @@ impl StateRange {
                         ref_index:   InsertionIdx::from_right_idx(ref_start),
                         query_range: query_start..query_start + inc,
                     }));
-                    query_start += inc
+                    query_start += inc;
                 }
                 b'D' => {
                     states.push(Self::D(DeletionRange {
@@ -648,19 +671,16 @@ impl StateRange {
             .next()
             .map(|first| (first.start, query_ranges.next_back().unwrap_or(first).end));
 
-        match query_bounds {
-            Some((query_start, query_end)) => {
-                states.soft_clip(query_start);
-                for ciglet in ciglets {
-                    states.add_ciglet(ciglet);
-                }
-                states.soft_clip(query_len - query_end);
+        if let Some((query_start, query_end)) = query_bounds {
+            states.soft_clip(query_start);
+            for ciglet in ciglets {
+                states.add_ciglet(ciglet);
             }
-            None => {
-                states.soft_clip(query_len);
-                for ciglet in ciglets {
-                    states.add_ciglet(ciglet);
-                }
+            states.soft_clip(query_len - query_end);
+        } else {
+            states.soft_clip(query_len);
+            for ciglet in ciglets {
+                states.add_ciglet(ciglet);
             }
         }
 
@@ -751,7 +771,7 @@ pub(crate) trait RangeExt: Sized {
     /// [`Ordering::Less`] if the range comes before the insertion,
     /// [`Ordering::Greater`] if the range comes after, or [`None`] if the range
     /// strictly contains the insertion.
-    fn cmp_ins(&self, ins: &InsertionIdx) -> Option<Ordering>;
+    fn cmp_ins(&self, ins: InsertionIdx) -> Option<Ordering>;
 }
 
 impl RangeExt for Range<usize> {
@@ -855,7 +875,7 @@ impl RangeExt for Range<usize> {
         }
     }
 
-    fn cmp_ins(&self, ins: &InsertionIdx) -> Option<Ordering> {
+    fn cmp_ins(&self, ins: InsertionIdx) -> Option<Ordering> {
         dbg_check_endpoints(self);
 
         if ins.right() <= self.start {

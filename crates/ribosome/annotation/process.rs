@@ -12,29 +12,34 @@ use crate::{
         QueryRecord,
         ranges::{CdsStateRange, InsertionIdx, InsertionRange, RangeExt, StateRange},
     },
-    errors::RibosomeError,
+    errors::UnimplementedCtype,
     outputs::{GenomeAndProductStates, Product, RibosomeOutput},
     ranges::CdsInsertionRange,
 };
 use std::ops::Range;
 use zoe::{alignment::Alignment, data::types::nucleotides::CodonExtension, prelude::*};
 
-impl<'a> AnnotationModule<'a> {
+impl AnnotationModule<'_> {
     /// Processes a single query, returning [`RibosomeOutput`] containing all
     /// the genome alignments against the relevant references, as well as the
     /// protein products formed for each reference.
-    pub fn process(&self, query: QueryRecord) -> Result<RibosomeOutput<'_>, RibosomeError> {
+    ///
+    /// ## Errors
+    ///
+    /// [`UnimplementedCtype`] is returned if the `query` has a compound type
+    /// not present in the [`AnnotationModule`].
+    pub fn process(&self, query: QueryRecord) -> Result<RibosomeOutput<'_>, UnimplementedCtype> {
         // Get the corresponding reference information for the compound type of
         // the query
         let Some(reference_data) = self.ctype_map.get(query.ctype()) else {
-            return Err(RibosomeError::UnimplementedCtype(query.into_ctype().into()));
+            return Err(query.into_ctype().into());
         };
 
         let mut states = Vec::with_capacity(reference_data.len());
 
         let mut failed_ref_ids = Vec::new();
 
-        for ref_id_data in reference_data.iter() {
+        for ref_id_data in reference_data {
             let (query_ori_offset, chewed_query) = self.rule_chew_to_start(&query, ref_id_data);
 
             // Get the alignment to the best reference
@@ -59,7 +64,7 @@ impl<'a> AnnotationModule<'a> {
 
             // Mutate the genome alignment based on any rules for rewriting of
             // deletions
-            self.rule_rewrite_dels(
+            Self::rule_rewrite_dels(
                 &mut genome_aln_states,
                 &mut genome_aln.states,
                 ref_id_data,
@@ -266,7 +271,7 @@ impl<T> AlignmentExt for Alignment<T> {
     }
 }
 
-impl<'a> Product<'a> {
+impl Product<'_> {
     /// Returns true if a required start codon is required for the exons, a
     /// long-enough match state occurs in the [`Product`] to span this codon,
     /// and yet the codon is not equal to the required one.

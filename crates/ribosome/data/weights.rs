@@ -277,9 +277,9 @@ fn normalize_codon(mut codon: [u8; 3]) -> std::io::Result<[u8; 3]> {
             return Err(std::io::Error::other(format!(
                 "The character {base} is not permitted in a codon"
             )));
-        } else {
-            *base = new_base;
         }
+
+        *base = new_base;
     }
 
     Ok(codon)

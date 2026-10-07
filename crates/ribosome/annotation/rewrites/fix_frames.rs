@@ -73,7 +73,7 @@ use crate::{
 };
 use std::cmp::Ordering;
 
-impl<'a> Product<'a> {
+impl Product<'_> {
     /// The procedure for fixing the frames of all the eligible indels.
     ///
     /// See [the module documentation](crate::annotation::fix_frames) for more
@@ -97,6 +97,7 @@ impl<'a> Product<'a> {
 ///
 /// [`fix_frames`]: Product::fix_frames
 #[must_use]
+#[allow(clippy::match_same_arms)]
 fn fix_frame(
     states: StateWithFlanking<CdsStateRange>, query: &QueryRecord, product_spec: &ProductSpec,
 ) -> IdxAdjustment<CdsStateRange> {
@@ -202,6 +203,7 @@ fn fix_frame(
 ///
 /// [`fix_frames`]: Product::fix_frames
 #[must_use]
+#[allow(clippy::needless_pass_by_value, reason = "false positive")]
 fn fix_flanked_deletion(
     left2: Option<&mut CdsStateRange>, left_match: &mut CdsMatchRange, del: &mut CdsDeletionRange,
     right_match: &mut CdsMatchRange, query: &QueryRecord, product_spec: &ProductSpec,
@@ -249,6 +251,7 @@ fn fix_flanked_deletion(
 /// [the module documentation](crate::annotation::fix_frames) for more details.
 ///
 /// [`fix_frames`]: Product::fix_frames
+#[allow(clippy::needless_pass_by_value, reason = "false positive")]
 fn fix_flanked_insertion(
     left2: Option<&mut CdsStateRange>, left_match: &mut CdsMatchRange, ins: &mut CdsInsertionRange,
     right_match: &mut CdsMatchRange, right2: Option<&mut CdsStateRange>, query: &QueryRecord, product_spec: &ProductSpec,
@@ -380,7 +383,7 @@ fn is_valid_del_merge(del1: &CdsDeletionRange, del2: &CdsDeletionRange, product_
         .exons
         .noncoding_regions
         .iter()
-        .all(|noncoding| del1.cds_range.cmp_ins(&noncoding.cds_index) == del2.cds_range.cmp_ins(&noncoding.cds_index))
+        .all(|noncoding| del1.cds_range.cmp_ins(noncoding.cds_index) == del2.cds_range.cmp_ins(noncoding.cds_index))
 }
 
 /// The chosen direction to shift an out-of-frame indel.
@@ -489,8 +492,7 @@ fn pick_insertion_shift(
             .exons
             .overlapped_regions
             .iter()
-            .filter_map(|overlap| overlap.cds_range().start.checked_sub(ins.cds_index.right()))
-            .next();
+            .find_map(|overlap| overlap.cds_range().start.checked_sub(ins.cds_index.right()));
 
         // Limit max_right_shift based on the closest overlapping region
         // right of the insertion.
@@ -643,8 +645,7 @@ fn pick_deletion_shift(
             .exons
             .overlapped_regions
             .iter()
-            .filter_map(|overlap| overlap.cds_range().start.checked_sub(del.cds_range.end))
-            .next();
+            .find_map(|overlap| overlap.cds_range().start.checked_sub(del.cds_range.end));
 
         // Limit max_right_shift based on the closest overlapping region
         // right of the deletion.
@@ -692,6 +693,7 @@ fn pick_deletion_shift(
 /// will form a codon after the deletion. If the deletion shifts right, the same
 /// codon is formed but before the deletion. So, this method compares whether
 /// the codon is more likely before or after the deletion.
+#[allow(clippy::cast_possible_truncation)]
 pub(crate) fn pick_del_shift_with_stats(
     left_match: &CdsMatchRange, del: &CdsDeletionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,
@@ -759,6 +761,7 @@ pub(crate) fn pick_del_shift_with_stats(
 /// that codon will differ depending on which way the insertion shifts (which
 /// bases are treated as inserted, and which as matches). So, this method
 /// compares which codon is more likely at the given position.
+#[allow(clippy::cast_possible_truncation)]
 pub(crate) fn pick_ins_shift_with_stats(
     left_match: &CdsMatchRange, ins: &CdsInsertionRange, right_match: &CdsMatchRange, query: &QueryRecord,
     product_spec: &ProductSpec,

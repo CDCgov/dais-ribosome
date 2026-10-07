@@ -34,7 +34,7 @@ impl std::error::Error for RibosomeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             RibosomeError::Io(e) => e.source(),
-            _ => None,
+            RibosomeError::UnimplementedCtype(_) => None,
         }
     }
 }

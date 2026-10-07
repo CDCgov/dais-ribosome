@@ -165,7 +165,7 @@ dependencies = [
  "serde",
  "sha1_smol",
  "toml",
- "zoe 0.0.33",
+ "zoe 0.0.34",
 ]
 
 [[package]]
@@ -179,7 +179,7 @@ dependencies = [
  "num_cpus",
  "rayon",
  "sswsort",
- "zoe 0.0.33",
+ "zoe 0.0.34",
 ]
 
 [[package]]
@@ -707,9 +707,9 @@ dependencies = [
 
 [[package]]
 name = "zoe"
-version = "0.0.33"
+version = "0.0.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc94044f5f4370929c27d1629d917b73c3f53cabab1e501440c7ea4e09208d4d"
+checksum = "a9593e24824ee9448a3a1b07351ae4a9b3247c39bddbc514d9de5b4a953c1f2e"
 dependencies = [
  "multiversion 0.9.0",
  "rand",

@@ -60,12 +60,14 @@ impl QueryRecord {
     ///
     /// This will not contain any tabs.
     #[inline]
+    #[must_use]
     pub fn id(&self) -> &String {
         &self.id
     }
 
     /// Returns the sanitized query sequence.
     #[inline]
+    #[must_use]
     pub fn nucleotides(&self) -> &Nucleotides {
         &self.nucleotides
     }
@@ -74,6 +76,7 @@ impl QueryRecord {
     ///
     /// This will not contain any tabs
     #[inline]
+    #[must_use]
     pub fn ctype(&self) -> &String {
         &self.ctype
     }

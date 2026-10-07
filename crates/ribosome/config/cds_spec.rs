@@ -186,8 +186,8 @@ impl FromStr for TsvRow {
 
         Ok(TsvRow {
             reference_id,
-            product_name,
             ctype,
+            product_name,
             coords,
             // Validity: we recoded to ACGT above
             required_start,

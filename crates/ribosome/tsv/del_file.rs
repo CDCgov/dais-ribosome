@@ -192,6 +192,7 @@ impl<'a> DelRowView<'a> {
     /// ## Validity
     ///
     /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
+    #[must_use]
     pub fn new(
         deletion: &'a ComputedDeletion, product: &'a ComputedProduct<'a>, query_id: &'a str, ctype: &'a str,
         reference_id: &'a str,
@@ -221,6 +222,7 @@ impl<'a> DelRowView<'a> {
     /// ## Validity
     ///
     /// `query_id`, `ctype`, and `reference_id` cannot contain tabs.
+    #[must_use]
     pub fn from_deleted_product(
         product: &'a DeletedProduct<'a>, query_id: &'a str, ctype: &'a str, reference_id: &'a str,
     ) -> Self {
@@ -257,12 +259,12 @@ impl Display for DelRow {
             self.ctype,
             self.reference_id,
             self.product_name,
-            self.variant_hash.as_ref().map(AsRef::as_ref).unwrap_or(HADOOP_NULL),
+            self.variant_hash.as_ref().map_or(HADOOP_NULL, AsRef::as_ref),
             self.del_aa_start,
             self.del_aa_end,
             self.del_aa_len,
             self.in_frame,
-            self.cds_id.as_ref().map(AsRef::as_ref).unwrap_or(HADOOP_NULL),
+            self.cds_id.as_ref().map_or(HADOOP_NULL, AsRef::as_ref),
             self.del_cds_start,
             self.del_cds_end,
             self.del_cds_len,
@@ -283,12 +285,12 @@ impl Display for DelRowView<'_> {
             self.ctype,
             self.reference_id,
             self.product_name,
-            self.variant_hash.as_ref().map(AsRef::as_ref).unwrap_or(HADOOP_NULL),
+            self.variant_hash.as_ref().map_or(HADOOP_NULL, AsRef::as_ref),
             self.del_aa_start,
             self.del_aa_end,
             self.del_aa_len,
             self.in_frame,
-            self.cds_id.as_ref().map(AsRef::as_ref).unwrap_or(HADOOP_NULL),
+            self.cds_id.as_ref().map_or(HADOOP_NULL, AsRef::as_ref),
             self.del_cds_start,
             self.del_cds_end,
             self.del_cds_len,
@@ -338,6 +340,10 @@ impl<R: Read> Iterator for DelFileParser<R> {
 /// other formats can be supported.
 pub trait DelWriter: Finish {
     /// Writes the deletion row to the writer.
+    ///
+    /// ## Errors
+    ///
+    /// Any IO errors are propagated.
     fn write_del_row(&mut self, row: &DelRowView) -> std::io::Result<()>;
 }
 

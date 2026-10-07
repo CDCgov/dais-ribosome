@@ -68,6 +68,7 @@ impl<'a> AnnotationModule<'a> {
     ///   be parsed successfully.
     /// - All information in the files must correspond to information in the
     ///   other files.
+    #[allow(clippy::too_many_lines)]
     pub fn new(config: &'a TomlConfig, toml_path: &Path, module_name: &str) -> std::io::Result<AnnotationModule<'a>> {
         // Get path to ribosome_res directory
         let modules_dir = toml_path
@@ -124,7 +125,7 @@ impl<'a> AnnotationModule<'a> {
             let params = module.alignment.get(&ref_key.compound_type);
 
             // Get the list of groups for the given compound type
-            let groups = ctype_map.entry(ref_key.compound_type.to_string()).or_default();
+            let groups = ctype_map.entry(ref_key.compound_type.clone()).or_default();
 
             // See if there is an existing entry in the list of groups for the given
             // reference ID
@@ -203,7 +204,7 @@ impl<'a> AnnotationModule<'a> {
         Ok(AnnotationModule {
             ctype_map,
             name: &module.name,
-            version: module.version.as_ref().map(AsRef::as_ref).unwrap_or_else(|| "unknown"),
+            version: module.version.as_ref().map_or_else(|| "unknown", AsRef::as_ref),
             alignment_method: module.alignment_method,
             formatting: &module.formatting,
             rules: &module.rules,
@@ -213,6 +214,7 @@ impl<'a> AnnotationModule<'a> {
     }
 
     /// Do we have codon-position weights to work with
+    #[must_use]
     pub fn have_weights(&self) -> bool {
         self.have_weights
     }
@@ -258,6 +260,7 @@ impl<'a> AnnotationModule<'a> {
 
     /// Attempts to return the module name of a different module containing the
     /// specified `ctype`.
+    #[must_use]
     pub fn find_in_other_module(&self, ctype: &str) -> Option<&String> {
         for (module_name, ref_path) in &self.other_modules {
             if let Ok(reader) = FastaReader::from_path(ref_path) {
@@ -362,7 +365,7 @@ impl<'a> ReferenceGroup<'a> {
         rewrite_dels.sort();
 
         Ok(Self {
-            reference_id: ref_key.reference_id.to_string(),
+            reference_id: ref_key.reference_id.clone(),
             length,
             profiles,
             product_specs,
