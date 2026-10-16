@@ -10,7 +10,10 @@ use crate::{
     outputs::{ComputedGenome, ComputedGenomeInsertion},
     ranges::InsertionRange,
 };
-use zoe::{alignment::AlignmentStates, prelude::*};
+use zoe::{
+    alignment::{AlignOp, AlignmentStates},
+    prelude::*,
+};
 
 /// The genome alignments and products for a single query against all reference
 /// IDs.
@@ -116,7 +119,7 @@ impl<'a> GenomeAndProductStates<'a> {
 
         // Add stop extension to Zoe alignment if applicable
         if let Some(stop_ext) = &stop_extension {
-            zoe_genome_aln.add_inc_op(stop_ext.len(), b'I');
+            zoe_genome_aln.add_inc_op(stop_ext.len(), AlignOp::I);
         }
 
         let ref_len = references.length;

@@ -9,7 +9,7 @@ use std::{
     ops::Range,
 };
 use zoe::{
-    alignment::{Alignment, AlignmentStates},
+    alignment::{AlignOp, Alignment, AlignmentStates},
     data::{cigar::Ciglet, err::ResultWithErrorContext},
 };
 
@@ -181,15 +181,15 @@ impl From<&StateRange> for Ciglet {
         match value {
             StateRange::M(state) => Ciglet {
                 inc: state.len(),
-                op:  b'M',
+                op:  AlignOp::M,
             },
             StateRange::D(state) => Ciglet {
                 inc: state.len(),
-                op:  b'D',
+                op:  AlignOp::D,
             },
             StateRange::I(state) => Ciglet {
                 inc: state.len(),
-                op:  b'I',
+                op:  AlignOp::I,
             },
         }
     }
@@ -609,7 +609,7 @@ impl StateRange {
         // all StateRange entries will be non-empty
         for Ciglet { inc, op } in &alignment.states {
             match op {
-                b'M' | b'=' | b'X' => {
+                AlignOp::M | AlignOp::Eq | AlignOp::X => {
                     // Validity: both ranges are length inc
                     states.push(Self::M(MatchRange {
                         query_range: query_start..query_start + inc,
@@ -618,7 +618,7 @@ impl StateRange {
                     query_start += inc;
                     ref_start += inc;
                 }
-                b'I' => {
+                AlignOp::I => {
                     states.push(Self::I(InsertionRange {
                         // The insertion comes before ref_start
                         ref_index:   InsertionIdx::from_right_idx(ref_start),
@@ -626,7 +626,7 @@ impl StateRange {
                     }));
                     query_start += inc;
                 }
-                b'D' => {
+                AlignOp::D => {
                     states.push(Self::D(DeletionRange {
                         ref_range: ref_start..ref_start + inc,
                     }));

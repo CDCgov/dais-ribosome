@@ -13,7 +13,11 @@ pub use config::{annotation_module::AnnotationModule, toml};
 pub use data::{NoNucleotides, QueryRecord, ranges};
 
 use std::ops::ControlFlow;
-use zoe::{alignment::AlignmentStates, data::cigar::Ciglet, search::replace_all_bytes};
+use zoe::{
+    alignment::{AlignOp, AlignmentStates},
+    data::cigar::Ciglet,
+    search::replace_all_bytes,
+};
 
 trait IteratorExt: Iterator {
     fn take_until_inclusive<F>(self, f: F) -> TakeUntilInclusive<Self, F>
@@ -120,7 +124,7 @@ impl AlignmentStatesExt for AlignmentStates {
         // Is the first ciglet soft clipping, in which case we have to remove
         // some of it? If not, just prepend as normal.
         if let Some((first, rest)) = self.as_mut_slice().split_first_mut()
-            && first.op == b'S'
+            && first.op == AlignOp::S
         {
             let previous_soft_clipping = first.inc;
             let new_soft_clipping = previous_soft_clipping.saturating_sub(inc);
@@ -129,7 +133,7 @@ impl AlignmentStatesExt for AlignmentStates {
             // need to merge into it. If not, we can replace the first ciglet
             // with our new one, and then optionally add back soft clipping.
             if let Some(second) = rest.first_mut()
-                && second.op == b'M'
+                && second.op == AlignOp::M
             {
                 second.inc += inc;
                 // Is the soft clipping remaining positive? If so, mutate the
@@ -140,11 +144,11 @@ impl AlignmentStatesExt for AlignmentStates {
                     self.as_mut_vec().remove(0);
                 }
             } else {
-                *first = Ciglet { inc, op: b'M' };
+                *first = Ciglet { inc, op: AlignOp::M };
                 self.prepend_soft_clip(new_soft_clipping);
             }
         } else {
-            self.prepend_inc_op(inc, b'M');
+            self.prepend_inc_op(inc, AlignOp::M);
         }
     }
 
@@ -152,7 +156,7 @@ impl AlignmentStatesExt for AlignmentStates {
         // Is the last ciglet soft clipping, in which case we have to remove
         // some of it? If not, just prepend as normal.
         if let Some((last, rest)) = self.as_mut_slice().split_last_mut()
-            && last.op == b'S'
+            && last.op == AlignOp::S
         {
             let previous_soft_clipping = last.inc;
             let new_soft_clipping = previous_soft_clipping.saturating_sub(inc);
@@ -161,7 +165,7 @@ impl AlignmentStatesExt for AlignmentStates {
             // need to merge into it. If not, we can replace the last ciglet
             // with our new one, and then optionally add back soft clipping.
             if let Some(second_to_last) = rest.last_mut()
-                && second_to_last.op == b'M'
+                && second_to_last.op == AlignOp::M
             {
                 second_to_last.inc += inc;
                 // Is the soft clipping remaining positive? If so, mutate the
@@ -172,11 +176,11 @@ impl AlignmentStatesExt for AlignmentStates {
                     self.as_mut_vec().pop();
                 }
             } else {
-                *last = Ciglet { inc, op: b'M' };
+                *last = Ciglet { inc, op: AlignOp::M };
                 self.soft_clip(new_soft_clipping);
             }
         } else {
-            self.add_inc_op(inc, b'M');
+            self.add_inc_op(inc, AlignOp::M);
         }
     }
 }

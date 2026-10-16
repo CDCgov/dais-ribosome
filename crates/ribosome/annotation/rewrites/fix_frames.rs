@@ -76,8 +76,8 @@ use std::cmp::Ordering;
 impl Product<'_> {
     /// The procedure for fixing the frames of all the eligible indels.
     ///
-    /// See [the module documentation](crate::annotation::fix_frames) for more
-    /// details.
+    /// See [the module documentation](crate::annotation::rewrites::fix_frames)
+    /// for more details.
     ///
     /// ## Validity
     ///
@@ -199,7 +199,8 @@ fn fix_frame(
 ///
 /// This handles performing the shift, dropping empty match states, and merging
 /// the deletion left if needed. The caller should verify shift eligibility. See
-/// [the module documentation](crate::annotation::fix_frames) for more details.
+/// [the module documentation](crate::annotation::rewrites::fix_frames) for more
+/// details.
 ///
 /// [`fix_frames`]: Product::fix_frames
 #[must_use]
@@ -248,7 +249,8 @@ fn fix_flanked_deletion(
 /// This handles performing the shift, dropping empty match states, dropping the
 /// insertion if it shifted to product/exon boundaries, merging the insertion
 /// left or right if needed. The caller should verify shift eligibility. See
-/// [the module documentation](crate::annotation::fix_frames) for more details.
+/// [the module documentation](crate::annotation::rewrites::fix_frames) for more
+/// details.
 ///
 /// [`fix_frames`]: Product::fix_frames
 #[allow(clippy::needless_pass_by_value, reason = "false positive")]

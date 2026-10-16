@@ -265,7 +265,7 @@ impl<'a> AnnotationModule<'a> {
         for (module_name, ref_path) in &self.other_modules {
             if let Ok(reader) = FastaReader::from_path(ref_path) {
                 for fasta_result in reader.flatten() {
-                    if let Ok(key) = RefKey::parse(&fasta_result.name)
+                    if let Ok(key) = RefKey::parse(&fasta_result.header)
                         && ctype == key.compound_type
                     {
                         return Some(module_name);

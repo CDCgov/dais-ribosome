@@ -2,7 +2,7 @@
 
 use crate::{data::keys::RefKey, ranges::ParseOneBasedInclusive};
 use serde::{Deserialize, Deserializer, de::Error};
-use std::{collections::HashMap, ops::Range, path::Path};
+use std::{cmp::Ordering, collections::HashMap, ops::Range, path::Path};
 use zoe::data::err::ResultWithErrorContext;
 
 /// The rewrite rules for a module, indexed by reference ID and compound type.
@@ -30,7 +30,7 @@ impl Ord for RewriteRanges {
     /// The sort order is based first on the starting index of `from`, then the
     /// ending index of `from`, the starting index of `to`, and the ending index
     /// of `to`.
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         self.from
             .start
             .cmp(&other.from.start)
@@ -41,7 +41,7 @@ impl Ord for RewriteRanges {
 }
 
 impl PartialOrd for RewriteRanges {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }

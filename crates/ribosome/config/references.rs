@@ -5,7 +5,7 @@ use std::{collections::HashMap, path::Path};
 use zoe::{
     data::{
         err::{ResultWithErrorContext, WithErrorContext},
-        fasta::FastaSeq,
+        fasta::Fasta,
         nucleotides::CheckNucleotides,
     },
     prelude::{FastaReader, IsValidDNA, Nucleotides},
@@ -33,7 +33,7 @@ pub fn load_references(path: &Path) -> std::io::Result<HashMap<RefKey, Vec<Nucle
     let mut refs = HashMap::new();
 
     for r in data {
-        let FastaSeq { name, sequence } = r?;
+        let Fasta { header, sequence } = r?;
 
         let sequence = Nucleotides::from(sequence);
 
@@ -49,12 +49,12 @@ pub fn load_references(path: &Path) -> std::io::Result<HashMap<RefKey, Vec<Nucle
                         "Non-IUPAC character(s) were found. Consider removing them (if it is erroneously present) or masking to N.",
                     )
                 }
-            .with_context(format!("Failed to parse reference sequence with name: {name}"));
+            .with_context(format!("Failed to parse reference sequence with header: {header}"));
 
             return Err(e.into());
         }
 
-        let key = RefKey::parse(&name).with_context("Failed to parse FASTA header")?;
+        let key = RefKey::parse(&header).with_context("Failed to parse FASTA header")?;
 
         refs.entry(key).or_insert_with(Vec::new).push(sequence);
     }

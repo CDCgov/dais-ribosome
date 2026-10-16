@@ -13,7 +13,7 @@ use std::{
     path::Path,
 };
 use zoe::{
-    data::{err::ResultWithErrorContext, fasta::FastaSeq},
+    data::{err::ResultWithErrorContext, fasta::Fasta},
     define_whichever,
     prelude::*,
     unwrap_or_return_some_err,
@@ -282,10 +282,10 @@ impl Iterator for FastaQueryIter {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let info = unwrap_or_return_some_err!(self.reader.next()?);
-        let FastaSeq { name, sequence } = info;
+        let Fasta { header, sequence } = info;
 
-        if name.contains('|') {
-            let mut parts = name.split('|').map(|part| part.trim_ascii().to_string());
+        if header.contains('|') {
+            let mut parts = header.split('|').map(|part| part.trim_ascii().to_string());
 
             if let (Some(id), Some(ctype)) = (parts.next(), parts.next())
                 && !ctype.is_empty()
@@ -297,12 +297,12 @@ impl Iterator for FastaQueryIter {
                 }))
             } else {
                 Some(Err(std::io::Error::other(format!(
-                    "Invalid FASTA header found. Expected ID or ID|ctype, found {name}"
+                    "Invalid FASTA header found. Expected ID or ID|ctype, found {header}"
                 ))))
             }
         } else {
             Some(Ok(QueryInfo {
-                id: name,
+                id: header,
                 sequence,
                 ctype: None,
             }))
