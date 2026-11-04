@@ -135,6 +135,9 @@ struct CodonKey {
 /// into ranks (times 10, in case we need to make easy adjustments), since that
 /// is all that needed for our algorithm. Stop codons are set to the lowest
 /// ranks to avoid premature stop codons.
+/// 
+/// This is used for fixing insertion frames when codon-position weights are
+/// tied or unavailable.
 #[rustfmt::skip]
 pub(crate) static DEFAULT_CODON_STATS: LazyLock<HashMap<[u8; 3], u32>> = LazyLock::new(|| {
     HashMap::from([

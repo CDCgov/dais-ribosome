@@ -59,7 +59,7 @@ fn main() -> Result<(), ErrorWithContext> {
 
     if !annotation_module.have_weights() {
         time_stamp(
-            "Warning: no codon-position weights were found, so flu A codon usage ranks will be used.",
+            "Warning: no codon-position weights were found to help with indel frame-fixing. Flu A codon usage ranks will be used for insertions",
             true,
         );
     }

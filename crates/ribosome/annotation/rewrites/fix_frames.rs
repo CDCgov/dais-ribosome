@@ -989,8 +989,9 @@ impl ProductSpec {
     /// Compares the likelihood of two codons at the specified 1-based position,
     /// returning an ordering based on the observed counts.
     ///
-    /// If both observed counts are 0, or if there are no position-specific
-    /// weights are available, [`DEFAULT_CODON_STATS`] is used.
+    /// This is used for fixing insertion frames. If both observed counts are 0,
+    /// or if there are no position-specific weights are available,
+    /// [`DEFAULT_CODON_STATS`] is used.
     ///
     /// ## Validity
     ///
@@ -1011,7 +1012,8 @@ impl ProductSpec {
     /// `pos_left` and `pos_right`, returning an ordering based on the observed
     /// counts.
     ///
-    /// If no observed counts are available, [`Ordering::Equal`] is returned.
+    /// This is used for fixing deletion frames. If no observed counts are
+    /// available, [`Ordering::Equal`] is returned.
     ///
     /// ## Validity
     ///

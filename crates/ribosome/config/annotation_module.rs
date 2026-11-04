@@ -204,7 +204,7 @@ impl<'a> AnnotationModule<'a> {
         Ok(AnnotationModule {
             ctype_map,
             name: &module.name,
-            version: module.version.as_ref().map_or_else(|| "unknown", AsRef::as_ref),
+            version: module.version.as_ref().map_or("unknown", AsRef::as_ref),
             alignment_method: module.alignment_method,
             formatting: &module.formatting,
             rules: &module.rules,

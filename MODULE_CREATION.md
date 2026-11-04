@@ -14,8 +14,9 @@ to add a new module to DAIS-ribosome:
       [Reference Sequence File](#reference-sequence-file).
     - A TSV file with the coding sequence specifications, as described in
       [Coding Sequence Specifications](#coding-sequence-specifications).
-    - A TSV file with the codon-position weights, as described in
-      [Codon-Position Weights](#codon-position-weights).
+    - Optionally a TSV file with the codon-position weights, as described in
+      [Codon-Position Weights](#codon-position-weights). This should eventually
+      be added, but is not required during module development.
 5. Add the module to `ribosome_res/modules.toml` according to
    [Module TOML Format](#module-toml-format).
 6. Optionally, create a [SSWSort](https://github.com/CDCgov/sswsort) module of
@@ -181,10 +182,8 @@ TSV:
    indicating a greater preference for that site.
 
 The codons are converted to uppercase, and `U` is replaced with `T`. The
-codon/position pairs within each section must be unique.
-
-To save space, consider filtering codons with minimal observations or weights
-(e.g., singletons).
+codon/position pairs within each section must be unique. To save space, consider
+filtering codons with minimal observations or weights (e.g., singletons).
 
 Below is an example. For a full example, see the [flu
 module](ribosome_res/flu/flu-codon-position-weights.tsv).
@@ -212,6 +211,40 @@ module](ribosome_res/flu/flu-codon-position-weights.tsv).
 1	CAG	101
 ...
 ```
+
+### Purpose of Codon-Position Weights
+
+Codon-position weights are a way to improve the quality of alignments with
+indels. When an indel has a length that is a multiple of 3 but does not occur in
+the reading frame, DAIS-ribosome will shift it left or right when possible to
+improve the translation and alignment. The codon-position weights help choose
+the direction to shift.
+
+Shifting an insertion left or right alters which codons belong to the aligned
+genome and which belong to the insertion. Shifting a deletion left or right
+alters the position of codons within the alignment. The codon-position weights
+are used in both cases to pick which shift direction is most probable for the
+given module.
+
+Note that there is an [experimental feature](#experimental-rewriting-rules) for specifying explicit indel shifts to perform, which is another way of improving their placement.
+
+### Default Behavior Without Codon-Position Weights
+
+During development, an MSA of data may not be available, and so codon-position
+weights cannot be easily formed. In this case, the codon-position weights can be
+left out of the module, although a warning will appear when DAIS-ribosome is run
+in this module configuration. 
+
+When picking the direction to shift an insertion, the usage ranks of flu A are
+used as a position-agnostic default to decide which codons are more likely to
+appear in the genome. For a deletion, it is shifted in the direction that
+minimizes the change to the alignment (shifts left if the deletion occurs after
+the first base of a codon, and shifts right if the deletion occurs after the
+second base of a codon).
+
+It is recommended to eventually add codon-position weights. While specifying
+good references is the most important way to improve alignments, codon-position
+weights can help improve poorly-aligned indels.
 
 ## Module TOML Format
 
@@ -244,26 +277,26 @@ therefore may be changed or removed at any time.
 
 The following is a list of the field paths that can be specified:
 
-|                                                   Field Path | Type                       | Required | Default      | Description                                                                                                                             |
-| -----------------------------------------------------------: | -------------------------- | -------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-|                                                         name | String                     | Yes      | -            | The name of the module, matching the name of the folder in ribosome_res                                                                 |
-|                                                      version | String                     | No       | None         | The version for the module                                                                                                              |
-|                                            alternative_names | List of Strings            | No       | Empty        | Any alternative names that can be used to refer to the module                                                                           |
-|                                                   references | File Name                  | Yes      | -            | The name of the FASTA file containing the references, which should be located in module's folder                                        |
-|                                                      weights | File Name                  | Yes      | -            | The name of the codon-position weights file, which should be located in the module's folder                                             |
-|                                                     cds_spec | File Name                  | Yes      | -            | The name of the CDS specs file, which should be located in the module's folder                                                          |
-|                                             alignment_method | "one-pass" or "three-pass" | No       | "three-pass" | The alignment method to use, with one-pass being faster for small genomes and three-pass being more memory efficient for larger genomes |
-|                                      formatting.right_pad_aa | Boolean                    | No       | True         | Whether to add right padding to the aligned amino acid sequence                                                                         |
-|                                     formatting.right_pad_cds | Boolean                    | No       | True         | Whether to add right padding to the aligned coding sequence                                                                             |
-|                                     formatting.right_pad_gen | Boolean                    | No       | True         | Whether to add right padding to the genome alignment                                                                                    |
-|                                     rules.try_stop_extension | Boolean                    | No       | False        | Enables the stop extension rule                                                                                                         |
-|                                          rules.chew_to_start | Boolean                    | No       | False        | Enables the chew to start rule                                                                                                          |
-|                                   rules.repairable_end_limit | Integer                    | No       | 0            | If non-zero, enables that number of bases to be re-added to either end of the local alignment                                           |
-|           alignment.default.match<br />alignment.CTYPE.match | Integer                    | Yes      | -            | The score for a match, with optional CTYPE-specific overrides                                                                           |
-|     alignment.default.mismatch<br />alignment.CTYPE.mismatch | Integer                    | Yes      | -            | The score/penalty for a mismatch, automatically converted to be non-positive, with optional CTYPE-specific overrides                    |
-|     alignment.default.gap_open<br />alignment.CTYPE.gap_open | Integer                    | Yes      | -            | The score/penalty for opening a gap, automatically converted to be non-positive, with optional CTYPE-specific overrides                 |
-| alignment.default.gap_extend<br />alignment.CTYPE.gap_extend | Integer                    | Yes      | -            | The score/penalty for extending a gap, automatically converted to be non-positive, with optional CTYPE-specific overrides               |
-|                                   experimental.rewrite_rules | File Name                  | No       | None         | The name of the rewrite rules file, which should be located in the module's folder (*warning: this is experimental and may be changed*) |
+|                                                   Field Path | Type                       | Required | Default                                               | Description                                                                                                                             |
+| -----------------------------------------------------------: | -------------------------- | -------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+|                                                         name | String                     | Yes      | -                                                     | The name of the module, matching the name of the folder in ribosome_res                                                                 |
+|                                                      version | String                     | No       | None                                                  | The version for the module                                                                                                              |
+|                                            alternative_names | List of Strings            | No       | Empty                                                 | Any alternative names that can be used to refer to the module                                                                           |
+|                                                   references | File Name                  | Yes      | -                                                     | The name of the FASTA file containing the references, which should be located in module's folder                                        |
+|                                                      weights | File Name                  | No       | See [Codon-Position Weights](#codon-position-weights) | The name of the codon-position weights file, which should be located in the module's folder                                             |
+|                                                     cds_spec | File Name                  | Yes      | -                                                     | The name of the CDS specs file, which should be located in the module's folder                                                          |
+|                                             alignment_method | "one-pass" or "three-pass" | No       | "three-pass"                                          | The alignment method to use, with one-pass being faster for small genomes and three-pass being more memory efficient for larger genomes |
+|                                      formatting.right_pad_aa | Boolean                    | No       | True                                                  | Whether to add right padding to the aligned amino acid sequence                                                                         |
+|                                     formatting.right_pad_cds | Boolean                    | No       | True                                                  | Whether to add right padding to the aligned coding sequence                                                                             |
+|                                     formatting.right_pad_gen | Boolean                    | No       | True                                                  | Whether to add right padding to the genome alignment                                                                                    |
+|                                     rules.try_stop_extension | Boolean                    | No       | False                                                 | Enables the stop extension rule                                                                                                         |
+|                                          rules.chew_to_start | Boolean                    | No       | False                                                 | Enables the chew to start rule                                                                                                          |
+|                                   rules.repairable_end_limit | Integer                    | No       | 0                                                     | If non-zero, enables that number of bases to be re-added to either end of the local alignment                                           |
+|           alignment.default.match<br />alignment.CTYPE.match | Integer                    | Yes      | -                                                     | The score for a match, with optional CTYPE-specific overrides                                                                           |
+|     alignment.default.mismatch<br />alignment.CTYPE.mismatch | Integer                    | Yes      | -                                                     | The score/penalty for a mismatch, automatically converted to be non-positive, with optional CTYPE-specific overrides                    |
+|     alignment.default.gap_open<br />alignment.CTYPE.gap_open | Integer                    | Yes      | -                                                     | The score/penalty for opening a gap, automatically converted to be non-positive, with optional CTYPE-specific overrides                 |
+| alignment.default.gap_extend<br />alignment.CTYPE.gap_extend | Integer                    | Yes      | -                                                     | The score/penalty for extending a gap, automatically converted to be non-positive, with optional CTYPE-specific overrides               |
+|                                   experimental.rewrite_rules | File Name                  | No       | None                                                  | The name of the rewrite rules file, which should be located in the module's folder (*warning: this is experimental and may be changed*) |
 
 See
 [*Zoe*](https://docs.rs/zoe/0.0.29/zoe/alignment/sw/index.html#affine-gap-penalties)
