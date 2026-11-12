@@ -18,6 +18,9 @@ to add a new module to DAIS-ribosome:
       [Codon-Position Weights](#codon-position-weights).
 5. Add the module to `ribosome_res/modules.toml` according to
    [Module TOML Format](#module-toml-format).
+6. Optionally, create a [SSWSort](https://github.com/CDCgov/sswsort) module of
+   the same name with the same compound types to enable unannotated/unclassified
+   data to be handled.
 
 Unlike `v1` which required a separate "build" step and the use of some perl
 scripts, `v2` reads the files directly and does not require any other steps
