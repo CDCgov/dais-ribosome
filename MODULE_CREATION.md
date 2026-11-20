@@ -43,7 +43,7 @@ To each ctype, there should be associated one or more references, grouped under
 one or more _reference IDs_. In `cov` and `rsv`, only a single reference
 sequence is used for each `ctype`, and this is typically a good starting place.
 For a segmented genome, the reference sequences for each segment should be
-grouped under the same reference ID.
+grouped under the same reference ID. By convention, this should be named after a well-known virus whose coordinate space is shared with the given reference (even if the sequences do not perfectly match).
 
 If a single reference sequence is insufficient to model all the variation in a
 given `ctype`, additional reference sequences can be added under each reference
