@@ -3,13 +3,13 @@ members = ["crates/ribosome", "crates/ribosome-cli"]
 resolver = "2"
 
 [workspace.package]
-version = "2.1.1-dev"
+version = "2.2.0"
 edition = "2024"
 authors = ["Samuel S. Shepard", "William Chettleburgh"]
 rust-version = "1.96"
 
 [workspace.dependencies]
-zoe = { version = "0.0.35", default-features = false, features = [
+zoe = { version = "0.0.37", default-features = false, features = [
     "multiversion",
     "rand",
 ] }

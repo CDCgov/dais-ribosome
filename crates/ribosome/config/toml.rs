@@ -1,14 +1,11 @@
 //! The data structures and parsing for the TOML configuration file.
 
-use serde::{
-    Deserialize, Deserializer,
-    de::{Error, Unexpected},
-};
+use serde::{Deserialize, Deserializer, de::Error};
 use std::{
     collections::{HashMap, hash_map::Entry},
     path::{Path, PathBuf},
 };
-use zoe::data::{WeightMatrix, err::ResultWithErrorContext};
+use zoe::{alignment::ScoreParams, data::err::ResultWithErrorContext};
 
 /// Root configuration structure parsed from `modules.toml`.
 ///
@@ -214,11 +211,12 @@ pub enum AlignmentMethod {
 #[derive(Clone, Debug, Deserialize)]
 pub struct AlignmentWeights {
     /// Default scoring matrix and gap parameters.
-    pub default: AlignmentParams,
+    #[serde(deserialize_with = "deserialize_params")]
+    pub default: ScoreParams<'static, i8, 5>,
 
     /// Per-compound-type overrides.
-    #[serde(flatten)]
-    pub overrides: HashMap<String, AlignmentParams>,
+    #[serde(flatten, deserialize_with = "deserialize_many_params")]
+    pub overrides: HashMap<String, ScoreParams<'static, i8, 5>>,
 }
 
 impl AlignmentWeights {
@@ -227,7 +225,7 @@ impl AlignmentWeights {
     /// Returns the override for the compound type if it exists, otherwise
     /// returns defaults.
     #[must_use]
-    pub fn get(&self, compound_type: &str) -> &AlignmentParams {
+    pub fn get(&self, compound_type: &str) -> &ScoreParams<'static, i8, 5> {
         self.overrides.get(compound_type).unwrap_or(&self.default)
     }
 }
@@ -310,92 +308,63 @@ pub struct Rules {
     pub repairable_end_limit: usize,
 }
 
-/// The alignment scoring parameters.
-///
-/// ## Validity
-///
-/// At least one of `gap_open` or `gap_extend` must be nonzero, to ensure that
-/// optimal local alignments do not begin or end with indels.
-#[derive(Clone, Debug)]
-pub struct AlignmentParams {
-    /// The weight matrix for alignment.
-    ///
-    /// ## Validity
-    ///
-    /// The mismatch score must be non-positive, and cannot be -128.
-    pub matrix:     WeightMatrix<'static, i8, 5>,
-    /// The score for opening a gap.
-    ///
-    /// ## Validity
-    ///
-    /// This must be non-positive, and cannot be -128.
-    pub gap_open:   i8,
-    /// The score for extending a gap.
-    ///
-    /// ## Validity
-    ///
-    /// This must be non-positive, and cannot be -128.
-    pub gap_extend: i8,
-}
-
-/// A helper type for parsing [`AlignmentParams`] that does not impose any
-/// conditions or checking on the integers.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct AlignmentParamsRaw {
-    #[serde(rename = "match")]
-    match_score: i8,
-
-    #[serde(deserialize_with = "deserialize_penalty")]
-    mismatch: i8,
-
-    #[serde(deserialize_with = "deserialize_penalty")]
-    gap_open: i8,
-
-    #[serde(deserialize_with = "deserialize_penalty")]
-    gap_extend: i8,
-}
-
-impl<'de> Deserialize<'de> for AlignmentParams {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>, {
-        // Validity: AlignmentParamsRaw handles converting penalties to
-        // non-positive and ensuring they are not -128.
-        let raw = AlignmentParamsRaw::deserialize(deserializer)?;
-
-        // Validity: Verify validity requirement on AlignmentParams
-        if raw.gap_open == 0 && raw.gap_extend == 0 {
-            return Err(D::Error::custom("gap_open and gap_extend cannot both be 0"));
-        }
-
-        let matrix = WeightMatrix::new_dna_matrix(raw.match_score, raw.mismatch, Some(b'N'));
-
-        Ok(AlignmentParams {
-            matrix,
-            gap_open: raw.gap_open,
-            gap_extend: raw.gap_extend,
-        })
-    }
-}
-
-/// Deserializes an alignment penalty, validating the range and normalizing to
-/// be non-positive.
-///
-/// ## Errors
-///
-/// If the penalty is -128, then an error is thrown since this is out of the
-/// range *Zoe* can handle.
+/// Deserializes an alignment penalty, normalizing it to be negative.
 fn deserialize_penalty<'de, D>(deserializer: D) -> Result<i8, D::Error>
 where
     D: serde::Deserializer<'de>, {
     let value: i8 = Deserialize::deserialize(deserializer)?;
-    match value {
-        -128 => Err(D::Error::invalid_value(
-            Unexpected::Signed(i64::from(value)),
-            &"an integer of absolute value at most 127",
-        )),
-        -127..0 => Ok(value),
-        0.. => Ok(-value),
+    let negative = match value {
+        -128..0 => value,
+        0.. => -value,
+    };
+    Ok(negative)
+}
+
+/// A helper function for deserializing [`ScoreParams`].
+fn deserialize_params<'de, D>(deserializer: D) -> Result<ScoreParams<'static, i8, 5>, D::Error>
+where
+    D: serde::Deserializer<'de>, {
+    /// An inner helper type for deserializing the struct of simple weights
+    #[derive(Copy, Clone, Eq, PartialEq, Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct UnvalidatedWeights {
+        #[serde(rename = "match")]
+        match_score: i8,
+
+        #[serde(deserialize_with = "deserialize_penalty")]
+        mismatch: i8,
+
+        #[serde(deserialize_with = "deserialize_penalty")]
+        gap_open: i8,
+
+        #[serde(deserialize_with = "deserialize_penalty")]
+        gap_extend: i8,
     }
+
+    let UnvalidatedWeights {
+        match_score,
+        mismatch,
+        gap_open,
+        gap_extend,
+    } = UnvalidatedWeights::deserialize(deserializer)?;
+
+    if gap_open == 0 && gap_extend == 0 {
+        return Err(D::Error::custom("gap_open and gap_extend cannot both be 0"));
+    }
+
+    ScoreParams::new_dna_params(match_score, mismatch, gap_open, gap_extend, Some(b'N')).map_err(D::Error::custom)
+}
+
+/// A helper function for destructuring many [`ScoreParams`], for use in
+/// [`AlignmentWeights::overrides`].
+fn deserialize_many_params<'de, D>(deserializer: D) -> Result<HashMap<String, ScoreParams<'static, i8, 5>>, D::Error>
+where
+    D: serde::Deserializer<'de>, {
+    /// An inner helper type using [`deserialize_params`] for deserialization.
+    #[derive(Deserialize)]
+    #[serde(transparent)]
+    struct SerdeScoreParams(#[serde(deserialize_with = "deserialize_params")] ScoreParams<'static, i8, 5>);
+
+    let map = HashMap::<String, SerdeScoreParams>::deserialize(deserializer)?;
+    Ok(map.into_iter().map(|(key, val)| (key, val.0)).collect())
 }

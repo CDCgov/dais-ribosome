@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file. The format
 is roughly based on [Keep a Changelog], and this project adheres to
 [Semantic Versioning].
 
-## [2.1.1] - TBD
+## [2.2.0] - 2026-11-24
 
 ### Added
 
@@ -13,6 +13,7 @@ is roughly based on [Keep a Changelog], and this project adheres to
 
 ### Changed
 
+- Updated to use Zoe's `ScoreParams`
 - The rewrite genome deletions rules are now applied in left to right order in
   terms of the `from` ranges, rather than the order specified in the file
 - Rather than relying on the `Write` trait, more flexible traits for writing
@@ -260,7 +261,7 @@ is roughly based on [Keep a Changelog], and this project adheres to
 
 <!-- Versions -->
 
-[2.1.1]: https://github.com/CDCgov/dais-ribosome/compare/v2.1.0...v2.1.1
+[2.2.0]: https://github.com/CDCgov/dais-ribosome/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/CDCgov/dais-ribosome/compare/v2.0.3...v2.1.0
 [2.0.3]: https://github.com/CDCgov/dais-ribosome/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/CDCgov/dais-ribosome/compare/v2.0.1...v2.0.2

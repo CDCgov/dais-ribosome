@@ -55,6 +55,8 @@ pub fn get_state_with_flanking<T>(idx: usize, product_ranges: &mut [T]) -> Optio
     })
 }
 
+/// Shared code between frame fixing and manual rules for rewriting indels in an
+/// alignment based on a closure.
 pub fn rewrite<T, F>(ranges: &mut Vec<T>, mut f: F)
 where
     F: FnMut(StateWithFlanking<T>) -> IdxAdjustment<T>, {
